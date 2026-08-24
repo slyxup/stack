@@ -1,4 +1,4 @@
-name: Deploy (CF Workers + Pages)
+name: "2. Deploy — Cloudflare (Workers + Pages)"
 
 on:
   push:
