@@ -23,17 +23,17 @@ jobs:
 
   deploy-stack:
     runs-on: ubuntu-latest
-    # Stack is MARKETING ONLY — Pages (NOT Worker). Deploys static Next.js to Cloudflare Pages.
-    # Uses `wrangler pages deploy` with project `stack-slyxup-online` → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.online
-    # Always deploy on main so marketing latest. Worker `auth` and `billing` are separate.
+    # Stack is MARKETING ONLY — Pages (NOT Worker). Uses Next.js static export (out/) via Pages.
+    # Project: stack-slyxup-online → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.online (active in Pages)
+    # Always deploy on main so marketing latest. Auth/billing are Workers.
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter stack.slyxup.online build
-      - run: npx wrangler pages deploy stack.slyxup.online/.next --project-name=stack-slyxup-online --branch=main --commit-dirty=true
+      - run: pnpm --filter stack.slyxup.online build # next.config.mjs output: 'export' -> out/
+      - run: npx wrangler pages deploy stack.slyxup.online/out --project-name=stack-slyxup-online --branch=main --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
