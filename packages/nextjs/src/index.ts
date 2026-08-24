@@ -1,1 +1,1 @@
-export const placeholder = 'nextjs';
+export const placeholder = 'nextjs — verified 2026-08-24';

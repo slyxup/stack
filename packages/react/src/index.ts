@@ -1,1 +1,1 @@
-export * from './provider/SlyxUpProvider';
+export * from './provider/SlyxUpProvider'; // verified 2026-08-24
