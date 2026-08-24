@@ -12,7 +12,10 @@
     "APP_URL": "https://stack.slyxup.online",
     "API_URL": "https://auth.slyxup.online",
     "HOSTED_AUTH_URL": "https://auth.slyxup.online",
-    "CORS_ORIGINS": "https://stack.slyxup.online"
+    "CORS_ORIGINS": "https://stack.slyxup.online,http://localhost:3000,http://localhost:8787",
+    "ALLOWED_REDIRECT_ORIGINS": "https://myapp.com,http://localhost:3000,http://localhost:8787",
+    "GOOGLE_CLIENT_ID": "dummy-google-client-id.apps.googleusercontent.com",
+    "GITHUB_CLIENT_ID": "dummy-github-client-id"
   },
   "d1_databases": [
     {
