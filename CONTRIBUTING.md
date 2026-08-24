@@ -33,6 +33,23 @@ Husky runs `commitlint --edit` on commit-msg + `lint-staged` (biome) on pre-comm
 - Changesets: `pnpm changeset` → `.changeset/*.md` → `pnpm changeset version` bumps `packages/*` without forcing unrelated
 - Publish: `pnpm changeset publish` (via `release.yml`)
 
+## 0. Dev-First Rule — Pehle Dev, Phir Prod (tumhara flow)
+
+> **Hamesha dev me banao, local verify karo, jab 100% sahi lage tab hi `main` pe push karo. `main` = prod.**
+
+1. **Dev branch:** `git checkout -b feat/xxx` (main se, direct main pe coding nahi)
+2. **Local verify mandatory before push to main:**
+   ```bash
+   pnpm typecheck && pnpm lint && pnpm build # 7/7 green
+   pnpm cf:typegen
+   pnpm --filter auth.slyxup.online db:generate && pnpm --filter auth.slyxup.online db:migrate:local
+   npx wrangler deploy --dry-run --config auth.slyxup.online/wrangler.jsonc
+   pnpm --filter @slyxup/core exec npm publish --dry-run --access public
+   ```
+3. **SDK version:** Agar `packages/*` change kiya to `pnpm changeset` se `.changeset/*.md` banao, warna version bump nahi hoga (verified: no changeset → release success but no new npm version).
+4. **Push to main only after verify:** `git push origin feat/xxx` → `gh pr create` → CI green → `gh pr merge` → `main` push se hi `release.yml` (npm publish) + `deploy.yml` (wrangler deploy) trigger hoga. Local + prod dono me changes tabhi jayenge.
+5. **Check prod:** `gh run list`, `npm view @slyxup/core version`, `curl https://auth.slyxup.online/v1/health`, `wrangler d1 execute --remote`.
+
 ## 2. Before You Code — Planning Required
 
 1. Read `AGENTS.md` (build order db→api→core→react→nextjs→ui→cli)

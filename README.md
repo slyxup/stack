@@ -29,18 +29,25 @@ slyxup.online/stack/               ← monorepo (here, pnpm + wrangler)
 - **Drizzle** `sqliteTable` + `wrangler d1 migrations apply` both envs, `wrangler types`
 - **Security** `CODEQL`, `SECURITY.md`, `wrangler secret put` only
 
-## Quick Start (CF)
+## Quick Start (CF) — Dev First
 
 ```bash
 cd slyxup.online/stack
 pnpm install
 cp .env.example auth.slyxup.online/.dev.vars
-wrangler d1 create slyxup_auth --local # → update wrangler.jsonc database_id
+# wrangler.jsonc me D1/KV IDs already wired (cfa91e79 / 99d2ebe4), naya DB ho to wrangler d1 create
+pnpm typecheck && pnpm build # 7/7 green hona chahiye
 pnpm --filter auth.slyxup.online db:generate
 pnpm --filter auth.slyxup.online db:migrate:local
-pnpm --filter auth.slyxup.online dev  # wrangler dev
+pnpm --filter auth.slyxup.online dev  # wrangler dev localhost:8787
 ```
 
-Deploy: `pnpm --filter auth.slyxup.online deploy`
+**Dev → Prod Flow (tumhara flow):**
+1. **Dev me banao:** `git checkout -b feat/xxx` pe code, `pnpm changeset` (if SDK change), local verify `pnpm typecheck/lint/build` + `wrangler deploy --dry-run` + `npm publish --dry-run`.
+2. **Verify karo:** `git diff`, `curl /v1/health`, `wrangler d1 execute --local` — sab sahi lage tab hi aage.
+3. **Prod pe push:** `git push origin feat/xxx` → `gh pr create` → CI green → `gh pr merge` → `main` push se `release.yml` (auto SDK version bump **only if** changeset hai, warna no new version) + `deploy.yml` (only auth change pe) trigger. Agar latest hai koi change nahi to **no new deploy** (verified).
 
-See `CONTRIBUTING.md`, `PLANNING.md`, `WORKFLOW.md`.
+Deploy (prod, only on main): `pnpm --filter auth.slyxup.online deploy` (needs `CLOUDFLARE_API_TOKEN`)
+Verify prod: `gh run list`, `npm view @slyxup/core version`, `curl https://auth.slyxup.online/v1/health`
+
+See `WORKFLOW.md` §0 (Dev-First Hinglish), `CONTRIBUTING.md` §0, `PLANNING.md` §5.

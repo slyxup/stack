@@ -2,6 +2,71 @@
 
 > Industry-standard, modern, strict. AI + human both follow this. No light work.
 
+## 0. Development-First Workflow — Pehle Dev me banao, verify karo, phir Prod pe push (NEW)
+
+> **Tumhara flow: `development me sab banao → local verify → jab sahi lage tab `main` pe push → prod auto-deploy + SDK auto-version`**
+
+### Hinglish Summary (tumhare liye)
+- **Pehle sab dev me:** `feat/*` branch pe code likho, `pnpm typecheck/build` local pe pass karwao, `wrangler dev --local` + `D1 local` pe test karo, `npm publish --dry-run` se SDK check karo. Changes dikhenge local `git diff` + `wrangler d1 execute` + `curl /v1/health` se.
+- **Verify karo:** `pnpm typecheck && pnpm lint && pnpm build` 7/7 green hona chahiye, `pnpm cf:typegen` se `Env` types bane, `npx wrangler deploy --dry-run --config auth.slyxup.online/wrangler.jsonc` se CF bindings sahi dikhe. SDK ke liye `npm view @slyxup/core version` local `dist` check.
+- **Jab sab sahi lage tab hi `main` pe push:** `gh pr create` → CI green → `gh pr merge` / `git push origin main`. Tabhi `main` push se **prod** ka kaam start hoga.
+- **Prod pe auto:** `ci.yml` (typecheck/lint/build), `release.yml` (changeset version bump + `npm publish` **only if** `.changeset/*.md` hai ya unpublished package hai, warna `No changesets` → publish skip, no new version), `deploy.yml` (only `auth.slyxup.online/` change pe `wrangler deploy`). Agar **koi change nahi** (already latest, jaise `35591c7` billing 0.1.1 pe `Release success 49s` bina new publish ke), to **naya version deploy nahi hoga** — yahi verified hai.
+- **Kaise check ki prod sahi hua?** `gh run list --repo slyxup/stack`, `gh run view <ID> --log`, `npm view @slyxup/core version` (new version dikhe), `curl https://auth.slyxup.online/v1/health`, `wrangler tail`, `npx wrangler d1 execute slyxup_auth --remote --config auth.slyxup.online/wrangler.jsonc --command "SELECT count(*) FROM users;"`
+
+### Step-by-Step Commands (Dev → Verify → Prod)
+
+```bash
+# 1. DEV: naya feature branch (main se)
+git checkout main && git pull origin main
+git checkout -b feat/auth-sessions
+
+# 2. CODE: schema/api/sdk banao (AGENTS.md build order follow)
+# ... edit auth.slyxup.online/src/lib/schema.ts etc.
+
+# 3. LOCAL VERIFY (push se pehle mandatory)
+pnpm typecheck                          # 7/7 pass
+pnpm lint                               # biome 19 files
+pnpm build                              # turbo 7/7
+pnpm cf:typegen                         # wrangler types auth+billing
+pnpm --filter auth.slyxup.online db:generate
+pnpm --filter auth.slyxup.online db:migrate:local   # local D1
+npx wrangler d1 execute slyxup_auth --local --config auth.slyxup.online/wrangler.jsonc --command "SELECT name FROM sqlite_master WHERE type='table';"
+pnpm --filter @slyxup/core exec npm publish --dry-run --access public # SDK dry-run
+npx wrangler deploy --dry-run --config auth.slyxup.online/wrangler.jsonc # 19.96 KiB gzip
+
+# 4. SDK version bump (agar packages/* change kiya to)
+pnpm changeset                          # select patch/minor/major, .changeset/*.md banta hai
+git add .changeset/*.md
+git commit -m "chore: add changeset for @slyxup/core"
+
+# 5. COMMIT & PUSH to feature branch (NOT main yet)
+git add -p
+git commit -m "feat(auth): add sessions table"
+git push -u origin feat/auth-sessions
+gh pr create --fill --label feat        # CI chalega PR pe, prod deploy nahi
+
+# 6. PR VERIFY: gh pr view, CI green check
+gh run list --repo slyxup/stack --limit 3
+# ci success hona chahiye (Typecheck success Build success), security failure ignore (only ci required)
+
+# 7. JAB SAB SAHI LAGE, tab main pe merge/push (prod trigger)
+gh pr merge --squash --delete-branch    # ya: git checkout main && git merge feat/auth-sessions && git push origin main
+# Ab prod: ci.yml main pe, release.yml (if changeset -> version bump + npm publish, else skip), deploy.yml (if auth changed -> wrangler deploy)
+
+# 8. POST-PUSH VERIFY (prod)
+gh run list --repo slyxup/stack --limit 3 # ci success, release success/skip, deploy skipped/in_progress
+gh run view <RELEASE_ID> --log | grep -E "Publishing|success"
+npm view @slyxup/core version            # new version dikhe to publish OK
+curl https://auth.slyxup.online/v1/health
+npx wrangler d1 execute slyxup_auth --remote --config auth.slyxup.online/wrangler.jsonc --command "SELECT count(*) FROM users;"
+```
+
+**Important Rules:**
+- **Direct `main` pe push only jab verify ho gaya** — warna CI fail hoga aur `main` red. Best: `feat/*` → PR → CI green → merge.
+- **No changeset = no version bump** — agar `packages/*` me koi change nahi aur `.changeset/*.md` nahi banaya, to `release.yml` bolega `No changesets found` → publish skip, `success` but no new npm version (verified `35591c7` pe `Release success 49s` bina publish). Yahi chahiye tha.
+- **SDK version auto:** `pnpm changeset version` `package.json` bump karta hai (`0.1.0 -> 0.1.1`), `pnpm changeset publish` `npm publish --access public` se `NPM_TOKEN` se publish. Local me `dist` build hona chahiye pehle.
+- **Deploy only on change:** `deploy.yml` `if: contains(head_commit.modified, 'auth.slyxup.online/')` — agar auth folder change nahi to `skipped`, warna `wrangler deploy` prod D1 `cfa91e79` pe.
+
 ## 1. Branching & Commits (Conventional)
 
 ```

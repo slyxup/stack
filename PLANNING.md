@@ -36,9 +36,11 @@
 - PR checklist from `pull_request_template.md` — all boxes checked
 - CI must be green (`ci.yml`: typecheck, lint, build, test, drizzle check)
 
-### Phase 5 — Release
+### Phase 5 — Release (only on `main` push, auto-version)
 
-- `pnpm changeset` → version bump → `release.yml` publishes `@slyxup/*`
+- **Dev me:** `pnpm changeset` → `.changeset/*.md` banao (patch/minor/major select), commit karo. Agar `packages/*` me change nahi to changeset mat banao — to `main` push pe **no new version** (verified `35591c7` pe `Release success` bina publish).
+- **Prod pe (`main` push):** `release.yml` auto `pnpm changeset version` (package.json bump) + `pnpm changeset publish` (`NPM_TOKEN` se `npm publish --access public`). Agar koi changeset nahi aur sab packages already `latest` hai to publish skip, job `success` but no deploy — yahi chahiye.
+- **Verify prod:** `npm view @slyxup/core version` (new version dikhe), `gh run view --log | grep Publishing`
 
 ## 2. Task Breakdown Template (Copy for each feat)
 
