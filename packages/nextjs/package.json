@@ -1,9 +1,26 @@
 {
   "name": "@slyxup/nextjs",
   "version": "0.1.0",
-  "description": "@slyxup/nextjs — SlyxUp SDK",
+  "description": "@slyxup/nextjs \u2014 SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit" }
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/slyxup/stack.git",
+    "directory": "packages/nextjs"
+  },
+  "homepage": "https://github.com/slyxup/stack/tree/main/packages/nextjs#readme",
+  "bugs": {
+    "url": "https://github.com/slyxup/stack/issues"
+  },
+  "author": "SlyxUp <hello@slyxup.online>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -1,12 +1,26 @@
 {
   "name": "@slyxup/billing",
   "version": "0.1.1",
-  "description": "@slyxup/billing — SlyxUp SDK",
+  "description": "@slyxup/billing \u2014 SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/slyxup/stack.git",
+    "directory": "packages/billing"
+  },
+  "homepage": "https://github.com/slyxup/stack/tree/main/packages/billing#readme",
+  "bugs": {
+    "url": "https://github.com/slyxup/stack/issues"
+  },
+  "author": "SlyxUp <hello@slyxup.online>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
   }
 }
