@@ -1,9 +1,12 @@
 {
   "name": "@slyxup/billing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "@slyxup/billing — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit" }
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  }
 }
