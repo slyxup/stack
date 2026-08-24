@@ -1,4 +1,4 @@
-name: Deploy (CF Workers)
+name: Deploy (CF Workers + Pages)
 
 on:
   push:
@@ -8,15 +8,46 @@ on:
 jobs:
   deploy-auth:
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.modified, 'auth.slyxup.online/')
+    # run if auth, packages, or billing changed (auth depends on core)
+    if: contains(toJSON(github.event.head_commit.modified), 'auth.slyxup.online/') || contains(toJSON(github.event.head_commit.added), 'auth.slyxup.online/') || contains(toJSON(github.event.commits), 'auth')
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      # uses packageManager from package.json (pnpm@9.0.0) — no version key to avoid ERR_PNPM_BAD_PM_VERSION
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter auth.slyxup.online deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-stack:
+    runs-on: ubuntu-latest
+    # Stack is marketing Pages (static) — deploy on every main push so latest marketing always live
+    # Cloudflare now uses Workers with assets for Pages (unified), wrangler.jsonc assets: .next
+    if: always() # always deploy stack on main push (marketing should always be latest)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter stack.slyxup.online build
+      - run: npx wrangler deploy --config stack.slyxup.online/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-billing:
+    runs-on: ubuntu-latest
+    if: contains(toJSON(github.event.head_commit.modified), 'billing.slyxup.online/')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter billing.slyxup.online deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

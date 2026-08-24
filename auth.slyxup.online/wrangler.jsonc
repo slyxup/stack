@@ -13,9 +13,11 @@
     "API_URL": "https://auth.slyxup.online",
     "HOSTED_AUTH_URL": "https://auth.slyxup.online",
     "CORS_ORIGINS": "https://stack.slyxup.online,http://localhost:3000,http://localhost:8787",
-    "ALLOWED_REDIRECT_ORIGINS": "https://myapp.com,http://localhost:3000,http://localhost:8787",
-    "GOOGLE_CLIENT_ID": "dummy-google-client-id.apps.googleusercontent.com",
-    "GITHUB_CLIENT_ID": "dummy-github-client-id"
+    "ALLOWED_REDIRECT_ORIGINS": "https://myapp.com,http://localhost:3000,http://localhost:8787,https://auth.slyxup.online",
+    "GOOGLE_CLIENT_ID": "733897164108-o1reljhjoi3oho61hcksv5lv693u09ji.apps.googleusercontent.com",
+    "GITHUB_CLIENT_ID": "Ov23liAPqCFTwbp2umVu",
+    "EMAIL_FROM": "noreply@slyxup.online",
+    "BREVO_SENDER": "noreply@slyxup.online"
   },
   "d1_databases": [
     {
