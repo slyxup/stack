@@ -16,16 +16,17 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter auth.slyxup.online deploy
+      - run: pnpm --filter auth.slyxup.online run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   deploy-stack:
     runs-on: ubuntu-latest
-    # Stack is marketing Pages (static) — deploy on every main push so latest marketing always live
-    # Cloudflare now uses Workers with assets for Pages (unified), wrangler.jsonc assets: .next
-    if: always() # always deploy stack on main push (marketing should always be latest)
+    # Stack is marketing Pages — STATIC via Workers assets (modern Pages). Always deploy on main so marketing latest.
+    # Note: This is Pages (marketing design etc), NOT Worker logic — uses assets: .next, deploys via wrangler.
+    # If you see "Authentication error /zones/.../workers/routes [10000]", update CLOUDFLARE_API_TOKEN at
+    # https://dash.cloudflare.com/profile/api-tokens → Create Token → Edit Cloudflare Workers template + add Zone:Read + Workers Routes:Edit
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -47,7 +48,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter billing.slyxup.online deploy
+      - run: pnpm --filter billing.slyxup.online run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
