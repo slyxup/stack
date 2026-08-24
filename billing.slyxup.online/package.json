@@ -1,0 +1,9 @@
+{
+  "name": "billing.slyxup.online",
+  "private": true, "version": "0.1.0",
+  "description": "SlyxUp Billing Worker — CF Workers + D1 (future)",
+  "type": "module",
+  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy", "typegen": "wrangler types" },
+  "dependencies": { "hono": "^4.7.0", "drizzle-orm": "^0.33.0" },
+  "devDependencies": { "wrangler": "^3.80.0", "@cloudflare/workers-types": "^4.20240605.0", "typescript": "^5.5.0" }
+}

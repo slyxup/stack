@@ -1,0 +1,26 @@
+{
+  "name": "auth.slyxup.online",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SlyxUp Auth Worker — Hono + D1 + KV (https://auth.slyxup.online) — CF Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typegen": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply slyxup_auth --local",
+    "db:migrate:remote": "wrangler d1 migrations apply slyxup_auth --remote"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "drizzle-orm": "^0.33.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "wrangler": "^3.80.0",
+    "drizzle-kit": "^0.24.0",
+    "@cloudflare/workers-types": "^4.20240605.0"
+  }
+}

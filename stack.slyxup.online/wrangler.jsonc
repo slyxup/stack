@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stack-slyxup-online",
+  "compatibility_date": "2025-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": ".next", "not_found_handling": "single-page-application" },
+  "vars": { "NEXT_PUBLIC_SLYXUP_API_URL": "https://auth.slyxup.online" },
+  "routes": [
+    { "pattern": "stack.slyxup.online/*", "zone_name": "slyxup.online" }
+  ],
+  "observability": { "enabled": true }
+}

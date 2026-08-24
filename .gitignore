@@ -1,0 +1,58 @@
+# Deps
+node_modules
+.pnpm-store
+.pnpm-debug.log
+yarn.lock
+package-lock.json
+
+# Build
+dist
+build
+.next
+out
+.turbo
+.cache
+.parcel-cache
+
+# Workers
+.dev.vars
+.dev.vars.*
+.wrangler
+worker-configuration.d.ts
+.migrations
+.mini-queue
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage
+.nyc_output
+*.lcov
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.swp
+*.swo
+*~
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Misc
+.cache
+.tmp
+temp

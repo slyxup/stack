@@ -1,0 +1,11 @@
+name: Bug Report
+description: Report a bug in SlyxUp Stack
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: What happened?, description: "Include `wrangler dev` logs, D1 query, binding used" }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Repro, description: "Steps + `curl` + D1 state" }

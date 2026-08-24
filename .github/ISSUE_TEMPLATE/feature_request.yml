@@ -1,0 +1,8 @@
+name: Feature Request
+description: Request feature (check ROADMAP.md V1 scope first)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposal, description: "If V1 NOT-in-scope (LIMITATIONS.md), explain why needed now" }
+    validations: { required: true }

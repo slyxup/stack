@@ -1,0 +1,53 @@
+{
+  "name": "@slyxup/stack-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SlyxUp Stack \u2014 Cloudflare Workers + D1 (github.com/slyxup/stack) \u2014 domain-based: slyxup.online/stack/*",
+  "repository": "github:slyxup/stack",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "workspaces": [
+    "auth.slyxup.online",
+    "stack.slyxup.online",
+    "billing.slyxup.online",
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "deploy": "turbo deploy",
+    "dev:auth": "pnpm --filter auth.slyxup.online dev",
+    "dev:stack": "pnpm --filter stack.slyxup.online dev",
+    "dev:billing": "pnpm --filter billing.slyxup.online dev",
+    "deploy:auth": "pnpm --filter auth.slyxup.online deploy",
+    "deploy:stack": "pnpm --filter stack.slyxup.online deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply slyxup_auth --remote",
+    "cf:typegen": "wrangler types",
+    "typecheck": "turbo typecheck",
+    "lint": "biome lint .",
+    "format": "biome format . --write",
+    "lint:fix": "biome lint --write .",
+    "prepare": "husky",
+    "commitlint": "commitlint --edit"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^3.80.0",
+    "@biomejs/biome": "^1.9.0",
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@changesets/cli": "^2.27.0",
+    "@changesets/changelog-github": "^0.5.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0"
+  },
+  "lint-staged": {
+    "*.*": "biome check --write --no-errors-on-unmatched"
+  }
+}
