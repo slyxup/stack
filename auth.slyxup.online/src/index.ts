@@ -46,6 +46,7 @@ app.get('/v1/health', (c) =>
 );
 
 import auth from './routes/auth';
+import developersRoute from './routes/developers';
 import keysRoute from './routes/keys';
 import projectsRoute from './routes/projects';
 import usersRoute from './routes/users';
@@ -55,6 +56,7 @@ app.route('/v1/user', usersRoute);
 app.route('/v1/verification', verificationRoute);
 app.route('/v1/projects', projectsRoute);
 app.route('/v1/keys', keysRoute);
+app.route('/v1/developers', developersRoute);
 app.route('/v1', auth); // also mount session at /v1/session
 
 export default {
