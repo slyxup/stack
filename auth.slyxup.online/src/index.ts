@@ -46,8 +46,16 @@ app.get('/v1/health', (c) =>
 );
 
 import auth from './routes/auth';
+import keysRoute from './routes/keys';
+import projectsRoute from './routes/projects';
+import usersRoute from './routes/users';
+import verificationRoute from './routes/verification';
 app.route('/v1/auth', auth);
-app.route('/v1', auth); // also mount session/user at /v1/session etc. (auth route already has /session)
+app.route('/v1/user', usersRoute);
+app.route('/v1/verification', verificationRoute);
+app.route('/v1/projects', projectsRoute);
+app.route('/v1/keys', keysRoute);
+app.route('/v1', auth); // also mount session at /v1/session
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
