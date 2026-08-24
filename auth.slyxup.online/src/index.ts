@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 // SlyxUp Auth Worker — CF Workers + D1 + KV
 // Deploy: https://auth.slyxup.online (wrangler deploy)
 // API: /v1/*  Hosted Pages: /sign-in etc.
-// Verified: CI/CD + Brevo + OAuth + Custom Domain — 2026-08-24
+// Verified: CI/CD + Brevo + OAuth + Custom Domain + Pages — 2026-08-24 14:55
 
 type Bindings = {
   DB: D1Database;
@@ -21,11 +21,11 @@ app.get('/health', (c) =>
     ok: true,
     service: 'auth.slyxup.online',
     runtime: 'cloudflare',
-    version: '0.1.1-ci-verified',
+    version: '0.1.2-ci-verified',
   })
 );
 app.get('/v1/health', (c) =>
-  c.json({ ok: true, db: !!c.env.DB, version: '0.1.1-ci-verified' })
+  c.json({ ok: true, db: !!c.env.DB, version: '0.1.2-ci-verified' })
 );
 
 // TODO: routes per PLAN.md — src/routes/auth.ts etc. with D1 + KV

@@ -7,7 +7,7 @@ app.get('/health', (c) =>
     service: 'billing.slyxup.online',
     runtime: 'cloudflare',
     status: 'placeholder',
-    verified: '2026-08-24',
+    verified: '2026-08-24 14:55',
   })
 );
 export default {
