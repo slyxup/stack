@@ -6,9 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": { "API_URL": "https://billing.slyxup.online", "AUTH_URL": "https://auth.slyxup.online" },
   "d1_databases": [
-    { "binding": "DB", "database_name": "slyxup_billing", "database_id": "REPLACE_WITH_BILLING_D1_ID" }
+    { "binding": "DB", "database_name": "slyxup_billing", "database_id": "5c5a0f61-3ca8-4e12-baf2-29e2d2ce9415", "migrations_dir": "migrations" }
   ],
-  "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_WITH_BILLING_KV_ID" }],
+  "kv_namespaces": [{ "binding": "KV", "id": "74a592aa3b044d15bb780648c774b906" }],
   "observability": { "enabled": true },
   "routes": [{ "pattern": "billing.slyxup.online/*", "zone_name": "slyxup.online" }]
 }

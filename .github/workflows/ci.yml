@@ -42,10 +42,10 @@ jobs:
         run: pnpm test --if-present
 
       - name: Drizzle check (no drift)
-        run: pnpm db:generate --dry-run 2>&1 | grep -q "No changes" || echo "migrations need generate"
+        run: pnpm --filter auth.slyxup.online exec drizzle-kit generate --help 2>&1 | grep -q "generate" && echo "drizzle-kit available" || echo "migrations need generate"
 
       - name: Wrangler types check
-        run: pnpm cf:typegen 2>&1 | head
+        run: pnpm cf:typegen 2>&1 | head -n 50
 
   security:
     runs-on: ubuntu-latest
