@@ -22,5 +22,14 @@
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@types/react": "^18"
+  },
+  "peerDependencies": {
+    "react": "^18 || ^19"
+  },
+  "dependencies": {
+    "@slyxup/core": "workspace:*"
   }
 }

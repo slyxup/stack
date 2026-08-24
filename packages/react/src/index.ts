@@ -1,1 +1,12 @@
-export * from './provider/SlyxUpProvider'; // verified 2026-08-24 14:55
+export {
+  SlyxUpProvider,
+  type SlyxUpProviderProps,
+} from './provider/SlyxUpProvider';
+export {
+  AuthContext,
+  useAuthContext,
+  type AuthContextValue,
+} from './context/auth-context';
+export { useAuth } from './hooks/useAuth';
+export { useUser } from './hooks/useUser';
+export { useSession } from './hooks/useSession';
