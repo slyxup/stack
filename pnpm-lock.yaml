@@ -117,7 +117,24 @@ importers:
         specifier: ^18
         version: 18.3.31
 
-  packages/ui: {}
+  packages/ui:
+    dependencies:
+      '@slyxup/core':
+        specifier: workspace:*
+        version: link:../core
+      '@slyxup/react':
+        specifier: workspace:*
+        version: link:../react
+      react:
+        specifier: ^18 || ^19
+        version: 18.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      '@types/react':
+        specifier: ^18
+        version: 18.3.31
 
   stack.slyxup.online:
     dependencies:

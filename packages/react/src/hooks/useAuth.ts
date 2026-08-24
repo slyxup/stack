@@ -25,5 +25,5 @@ export function useAuth() {
     return res;
   };
 
-  return { isLoaded, isSignedIn, userId, signIn, signUp, signOut };
+  return { isLoaded, isSignedIn, userId, client, signIn, signUp, signOut };
 }
