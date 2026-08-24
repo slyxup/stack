@@ -1,7 +1,7 @@
 {
   "name": "@slyxup/react",
-  "version": "0.1.0",
-  "description": "@slyxup/react \u2014 SlyxUp SDK",
+  "version": "0.1.1",
+  "description": "@slyxup/react — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
