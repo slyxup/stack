@@ -1,1 +1,3 @@
-export const placeholder = 'core — verified 2026-08-24 15:05 — ci fix';
+export { SlyxupClient } from './client.js';
+export * from './types.js';
+export * from './errors.js';

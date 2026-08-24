@@ -63,7 +63,13 @@ export async function signUp(
     updatedAt: now,
   });
 
-  return { userId, sessionToken, expiresAt, verificationToken: token };
+  return {
+    userId,
+    sessionToken,
+    expiresAt,
+    verificationToken: token,
+    user: { id: userId, email: input.email },
+  };
 }
 
 export async function signIn(

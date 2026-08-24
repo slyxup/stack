@@ -22,12 +22,12 @@ const auth = new Hono<{ Bindings: Bindings }>();
 auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
   const input = c.req.valid('json');
   try {
-    const { userId, sessionToken, expiresAt } = await AuthService.signUp(
+    const { sessionToken, expiresAt, user } = await AuthService.signUp(
       c.env,
       input
     );
     setSessionCookie(c, sessionToken, expiresAt);
-    return c.json({ ok: true, userId }, 201);
+    return c.json({ ok: true, user }, 201);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
     return c.json({ ok: false, error: msg }, 400);
