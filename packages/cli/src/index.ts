@@ -1,10 +1,14 @@
 #!/usr/bin/env node
-import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { Command } from 'commander';
-import { CliApiError, api } from './api';
-import { clearCredentials, loadCredentials, saveCredentials } from './config';
-import { detectFramework, readEnvKey } from './detectors/framework';
+import { CliApiError, api } from './api.js';
+import {
+  clearCredentials,
+  loadCredentials,
+  saveCredentials,
+} from './config.js';
+import { detectFramework, readEnvKey } from './detectors/framework.js';
 
 const DEFAULT_API_URL =
   process.env.SLYXUP_API_URL ?? 'https://auth.slyxup.online';
@@ -46,21 +50,32 @@ program
     }
 
     try {
-      if (opts.new) {
-        const res = await api.register(apiUrl, { email, password });
-        if (!res.ok) throw new CliApiError('Registration failed', res.status);
-        console.log(`Account created for ${email}`);
-      } else {
-        const check = await api.loginCheck(apiUrl, email, password);
-        if (!check.ok) {
-          // Fall back to register so first-time users just work
-          console.log('No account found — creating one…');
-          const res = await api.register(apiUrl, { email, password });
-          if (!res.ok) throw new CliApiError('Registration failed', res.status);
+      // Developers are a separate entity from app users — use only the
+      // developers endpoints. lookup validates creds; register creates.
+      let devId: string | null | undefined;
+      if (!opts.new) {
+        devId = await lookupDeveloper(apiUrl, email, password);
+      }
+      if (!devId) {
+        const res = await fetch(`${apiUrl}/v1/developers/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          developerId?: string;
+          error?: string;
+        };
+        if (!res.ok || !data.developerId) {
+          throw new CliApiError(
+            data.error ?? `Registration failed (${res.status})`,
+            res.status
+          );
         }
+        devId = data.developerId;
+        console.log(`Account created for ${email}`);
       }
 
-      const devId = await resolveDeveloperId(apiUrl, email);
       saveCredentials({ developerId: devId, email, apiUrl });
       console.log(
         `Logged in as ${email}. Credentials saved to ~/.config/slyxup/credentials.json`
@@ -71,14 +86,31 @@ program
     }
   });
 
+/** Validate developer credentials and resolve id; null when no account. */
+async function lookupDeveloper(
+  apiUrl: string,
+  email: string,
+  password: string
+): Promise<string | null> {
+  const res = await fetch(`${apiUrl}/v1/developers/lookup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(`Login failed (${res.status})`);
+  const data = (await res.json()) as { developerId?: string | null };
+  return data.developerId ?? null;
+}
+
 async function resolveDeveloperId(
   apiUrl: string,
-  email: string
+  email: string,
+  password: string
 ): Promise<string> {
   const res = await fetch(`${apiUrl}/v1/developers/lookup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok)
     throw new Error(`Could not resolve developer identity (${res.status})`);
@@ -298,6 +330,7 @@ program
       `NEXT_PUBLIC_SLYXUP_API_URL=${loadCredentials()?.apiUrl ?? DEFAULT_API_URL}`,
     ];
     if (opts.out) {
+      mkdirSync(dirname(opts.out), { recursive: true });
       appendFileSync(opts.out, `${lines.join('\n')}\n`);
       console.log(`Wrote ${lines.length} lines to ${opts.out}`);
     } else {

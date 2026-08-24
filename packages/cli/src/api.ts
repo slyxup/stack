@@ -1,4 +1,4 @@
-import type { Credentials } from './config';
+import type { Credentials } from './config.js';
 
 export interface Project {
   id: string;
@@ -60,18 +60,6 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     }),
-  loginCheck: async (apiUrl: string, email: string, password: string) => {
-    // Developer login reuses the users sign-in endpoint for validation, then
-    // resolves developerId via projects listing. V1 simplification: developer
-    // registers via `slyxup login --new`, otherwise validates credentials and
-    // uses the returned identity.
-    const res = await fetch(`${apiUrl}/v1/auth/sign-in`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    return { ok: res.ok, status: res.status };
-  },
   createProject: (
     c: Credentials,
     input: { name: string; slug: string; description?: string }
