@@ -14,13 +14,16 @@
     "db:migrate:remote": "wrangler d1 migrations apply slyxup_auth --remote"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.9.0",
+    "drizzle-orm": "^0.33.0",
     "hono": "^4.7.0",
-    "drizzle-orm": "^0.33.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "wrangler": "^3.80.0",
+    "@cloudflare/workers-types": "^4.20240605.0",
+    "@types/node": "^26.2.0",
     "drizzle-kit": "^0.24.0",
-    "@cloudflare/workers-types": "^4.20240605.0"
+    "typescript": "^5.5.0",
+    "wrangler": "^3.80.0"
   }
 }

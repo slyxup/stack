@@ -16,6 +16,23 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// CORS
+app.use('*', async (c, next) => {
+  const origin = c.req.header('Origin') ?? '';
+  const allowed = (c.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim());
+  if (origin && (allowed.includes(origin) || allowed.includes('*'))) {
+    c.header('Access-Control-Allow-Origin', origin);
+    c.header('Access-Control-Allow-Credentials', 'true');
+  }
+  c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  c.header(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, Cookie'
+  );
+  if (c.req.method === 'OPTIONS') return new Response('', { status: 204 });
+  await next();
+});
+
 app.get('/health', (c) =>
   c.json({
     ok: true,
@@ -28,7 +45,9 @@ app.get('/v1/health', (c) =>
   c.json({ ok: true, db: !!c.env.DB, version: '0.1.2-ci-verified' })
 );
 
-// TODO: routes per PLAN.md — src/routes/auth.ts etc. with D1 + KV
+import auth from './routes/auth';
+app.route('/v1/auth', auth);
+app.route('/v1', auth); // also mount session/user at /v1/session etc. (auth route already has /session)
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
