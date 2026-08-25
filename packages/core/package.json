@@ -1,14 +1,14 @@
 {
   "name": "@slyxup/core",
   "version": "0.2.0",
-  "description": "@slyxup/core — SlyxUp SDK",
+  "description": "@slyxup/core \u2014 SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "repository": {
     "type": "git",
