@@ -18,6 +18,10 @@
   ],
   "scripts": {
     "dev": "turbo dev",
+    "dev:all": "turbo dev",
+    "run:all": "turbo dev",
+    "start:all": "turbo dev",
+    "servers": "turbo dev",
     "build": "turbo build",
     "deploy": "turbo deploy",
     "dev:auth": "pnpm --filter auth.slyxup.online dev",
