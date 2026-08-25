@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BillingClient, type Plan, type Subscription, type Invoice } from '@slyxup/billing';
 
 const defaultClient = new BillingClient();
 
 export function useBilling(apiUrl?: string) {
-  const client = apiUrl ? new BillingClient({ apiUrl }) : defaultClient;
+  const client = useMemo(() => (apiUrl ? new BillingClient({ apiUrl }) : defaultClient), [apiUrl]);
   return { client };
 }
 
@@ -23,7 +23,7 @@ export function usePlans(projectId: string | undefined, apiUrl?: string) {
       .then(setPlans)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
       .finally(() => setLoading(false));
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId, client]);
 
   return { plans, loading, error };
 }
@@ -44,7 +44,7 @@ export function useSubscription(projectId: string | undefined, apiUrl?: string) 
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [client]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -61,7 +61,7 @@ export function useInvoices(apiUrl?: string) {
       .then(setInvoices)
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [client]);
 
   return { invoices, loading };
 }
@@ -81,7 +81,7 @@ export function useCheckout(apiUrl?: string) {
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [client]);
 
   return { checkout, loading, error };
 }
