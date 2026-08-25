@@ -17,7 +17,17 @@ const mockClient = vi.hoisted(() => ({
 }));
 
 vi.mock('@slyxup/core', () => ({
-  SlyxupClient: vi.fn(() => mockClient),
+  SlyxupClient: class {
+    auth = mockClient.auth;
+    sessions = mockClient.sessions;
+    users = mockClient.users;
+    publishableKey: string | undefined;
+    apiUrl: string;
+    constructor(opts: { publishableKey?: string; apiUrl?: string }) {
+      this.publishableKey = opts.publishableKey;
+      this.apiUrl = opts.apiUrl ?? '';
+    }
+  },
 }));
 
 import { SlyxUpProvider } from '../src/provider/SlyxUpProvider';

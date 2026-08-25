@@ -85,17 +85,16 @@ describe('SignIn', () => {
 describe('SignUp', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders sign up heading', () => {
+  it('renders create your account heading', () => {
     render(<SignUp />);
-    expect(screen.getByRole('heading', { name: /sign up/i })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /create your account/i })).toBeTruthy();
   });
 
-  it('renders email, password, first name, last name inputs', () => {
+  it('renders first name, email, password inputs', () => {
     render(<SignUp />);
+    expect(screen.getByLabelText(/first name/i)).toBeTruthy();
     expect(screen.getByLabelText(/email/i)).toBeTruthy();
     expect(screen.getByLabelText(/password/i)).toBeTruthy();
-    expect(screen.getByLabelText(/first name/i)).toBeTruthy();
-    expect(screen.getByLabelText(/last name/i)).toBeTruthy();
   });
 
   it('shows social buttons by default', () => {

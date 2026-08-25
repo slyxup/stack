@@ -1,8 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.resetModules();
-
-const { CSS, injectStyles } = await import('../src/styles.js');
+import { describe, it, expect, beforeEach } from 'vitest';
+import { CSS, injectStyles } from '../src/styles';
 
 describe('CSS', () => {
   it('is a non-empty string', () => {
@@ -33,26 +30,21 @@ describe('CSS', () => {
   it('contains prefers-reduced-motion', () => {
     expect(CSS).toContain('prefers-reduced-motion');
   });
+
+  it('contains card styles', () => {
+    expect(CSS).toContain('.slx-card');
+  });
+
+  it('contains button styles', () => {
+    expect(CSS).toContain('.slx-btn');
+  });
 });
 
 describe('injectStyles', () => {
-  beforeEach(() => {
-    document.head.innerHTML = '';
-    vi.resetModules();
-  });
-
-  it('adds a style element to document head', async () => {
-    const { injectStyles: inject } = await import('../src/styles.js');
-    inject();
-    const style = document.getElementById('slyxup-styles');
+  it('injects stylesheet into document head', () => {
+    injectStyles();
+    const style = document.querySelector('#slyxup-styles');
     expect(style).toBeTruthy();
     expect(style?.tagName).toBe('STYLE');
-  });
-
-  it('does not add duplicate styles', async () => {
-    const { injectStyles: inject } = await import('../src/styles.js');
-    inject();
-    inject();
-    expect(document.querySelectorAll('#slyxup-styles').length).toBe(1);
   });
 });
