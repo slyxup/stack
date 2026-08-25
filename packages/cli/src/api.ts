@@ -91,4 +91,30 @@ export const api = {
     ),
   revokeKey: (c: Credentials, id: string) =>
     req<{ ok: true }>(c, 'DELETE', `/v1/keys/${id}`),
+  getDomains: (c: Credentials, projectId: string) =>
+    req<{ ok: true; environment: string; domains: string[] }>(
+      c,
+      'GET',
+      `/v1/projects/${projectId}/domains`
+    ),
+  addDomain: (c: Credentials, projectId: string, domain: string) =>
+    req<{ ok: true; domains: string[] }>(
+      c,
+      'PATCH',
+      `/v1/projects/${projectId}/domains`,
+      { action: 'add', domain }
+    ),
+  removeDomain: (c: Credentials, projectId: string, domain: string) =>
+    req<{ ok: true; domains: string[] }>(
+      c,
+      'PATCH',
+      `/v1/projects/${projectId}/domains`,
+      { action: 'remove', domain }
+    ),
+  goLive: (c: Credentials, projectId: string) =>
+    req<{ ok: true; environment: string }>(
+      c,
+      'POST',
+      `/v1/projects/${projectId}/go-live`
+    ),
 };

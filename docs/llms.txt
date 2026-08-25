@@ -1,0 +1,70 @@
+# SlyxUp Stack
+
+> Open-source authentication + billing platform on Cloudflare Workers. Email/password, OAuth, sessions, subscriptions, SDKs for React/Next.js, prebuilt UI, CLI.
+
+## Quick Links
+- [GitHub](https://github.com/slyxup/stack)
+- [npm @slyxup/core](https://www.npmjs.com/package/@slyxup/core)
+- Marketing: https://stack.slyxup.online
+- API: https://auth.slyxup.online/v1/
+
+## Authentication Endpoints (v1)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | /v1/auth/sign-up | none | Create user, returns session cookie |
+| POST | /v1/auth/sign-in | none | Sign in, returns session cookie |
+| POST | /v1/auth/sign-out | session | Clear session |
+| GET | /v1/session | cookie/bearer | Get current session |
+| GET | /v1/user | cookie/bearer | Get full user profile |
+| PATCH | /v1/user | bearer | Update profile |
+| DELETE | /v1/user | bearer | Delete account |
+| POST | /v1/verification/verify | none | Verify email with token |
+| POST | /v1/verification/resend | none | Resend verification email |
+| POST | /v1/verification/password/forgot | none | Request password reset |
+| POST | /v1/verification/password/reset | none | Reset password with token |
+| GET | /v1/oauth/google | none | Start Google OAuth |
+| GET | /v1/oauth/github | none | Start GitHub OAuth |
+| GET | /v1/oauth/callback/:provider | none | OAuth callback |
+
+## Billing Endpoints (v1)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | /v1/billing/plans?projectId= | none | List plans for project |
+| GET | /v1/billing/subscription?projectId= | bearer | Current subscription |
+| POST | /v1/billing/checkout | bearer | Create checkout URL {planId} |
+| POST | /v1/billing/subscription/cancel | bearer | Cancel at period end |
+| GET | /v1/billing/invoices | bearer | List invoices |
+| POST | /v1/webhooks/paddle | Paddle signature | Webhook handler |
+
+## Management API
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET/POST | /v1/projects | Bearer developerId | List/create projects |
+| GET/PATCH | /v1/projects/:id/domains | Bearer developerId | Manage CORS domains |
+| POST | /v1/projects/:id/go-live | Bearer developerId | Upgrade test→live |
+| GET/POST | /v1/keys | Bearer developerId | Manage API keys |
+| DELETE | /v1/keys/:id | Bearer developerId | Revoke key |
+| POST | /v1/admin/users/:id/block | admin session | Block user + revoke sessions |
+| POST | /v1/admin/users/:id/unblock | admin session | Unblock user |
+
+## npm Packages
+
+- `@slyxup/core` — HTTP client (SlyxupClient), errors, types
+- `@slyxup/react` — SlyxUpProvider, useAuth(), useUser(), useSession()
+- `@slyxup/nextjs` — auth(), currentUser(), requireUser(), slyxupMiddleware()
+- `@slyxup/ui` — SignIn, SignUp, UserButton, PricingTable, BillingPortal components
+- `@slyxup/cli` — slyxup login/init/project/keys/domains/doctor
+- `@slyxup/billing` — BillingClient for plans/subscriptions/invoices
+
+## Environment Variables
+
+- `SESSION_SECRET` — 32-char random hex (wrangler secret put)
+- `ENCRYPTION_KEY` — 32-char random hex
+- `BREVO_API_KEY` — Brevo xsmtpsib-... key for email
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+- `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`
+- `PADDLE_API_KEY` — Paddle billing API key
+- `PADDLE_ENVIRONMENT` — sandbox or production

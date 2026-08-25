@@ -1,7 +1,7 @@
 {
   "name": "@slyxup/billing",
   "version": "0.1.2",
-  "description": "@slyxup/billing \u2014 SlyxUp SDK",
+  "description": "@slyxup/billing — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,6 +25,10 @@
     "access": "public"
   },
   "devDependencies": {
+    "@types/node": "^26.3.0",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "@slyxup/core": "workspace:*"
   }
 }

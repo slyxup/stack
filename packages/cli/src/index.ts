@@ -275,6 +275,80 @@ keys.command('revoke <id>').action(async (id: string) => {
   }
 });
 
+// ── domains ──
+const domains = program
+  .command('domains')
+  .description('Manage project domains for CORS');
+
+domains
+  .command('list')
+  .requiredOption('--project-id <id>')
+  .action(async (opts) => {
+    const creds = needCreds();
+    try {
+      const res = await api.getDomains(creds, opts.projectId);
+      console.log(`Environment: ${res.environment}`);
+      if (res.domains.length === 0)
+        return console.log(
+          'No custom domains. Test projects work on localhost only.'
+        );
+      for (const d of res.domains) console.log(`  ${d}`);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+domains
+  .command('add <domain>')
+  .requiredOption('--project-id <id>')
+  .action(async (domain: string, opts) => {
+    const creds = needCreds();
+    try {
+      const res = await api.addDomain(creds, opts.projectId, domain);
+      console.log(
+        `Domain added. Allowed: ${res.domains.join(', ') || '(none)'}`
+      );
+      const env = await api.getDomains(creds, opts.projectId);
+      if (env.environment === 'test')
+        console.log(
+          '\nNote: Project is still in TEST mode. Run `slyxup domains go-live --project-id <id>` to enable custom domains.'
+        );
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+domains
+  .command('remove <domain>')
+  .requiredOption('--project-id <id>')
+  .action(async (domain: string, opts) => {
+    const creds = needCreds();
+    try {
+      const res = await api.removeDomain(creds, opts.projectId, domain);
+      console.log(
+        `Domain removed. Allowed: ${res.domains.join(', ') || '(none)'}`
+      );
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+domains
+  .command('go-live')
+  .requiredOption('--project-id <id>')
+  .description('Upgrade project from test to live (enables custom domain CORS)')
+  .action(async (opts) => {
+    const creds = needCreds();
+    try {
+      const res = await api.goLive(creds, opts.projectId);
+      console.log(
+        `Project is now ${res.environment.toUpperCase()}. Custom domains are active.`
+      );
+    } catch (e) {
+      fail(e);
+    }
+  });
+
 // ── init ──
 program
   .command('init')
