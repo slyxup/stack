@@ -1,7 +1,7 @@
 {
   "name": "@slyxup/billing",
-  "version": "0.1.1",
-  "description": "@slyxup/billing \u2014 SlyxUp SDK",
+  "version": "0.1.2",
+  "description": "@slyxup/billing — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
