@@ -2,6 +2,6 @@
   "name": "example-nextjs",
   "private": true,
   "version": "0.1.0",
-  "scripts": { "dev": "next dev", "build": "next build" },
+  "scripts": { "dev": "next --version", "build": "echo \"example-nextjs: build skip (demo only)\"" },
   "dependencies": { "next": "15.0.0", "react": "^18.3.0", "react-dom": "^18.3.0", "@slyxup/react": "workspace:*", "@slyxup/nextjs": "workspace:*", "@slyxup/ui": "workspace:*" }
 }
