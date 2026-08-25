@@ -3,7 +3,11 @@
  * Injected once via <SlyxUpStyles />. Theme with CSS variables on :root or .slyxup-scope.
  */
 
+export const FONT_LINK = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">`;
+
 export const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');
+
 .slyxup-root {
   --slx-accent: #5b5bd6;
   --slx-accent-hover: #4c4cc4;
@@ -15,7 +19,7 @@ export const CSS = `
   --slx-border: #e6e6ec;
   --slx-danger: #d64550;
   --slx-radius: 12px;
-  --slx-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --slx-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --slx-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   font-family: var(--slx-font);
@@ -188,9 +192,17 @@ export const CSS = `
 
 let injected = false;
 
-/** Inject the SlyxUp stylesheet once per document. */
+/** Inject the SlyxUp stylesheet + DM Sans font once per document. */
 export function injectStyles(): void {
   if (injected || typeof document === 'undefined') return;
+  // DM Sans font link
+  if (!document.querySelector('link[href*="DM+Sans"]')) {
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href =
+      'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap';
+    document.head.appendChild(fontLink);
+  }
   const style = document.createElement('style');
   style.setAttribute('data-slyxup', 'styles');
   style.textContent = CSS;

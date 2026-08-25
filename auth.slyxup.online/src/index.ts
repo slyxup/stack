@@ -24,19 +24,27 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// CORS
+// CORS — allow configured origins + any localhost dev port
 app.use('*', async (c, next) => {
   const origin = c.req.header('Origin') ?? '';
   const allowed = (c.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim());
-  if (origin && (allowed.includes(origin) || allowed.includes('*'))) {
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
+    origin
+  );
+  if (
+    origin &&
+    (allowed.includes(origin) || allowed.includes('*') || isLocalhost)
+  ) {
     c.header('Access-Control-Allow-Origin', origin);
     c.header('Access-Control-Allow-Credentials', 'true');
+    c.header('Vary', 'Origin');
   }
-  c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  c.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   c.header(
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, Cookie'
   );
+  c.header('Access-Control-Max-Age', '86400');
   if (c.req.method === 'OPTIONS') return new Response('', { status: 204 });
   await next();
 });
