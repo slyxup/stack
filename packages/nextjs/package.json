@@ -28,5 +28,8 @@
   },
   "dependencies": {
     "@slyxup/core": "workspace:*"
+  },
+  "devDependencies": {
+    "next": "^15.0.0"
   }
 }

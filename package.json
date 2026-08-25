@@ -2,7 +2,7 @@
   "name": "@slyxup/stack-monorepo",
   "private": true,
   "version": "0.1.0",
-  "description": "SlyxUp Stack \u2014 Cloudflare Workers + D1 (github.com/slyxup/stack) \u2014 domain-based: slyxup.online/stack/*",
+  "description": "SlyxUp Stack — Cloudflare Workers + D1 (github.com/slyxup/stack) — domain-based: slyxup.online/stack/*",
   "repository": "github:slyxup/stack",
   "packageManager": "pnpm@9.0.0",
   "engines": {
@@ -39,16 +39,21 @@
     "commitlint": "commitlint --edit"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
-    "typescript": "^5.5.0",
-    "wrangler": "^3.80.0",
     "@biomejs/biome": "^1.9.0",
+    "@changesets/changelog-github": "^0.5.0",
+    "@changesets/cli": "^2.27.0",
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
-    "@changesets/cli": "^2.27.0",
-    "@changesets/changelog-github": "^0.5.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16",
+    "happy-dom": "^20.11.6",
     "husky": "^9.0.0",
-    "lint-staged": "^15.0.0"
+    "lint-staged": "^15.0.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.11",
+    "wrangler": "^3.80.0"
   },
   "lint-staged": {
     "*.*": "biome check --write --no-errors-on-unmatched"
