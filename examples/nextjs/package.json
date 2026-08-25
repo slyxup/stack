@@ -2,6 +2,6 @@
   "name": "example-nextjs",
   "private": true,
   "version": "0.1.0",
-  "scripts": { "dev": "echo \"example-nextjs: dev skip\"", "build": "echo \"example-nextjs: build skip (demo only)\"" },
-  "dependencies": { "next": "15.0.0", "react": "^18.3.0", "react-dom": "^18.3.0", "@slyxup/react": "workspace:*", "@slyxup/nextjs": "workspace:*", "@slyxup/ui": "workspace:*" }
+  "scripts": { "dev": "next dev --port 3001", "build": "next build" },
+  "dependencies": { "next": "15.0.0", "react": "^18.3.0", "react-dom": "^18.3.0", "@slyxup/react": "workspace:*", "@slyxup/nextjs": "workspace:*", "@slyxup/ui": "workspace:*", "@slyxup/core": "workspace:*" }
 }
