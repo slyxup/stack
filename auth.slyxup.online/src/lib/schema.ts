@@ -534,3 +534,78 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type NewSubscription = typeof subscriptions.$inferInsert;
 export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
+
+// ── Audit Logs ──
+export const auditLogs = sqliteTable(
+  'audit_logs',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    projectId: text('project_id').references(() => projects.id, {
+      onDelete: 'cascade',
+    }),
+    userId: text('user_id'),
+    action: text('action', {
+      enum: [
+        'user.created',
+        'user.signed_in',
+        'user.signed_out',
+        'user.updated',
+        'user.deleted',
+        'user.blocked',
+        'user.unblocked',
+        'email.verified',
+        'password.reset',
+        'password.changed',
+        'oauth.linked',
+        'subscription.created',
+        'subscription.canceled',
+        'key.created',
+        'key.revoked',
+        'project.created',
+      ],
+    }).notNull(),
+    metadata: text('metadata', { mode: 'json' }).$type<
+      Record<string, unknown>
+    >(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    projectIdx: index('audit_logs_project_idx').on(t.projectId),
+    userIdx: index('audit_logs_user_idx').on(t.userId),
+    actionIdx: index('audit_logs_action_idx').on(t.action),
+  })
+);
+
+// ── Webhook Endpoints ──
+export const webhookEndpoints = sqliteTable(
+  'webhook_endpoints',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    secret: text('secret').notNull(),
+    events: text('events', { mode: 'json' }).$type<string[]>().default([]),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    projectIdx: index('webhook_endpoints_project_idx').on(t.projectId),
+  })
+);
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
+export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;

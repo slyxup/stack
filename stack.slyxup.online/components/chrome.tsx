@@ -10,6 +10,7 @@ export function Nav() {
         </Link>
         <div className="nav-links">
           <a href="/features">Features</a>
+          <a href="/docs">Docs</a>
           <a href="/pricing">Pricing</a>
           <a href="https://github.com/slyxup/stack" target="_blank" rel="noreferrer">GitHub</a>
         </div>
@@ -27,6 +28,7 @@ export function Footer() {
         <div className="foot-links">
           <a href="https://github.com/slyxup/stack">GitHub</a>
           <a href="https://www.npmjs.com/package/@slyxup/core">npm</a>
+          <a href="/docs">Docs</a>
           <a href="/pricing">Pricing</a>
           <a href="/features">Features</a>
         </div>

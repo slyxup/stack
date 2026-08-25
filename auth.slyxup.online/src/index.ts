@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { checkRateLimit } from './lib/rate-limit';
 import adminRoute from './routes/admin';
+import auditRoute from './routes/audit';
 import auth from './routes/auth';
 import billingRoute from './routes/billing';
 import developersRoute from './routes/developers';
@@ -53,6 +55,28 @@ app.use('*', async (c, next) => {
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);
 });
 
+// Rate limiting on auth endpoints
+app.use('/v1/auth/*', async (c, next) => {
+  const ip =
+    c.req.header('CF-Connecting-IP') ??
+    c.req.header('X-Forwarded-For') ??
+    'unknown';
+  const rl = await checkRateLimit(c.env.KV, `auth:${ip}`, 20, 60);
+  if (!rl.allowed) {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'Too many requests' }),
+      {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(rl.resetIn),
+        },
+      }
+    );
+  }
+  await next();
+});
+
 app.get('/health', (c) =>
   c.json({
     ok: true,
@@ -73,6 +97,7 @@ app.route('/v1/sessions', sessionsRoute);
 app.route('/v1/admin', adminRoute);
 app.route('/v1/billing', billingRoute);
 app.route('/v1/webhooks', webhookRoute);
+app.route('/v1/audit', auditRoute);
 app.route('/v1', auth); // also mount session at /v1/session
 
 export default {
