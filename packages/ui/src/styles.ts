@@ -3,10 +3,10 @@
  * Injected once via <SlyxUpStyles />. Theme with CSS variables on :root or .slyxup-scope.
  */
 
-export const FONT_LINK = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">`;
+export const FONT_LINK = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">`;
 
 export const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 .slyxup-root {
   --slx-accent: #5b5bd6;
@@ -19,7 +19,8 @@ export const CSS = `
   --slx-border: #e6e6ec;
   --slx-danger: #d64550;
   --slx-radius: 12px;
-  --slx-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --slx-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --slx-display: "Space Grotesk", "DM Sans", sans-serif;
   --slx-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   font-family: var(--slx-font);
@@ -72,7 +73,7 @@ export const CSS = `
   margin-bottom: 18px;
 }
 .slx-mark svg { display: block; }
-.slx-title { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 6px; }
+.slx-title { font-family: var(--slx-display); font-size: 20px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 6px; }
 .slx-subtitle { font-size: 13.5px; color: var(--slx-muted); margin: 0 0 22px; line-height: 1.5; }
 
 /* ── Fields ── */
@@ -103,7 +104,7 @@ export const CSS = `
 /* ── Button ── */
 .slx-btn {
   width: 100%; box-sizing: border-box;
-  font: inherit; font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  font-family: var(--slx-font); font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
   color: #fff; background: var(--slx-accent);
   border: none; border-radius: var(--slx-radius);
   padding: 11px 14px; cursor: pointer;
@@ -200,7 +201,7 @@ export function injectStyles(): void {
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
     fontLink.href =
-      'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap';
+      'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Space+Grotesk:wght@400;500;600;700&display=swap';
     document.head.appendChild(fontLink);
   }
   const style = document.createElement('style');

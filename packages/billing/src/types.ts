@@ -29,5 +29,3 @@ export interface Invoice {
   billedAt: string | null;
 }
 
-export type { SlyxupClient };
-import type { SlyxupClient } from '@slyxup/core';
