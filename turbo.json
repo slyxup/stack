@@ -4,7 +4,7 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"] },
     "dev": { "cache": false, "persistent": true },
     "lint": {},
-    "typecheck": {},
+    "typecheck": { "dependsOn": ["^build"] },
     "test": { "dependsOn": ["build"] },
     "deploy": { "dependsOn": ["build"], "cache": false }
   }
