@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { placeholder } from '../src/index.js';
+import { BillingClient } from '../src/index.js';
 
 describe('billing', () => {
-  it('exports placeholder string', () => {
-    expect(placeholder).toBe('billing — verified 2026-08-24 14:55');
+  it('exports BillingClient class', () => {
+    expect(typeof BillingClient).toBe('function');
+    const client = new BillingClient({ apiUrl: 'http://localhost:8787' });
+    expect(client.apiUrl).toBe('http://localhost:8787');
+    expect(typeof client.listPlans).toBe('function');
+    expect(typeof client.getSubscription).toBe('function');
+    expect(typeof client.checkout).toBe('function');
+    expect(typeof client.cancelSubscription).toBe('function');
+    expect(typeof client.listInvoices).toBe('function');
   });
 });
