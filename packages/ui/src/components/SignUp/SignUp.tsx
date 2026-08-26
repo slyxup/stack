@@ -15,7 +15,10 @@ export function SignUp({
   onSuccess,
   onSignInClick,
 }: SignUpProps) {
-  const { signUp } = useAuth();
+  const { signUp, client } = useAuth() as unknown as {
+    signUp: ReturnType<typeof useAuth>['signUp'];
+    client: { publishableKey?: string };
+  };
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,8 +55,30 @@ export function SignUp({
     window.location.href = `/v1/oauth/${provider}`;
   }
 
+  const missingKey =
+    !client.publishableKey ||
+    client.publishableKey === 'pk_test_missing' ||
+    client.publishableKey.includes('REPLACE');
+
   return (
     <div ref={cardRef} className={`slx-card${error ? ' slx-card-error' : ''}`}>
+      {missingKey && (
+        <p
+          style={{
+            fontSize: 12,
+            background: '#fff3cd',
+            border: '1px solid #ffe69c',
+            borderRadius: 8,
+            padding: '8px 10px',
+            marginBottom: 14,
+            lineHeight: 1.4,
+          }}
+        >
+          <strong>Setup:</strong> Add{' '}
+          <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> — run{' '}
+          <code>npx @slyxup/cli keys create</code>
+        </p>
+      )}
       <div className="slx-mark">
         <KeyholeMark />
       </div>
