@@ -1,5 +1,12 @@
 # @slyxup/ui
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @slyxup/react@0.2.3
+
 ## 0.2.3
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # example-react
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @slyxup/react@0.2.3
+  - @slyxup/ui@0.2.4
+
 ## 0.1.3
 
 ### Patch Changes
