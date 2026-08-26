@@ -69,7 +69,7 @@ export class BillingClient {
     this.apiUrl = (
       options.apiUrl ??
       getEnvApiUrl() ??
-      'https://auth.slyxup.online'
+      'https://billing.slyxup.online'
     ).replace(/\/$/, '');
     this.publishableKey = options.publishableKey;
   }

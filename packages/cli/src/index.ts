@@ -33,8 +33,8 @@ function needCreds() {
 // ── login ──
 program
   .command('login')
-  .description('Log in as a SlyxUp developer')
-  .option('--new', 'Create a new developer account first')
+  .description('Log in with your SlyxUp account (email must be verified)')
+  .option('--new', 'Create a new account first (requires email verification)')
   .option('-e, --email <email>')
   .option('-p, --password <password>')
   .option('--api-url <url>', `API base (default ${DEFAULT_API_URL})`)
@@ -52,74 +52,65 @@ program
     }
 
     try {
-      // Developers are a separate entity from app users — use only the
-      // developers endpoints. lookup validates creds; register creates.
-      let devId: string | null | undefined;
-      if (!opts.new) {
-        devId = await lookupDeveloper(apiUrl, email, password);
-      }
-      if (!devId) {
-        const res = await fetch(`${apiUrl}/v1/developers/register`, {
+      if (opts.new) {
+        const res = await fetch(`${apiUrl}/v1/auth/sign-up`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
         });
-        const data = (await res.json().catch(() => ({}))) as {
-          developerId?: string;
-          error?: string;
-        };
-        if (!res.ok || !data.developerId) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok)
           throw new CliApiError(
-            data.error ?? `Registration failed (${res.status})`,
+            data.error ?? `Sign-up failed (${res.status})`,
             res.status
           );
-        }
-        devId = data.developerId;
-        console.log(`Account created for ${email}`);
+        console.log(`Account created for ${email}.`);
+        console.log(
+          'Check your inbox and verify your email, then run: slyxup login'
+        );
+        return;
       }
 
-      saveCredentials({ developerId: devId, email, apiUrl });
+      const res = await fetch(`${apiUrl}/v1/auth/sign-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        sessionToken?: string;
+        user?: { role?: string; emailVerified?: boolean };
+        code?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.sessionToken) {
+        if (data.code === 'EMAIL_NOT_VERIFIED') {
+          console.error(`✗ ${email} is not verified.`);
+          console.error('  Check your inbox, or resend:');
+          console.error(`  slyxup auth resend -e ${email} --api-url ${apiUrl}`);
+          process.exit(1);
+        }
+        throw new CliApiError(
+          data.error ?? `Login failed (${res.status})`,
+          res.status
+        );
+      }
+
+      saveCredentials({
+        token: data.sessionToken,
+        developerId: undefined,
+        email,
+        apiUrl,
+      });
       console.log(
-        `Logged in as ${email}. Credentials saved to ~/.config/slyxup/credentials.json`
+        `Logged in as ${email}${data.user?.role === 'admin' ? ' (admin)' : ''}.`
       );
+      console.log('Credentials saved to ~/.config/slyxup/credentials.json');
     } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
     }
   });
-
-/** Validate developer credentials and resolve id; null when no account. */
-async function lookupDeveloper(
-  apiUrl: string,
-  email: string,
-  password: string
-): Promise<string | null> {
-  const res = await fetch(`${apiUrl}/v1/developers/lookup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) throw new Error(`Login failed (${res.status})`);
-  const data = (await res.json()) as { developerId?: string | null };
-  return data.developerId ?? null;
-}
-
-async function resolveDeveloperId(
-  apiUrl: string,
-  email: string,
-  password: string
-): Promise<string> {
-  const res = await fetch(`${apiUrl}/v1/developers/lookup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok)
-    throw new Error(`Could not resolve developer identity (${res.status})`);
-  const data = (await res.json()) as { developerId?: string };
-  if (!data.developerId) throw new Error('Server returned no developerId');
-  return data.developerId;
-}
 
 function readLine(): Promise<string> {
   return new Promise((resolve) => {
@@ -651,6 +642,27 @@ authCmd
       process.exit(1);
     }
     console.log(`Verified: ${(data as { email?: string }).email ?? 'ok'}`);
+  });
+
+authCmd
+  .command('resend')
+  .description('Resend the verification email')
+  .requiredOption('-e, --email <email>')
+  .option('--api-url <url>', DEFAULT_API_URL)
+  .action(async (opts) => {
+    const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
+    const res = await fetch(`${apiUrl}/v1/verification/resend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: opts.email }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+    // Server responds ok even for unknown emails (no enumeration)
+    console.log(
+      data.ok
+        ? `If ${opts.email} exists, a verification email was sent.`
+        : 'Resend failed.'
+    );
   });
 
 authCmd

@@ -2,6 +2,7 @@ import { relations } from 'drizzle-orm';
 // Drizzle schema for D1 (SQLite) — CF Workers — V1
 // D1 quirks: no BOOL/DATETIME (use integer 0/1 + unix seconds), FK always ON, 100 bound params, JSON as TEXT
 import {
+  type AnySQLiteColumn,
   index,
   integer,
   sqliteTable,
@@ -9,13 +10,17 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-// ── Developers (SlyxUp CLI users, NOT app users) ──
+// ── Developers (platform builders — authenticate via the users auth flow) ──
 export const developers = sqliteTable(
   'developers',
   {
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    // Linked login identity — developer access requires a verified user session
+    userId: text('user_id')
+      .unique()
+      .references((): AnySQLiteColumn => users.id, { onDelete: 'set null' }),
     email: text('email').notNull().unique(),
     emailVerified: integer('email_verified', { mode: 'boolean' })
       .notNull()
@@ -392,148 +397,8 @@ export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
 
-// ── Billing: Plans ──
-export const plans = sqliteTable(
-  'plans',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    paddlePriceId: text('paddle_price_id').notNull(),
-    amount: integer('amount').notNull(), // cents
-    currency: text('currency').notNull().default('USD'),
-    interval: text('interval', { enum: ['month', 'year'] })
-      .notNull()
-      .default('month'),
-    trialDays: integer('trial_days').default(0),
-    features: text('features', { mode: 'json' }).$type<string[]>().default([]),
-    isPopular: integer('is_popular', { mode: 'boolean' }).default(false),
-    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
-    sortOrder: integer('sort_order').notNull().default(0),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .$defaultFn(() => new Date()),
-  },
-  (t) => ({
-    projectIdx: index('plans_project_idx').on(t.projectId),
-  })
-);
-
-// ── Billing: Subscriptions ──
-export const subscriptions = sqliteTable(
-  'subscriptions',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    planId: text('plan_id')
-      .notNull()
-      .references(() => plans.id, { onDelete: 'restrict' }),
-    paddleSubscriptionId: text('paddle_subscription_id').unique(),
-    paddleCustomerId: text('paddle_customer_id'),
-    status: text('status', {
-      enum: ['active', 'trialing', 'past_due', 'paused', 'canceled'],
-    })
-      .notNull()
-      .default('trialing'),
-    currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }),
-    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }),
-    cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' })
-      .notNull()
-      .default(false),
-    canceledAt: integer('canceled_at', { mode: 'timestamp' }),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .$defaultFn(() => new Date()),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
-      .notNull()
-      .$defaultFn(() => new Date())
-      .$onUpdate(() => new Date()),
-  },
-  (t) => ({
-    userIdx: index('subscriptions_user_idx').on(t.userId),
-    projectIdx: index('subscriptions_project_idx').on(t.projectId),
-    paddleSubIdx: uniqueIndex('subscriptions_paddle_sub_idx').on(
-      t.paddleSubscriptionId
-    ),
-    statusIdx: index('subscriptions_status_idx').on(t.status),
-  })
-);
-
-// ── Billing: Invoices / Payments ──
-export const invoices = sqliteTable(
-  'invoices',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    userId: text('user_id').references(() => users.id, {
-      onDelete: 'set null',
-    }),
-    subscriptionId: text('subscription_id').references(() => subscriptions.id, {
-      onDelete: 'set null',
-    }),
-    paddleTransactionId: text('paddle_transaction_id'),
-    paddleInvoiceId: text('paddle_invoice_id'),
-    amount: integer('amount').notNull(),
-    currency: text('currency').notNull().default('USD'),
-    status: text('status', {
-      enum: ['paid', 'pending', 'overdue', 'refunded'],
-    })
-      .notNull()
-      .default('pending'),
-    invoiceNumber: text('invoice_number'),
-    billedAt: integer('billed_at', { mode: 'timestamp' }),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .$defaultFn(() => new Date()),
-  },
-  (t) => ({
-    userInvoiceIdx: index('invoices_user_idx').on(t.userId),
-    projectIdx: index('invoices_project_idx').on(t.projectId),
-    paddleTxIdx: uniqueIndex('invoices_paddle_tx_idx').on(
-      t.paddleTransactionId
-    ),
-  })
-);
-
-// ── Billing relations ──
-export const plansRelations = relations(plans, ({ one, many }) => ({
-  project: one(projects, {
-    fields: [plans.projectId],
-    references: [projects.id],
-  }),
-  subscriptions: many(subscriptions),
-}));
-
-export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
-  user: one(users, { fields: [subscriptions.userId], references: [users.id] }),
-  plan: one(plans, { fields: [subscriptions.planId], references: [plans.id] }),
-  project: one(projects, {
-    fields: [subscriptions.projectId],
-    references: [projects.id],
-  }),
-}));
-
-export type Plan = typeof plans.$inferSelect;
-export type NewPlan = typeof plans.$inferInsert;
-export type Subscription = typeof subscriptions.$inferSelect;
-export type NewSubscription = typeof subscriptions.$inferInsert;
-export type Invoice = typeof invoices.$inferSelect;
-export type NewInvoice = typeof invoices.$inferInsert;
+// NOTE: Billing tables (plans/subscriptions/invoices) live ONLY in
+// billing.slyxup.online (D1 slyxup_billing). Auth owns identity only.
 
 // ── Audit Logs ──
 export const auditLogs = sqliteTable(
@@ -559,8 +424,6 @@ export const auditLogs = sqliteTable(
         'password.reset',
         'password.changed',
         'oauth.linked',
-        'subscription.created',
-        'subscription.canceled',
         'key.created',
         'key.revoked',
         'project.created',

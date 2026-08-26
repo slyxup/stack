@@ -2,20 +2,37 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { createKeySchema } from '../schemas/keys';
 import * as ProjectService from '../services/project.service';
+import { ensureDeveloper, userFromSession } from './developers';
 
 const keys = new Hono<{
   Bindings: { DB: D1Database };
   Variables: { developerId?: string };
 }>();
 
+// SECURITY: verified-user session Bearer only (see routes/developers.ts)
 keys.use('*', async (c, next) => {
   const auth = c.req.header('Authorization');
   if (!auth?.startsWith('Bearer '))
     return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const developerId = auth.slice(7).trim();
-  const dev = await ProjectService.getDeveloperById(c.env, developerId);
-  if (!dev) return c.json({ ok: false, error: 'Invalid developer token' }, 401);
-  c.set('developerId', dev.id);
+  const user = await userFromSession(c.env, auth.slice(7).trim());
+  if (!user)
+    return c.json(
+      {
+        ok: false,
+        error:
+          'Sign in with a verified SlyxUp account (POST /v1/auth/sign-in).',
+      },
+      401
+    );
+  try {
+    const dev = await ensureDeveloper(c.env, user);
+    c.set('developerId', dev.id);
+  } catch (e) {
+    return c.json(
+      { ok: false, error: e instanceof Error ? e.message : 'Forbidden' },
+      403
+    );
+  }
   await next();
 });
 

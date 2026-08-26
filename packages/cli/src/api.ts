@@ -1,4 +1,4 @@
-import type { Credentials } from './config.js';
+import { type Credentials, bearerOf } from './config.js';
 
 export interface Project {
   id: string;
@@ -34,7 +34,7 @@ async function req<T>(
     method,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${creds.developerId}`,
+      Authorization: `Bearer ${bearerOf(creds)}`,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

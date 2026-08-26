@@ -2,24 +2,41 @@ import { zValidator } from '@hono/zod-validator';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getDb } from '../lib/db';
-import { projects as projectsTable } from '../lib/schema';
+import { developers, projects as projectsTable } from '../lib/schema';
 import { addMemberSchema, createProjectSchema } from '../schemas/projects';
 import * as ProjectService from '../services/project.service';
+import { ensureDeveloper, userFromSession } from './developers';
 
 const projects = new Hono<{
-  Bindings: { DB: D1Database };
+  Bindings: { DB: D1Database; KV: KVNamespace };
   Variables: { developerId?: string };
 }>();
 
-// Developer auth middleware (Bearer token = developerId for now; CLI flow)
+// SECURITY: developer auth = verified user session (no static tokens).
+// Bearer token is a DB-backed 7-day session from /v1/auth/sign-in.
 projects.use('*', async (c, next) => {
   const auth = c.req.header('Authorization');
   if (!auth?.startsWith('Bearer '))
     return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const developerId = auth.slice(7).trim();
-  const dev = await ProjectService.getDeveloperById(c.env, developerId);
-  if (!dev) return c.json({ ok: false, error: 'Invalid developer token' }, 401);
-  c.set('developerId', dev.id);
+  const user = await userFromSession(c.env, auth.slice(7).trim());
+  if (!user)
+    return c.json(
+      {
+        ok: false,
+        error:
+          'Sign in with a verified SlyxUp account (POST /v1/auth/sign-in).',
+      },
+      401
+    );
+  try {
+    const dev = await ensureDeveloper(c.env, user);
+    c.set('developerId', dev.id);
+  } catch (e) {
+    return c.json(
+      { ok: false, error: e instanceof Error ? e.message : 'Forbidden' },
+      403
+    );
+  }
   await next();
 });
 
@@ -85,6 +102,7 @@ projects.patch('/:id/domains', async (c) => {
     .update(projectsTable)
     .set({ allowedDomains: updated, updatedAt: new Date() })
     .where(eq(projectsTable.id, id));
+  await c.env.KV.delete('cors_live_domains');
   return c.json({ ok: true, domains: updated });
 });
 
@@ -114,6 +132,7 @@ projects.post('/:id/go-live', async (c) => {
     .update(projectsTable)
     .set({ environment: 'live', updatedAt: new Date() })
     .where(eq(projectsTable.id, id));
+  await c.env.KV.delete('cors_live_domains');
   return c.json({ ok: true, environment: 'live' });
 });
 

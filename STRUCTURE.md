@@ -18,15 +18,16 @@ slyxup.online/                      → root (no git, no code) — guide only
     │   ├── app/{page.tsx,features,pricing,react,nextjs,docs,blog}
     │   ├── wrangler.jsonc          (assets: .next)
     │   └── package.json            (next build + opennextjs-cloudflare)
-    ├── billing.slyxup.online/      → Worker https://billing.slyxup.online (future placeholder)
-    │   └── wrangler.jsonc (D1 slyxup_billing)
+    ├── billing.slyxup.online/      → Worker https://billing.slyxup.online (LIVE — sole owner of billing)
+    │   ├── src/{routes,services,schemas,lib}  (plans, checkout, subscription, invoices, webhooks, admin)
+    │   └── wrangler.jsonc (D1 slyxup_billing + AUTH_DB read binding, KV)
     ├── packages/
     │   ├── core → @slyxup/core (client, auth, sessions, errors)
     │   ├── react → @slyxup/react (SlyxUpProvider, hooks)
     │   ├── nextjs → @slyxup/nextjs (server auth, middleware)
     │   ├── ui → @slyxup/ui (SignIn/SignUp etc. → depends on react)
     │   ├── cli → @slyxup/cli (commands, detectors, generators)
-    │   └── billing → @slyxup/billing (future)
+    │   └── billing → @slyxup/billing (BillingClient → billing.slyxup.online)
     ├── examples/{nextjs,react}, docs, tests/{integration,e2e}, scripts, .github
     ├── package.json (workspaces: auth, stack, billing, packages/*, turbo)
     ├── pnpm-workspace.yaml, turbo.json, tsconfig.json
@@ -40,8 +41,14 @@ slyxup.online/                      → root (no git, no code) — guide only
 |--------|-------|--------|
 | auth.slyxup.online | `pnpm --filter auth.slyxup.online build` | `wrangler deploy` (D1+KV+R2) |
 | stack.slyxup.online | `next build` | `opennextjs-cloudflare deploy` / `wrangler pages deploy` |
-| billing.slyxup.online | — | future `wrangler deploy` |
+| billing.slyxup.online | `pnpm --filter billing.slyxup.online build` | `wrangler deploy` (D1+KV+AUTH_DB) |
 
 Root `slyxup.online/` — never deploy; `slyxup.online/stack/` is monorepo root.
+
+## Ownership rule
+
+- **auth.slyxup.online** = identity only (users, sessions, OAuth, projects, keys). ZERO billing code/tables.
+- **billing.slyxup.online** = sole owner of billing tables (plans/subscriptions/invoices/customers/webhook_events in `slyxup_billing`). Paddle webhooks land ONLY here. Validates auth sessions via its read-only `AUTH_DB` D1 binding.
+- Never re-add billing tables to `slyxup_auth` or billing routes to the auth Worker.
 
 ## Build order: db → api → core → react → nextjs → ui → cli → billing → docs

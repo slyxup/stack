@@ -54,7 +54,7 @@ Husky runs `commitlint --edit` on commit-msg + `lint-staged` (biome) on pre-comm
 
 1. Read `AGENTS.md` (build order db→api→core→react→nextjs→ui→cli)
 2. Read `TECH_STACK.md` (D1 limits), `DRIZZLE_GUIDE.md`, `ENV_GUIDE.md`
-3. Check `LIMITATIONS.md` — don't build Dashboard/Billing beyond placeholder
+3. Check `LIMITATIONS.md` — don't build Dashboard/Orgs; keep billing in billing.slyxup.online only
 4. Create issue → discuss → `feat/` branch → plan task list in PR description
 5. Do NOT generate entire repo — one phase per PR
 
@@ -109,7 +109,7 @@ Husky pre-commit runs `lint-staged` (biome check). Fix before push.
 - [ ] `pnpm typecheck` + `lint` + `build` pass?
 - [ ] `wrangler types` run?
 - [ ] Domain folder naming `.slyxup.online`?
-- [ ] No Dashboard/Billing beyond placeholder?
+- [ ] No new Dashboard/Orgs scope? Billing changes confined to billing.slyxup.online?
 - [ ] Conventional commit?
 
 ## 8. AI Agent — Extra

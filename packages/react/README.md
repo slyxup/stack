@@ -58,6 +58,31 @@ const { session, isLoaded } = useSession();
 
 State **auto-refreshes** every 5 minutes and after every auth action.
 
+## Billing hooks
+
+Pair with [`@slyxup/billing`](../billing) for plans, subscriptions, and Paddle checkout — no extra provider needed.
+
+```tsx
+import { useBilling, usePlans, useSubscription, useInvoices, useCheckout } from '@slyxup/react';
+
+const { client } = useBilling();                       // BillingClient instance
+const { plans, loading, error } = usePlans(projectId); // Plan[] for a project
+const { subscription, reload } = useSubscription(projectId); // Subscription | null
+const { invoices, loading } = useInvoices();           // Invoice[]
+const { checkout } = useCheckout();
+await checkout(planId);                                // redirects to Paddle
+```
+
+| Hook | Returns | Notes |
+|---|---|---|
+| `useBilling(apiUrl?)` | `{ client }` | Raw `BillingClient` |
+| `usePlans(projectId)` | `{ plans, loading, error }` | Skips fetch until `projectId` is set |
+| `useSubscription(projectId)` | `{ subscription, loading, error, reload }` | `null` when no subscription |
+| `useInvoices(apiUrl?)` | `{ invoices, loading }` | Newest first |
+| `useCheckout(apiUrl?)` | `{ checkout, loading, error }` | `checkout(planId)` redirects to hosted Paddle |
+
+For prebuilt billing UI, see [`<PricingTable />`](../ui) and [`<BillingPortal />`](../ui).
+
 ## Full example
 
 ```tsx

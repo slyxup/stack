@@ -15,13 +15,18 @@ npx @slyxup/cli --help
 ### `slyxup login`
 
 ```bash
-slyxup login                          # prompts for email/password; auto-creates account if new
-slyxup login --new                    # force registration
+slyxup login                          # prompts for email/password (account must be verified)
+slyxup login --new                    # create account first, then verify via email and log in
 slyxup login -e dev@acme.com -p secret
 slyxup login --api-url http://localhost:8787   # self-host / local worker
 ```
 
 Credentials are stored in `~/.config/slyxup/credentials.json` (never commit this).
+
+> **Security:** login uses the same verified-email auth as the platform
+> (`/v1/auth/sign-in`). The stored credential is a revocable 7-day session
+> token — not a static key. Unverified accounts cannot log in; use
+> `slyxup auth resend -e you@example.com` if the email didn't arrive.
 
 ```bash
 slyxup whoami     # show current developer
@@ -36,7 +41,7 @@ slyxup project create "My SaaS App" \
   -d "Short description"
 
 slyxup project list
-slyxup project delete <id>            # coming soon
+slyxup project delete <id>
 ```
 
 ### `slyxup keys`
@@ -52,6 +57,30 @@ slyxup keys revoke <key-id>
 ```
 
 Secret keys are printed **once** at creation — save them immediately.
+
+### `slyxup domains`
+
+Custom auth domains for a project (after adding one in Cloudflare):
+
+```bash
+slyxup domains list
+slyxup domains add auth.acme.com
+slyxup domains remove auth.acme.com
+slyxup domains go-live        # verify DNS + activate custom domain
+```
+
+### `slyxup auth` — test app-user flows
+
+Drive the same endpoints your app users hit, straight from the terminal (uses [`@slyxup/core`](../core) under the hood):
+
+```bash
+slyxup auth signup -e ada@acme.com -p secret123   # sends verification email
+slyxup auth signin -e ada@acme.com -p secret123   # prints session id + expiry
+slyxup auth verify --token <token-from-email>     # verify email address
+slyxup auth oauth --provider google               # opens hosted OAuth in browser
+```
+
+All subcommands accept `--api-url http://localhost:8787` for local worker testing.
 
 ### `slyxup init` — connect an existing app
 
@@ -106,7 +135,7 @@ slyxup login
 slyxup project create "My App"
 slyxup keys create --project-id <id> --type publishable
 slyxup env --publishable-key <key> --out .env.local
-slyxup npm i @slyxup/react @slyxup/ui   # in your app
+npm i @slyxup/react @slyxup/ui           # in your app
 slyxup doctor                            # verify
 ```
 

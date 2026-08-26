@@ -7,7 +7,7 @@
 SlyxUp Stack — open-source auth platform (github.com/slyxup/stack), domain-based inside `slyxup.online/stack/`:
 - `auth.slyxup.online/` → Hono Worker + D1 + KV + R2 (API `/v1/*` + Hosted Pages `/sign-in`)
 - `stack.slyxup.online/` → Marketing ONLY (Next.js, no dashboard/keys UI)
-- `billing.slyxup.online/` → Future Worker (placeholder, V1 me kuch nahi)
+- `billing.slyxup.online/` → LIVE billing Worker + D1 (`slyxup_billing`) — SOLE owner of billing tables; validates auth sessions via read-only `AUTH_DB` binding. NEVER add billing code/tables to auth.
 - `packages/{core,react,nextjs,ui,cli,billing}` → SDKs
 
 Root `slyxup.online/` has NO git, NO code — real monorepo is `slyxup.online/stack/`.
@@ -48,7 +48,7 @@ AI must build in this order, each phase must pass `pnpm typecheck && pnpm build`
 
 DO NOT build — will explode scope:
 
-- Dashboard / Organizations / SAML / SCIM / Billing (billing folder is placeholder only)
+- Dashboard / Organizations / SAML / SCIM (billing already exists as its own Worker — `billing.slyxup.online`; never merge billing INTO auth)
 - Teams / Analytics / Passkeys / Mobile/Vue/Svelte SDKs
 - 10+ OAuth providers, multi-region, complex admin panel
 
@@ -121,6 +121,7 @@ Full rules: see `references/rules.md` (workers-best-practices skill).
 - API versioned `/v1/` from day one
 - `api.auth.slyxup.online` deprecated → redirect to `auth.slyxup.online/v1/`
 - `stack.slyxup.online` has NO `/dashboard` — marketing only
+- **README sync rule**: ANY edit to a package's public surface (`packages/*/src`) — new/renamed/removed exports, methods, props, commands, or behavior — MUST update that package's `README.md` in the SAME change. No shipping SDK changes with stale docs.
 
 ---
 
@@ -131,7 +132,8 @@ Full rules: see `references/rules.md` (workers-best-practices skill).
 3. Run `pnpm typecheck` after each file, `pnpm build` after each phase
 4. Use `wrangler dev` to test locally with D1 (`--local`)
 5. Generate migrations immediately after schema edit — commit both schema + migration sql
-6. Ask if scope unclear — don't invent Dashboard/Billing logic in V1
+6. Changed a package's public surface (`packages/*/src`)? Update that package's `README.md` in the same commit
+7. Ask if scope unclear — don't invent Dashboard/Billing logic in V1
 
 ---
 

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
@@ -26,6 +26,12 @@ export async function signUp(
   const userId = randomUUID();
   const now = new Date();
 
+  // Bootstrap: the very first user becomes the platform admin
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(users);
+  const role = count === 0 ? 'admin' : 'user';
+
   await db.insert(users).values({
     id: userId,
     projectId: input.projectId ?? null,
@@ -34,6 +40,7 @@ export async function signUp(
     passwordHash,
     firstName: input.firstName ?? null,
     lastName: input.lastName ?? null,
+    role,
     createdAt: now,
     updatedAt: now,
   });
@@ -68,6 +75,7 @@ export async function signUp(
     sessionToken,
     expiresAt,
     verificationToken: token,
+    role,
     user: { id: userId, email: input.email },
   };
 }
@@ -85,6 +93,11 @@ export async function signIn(
   if (!user || !user.passwordHash) throw new Error('Invalid credentials');
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw new Error('Invalid credentials');
+  if (user.blocked)
+    throw new Error(
+      `ACCOUNT_BLOCKED:${user.blockedReason ?? 'Contact support'}`
+    );
+  if (!user.emailVerified) throw new Error('EMAIL_NOT_VERIFIED');
 
   const sessionToken = randomToken(32);
   const sessionId = randomUUID();

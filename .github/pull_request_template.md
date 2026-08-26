@@ -19,7 +19,7 @@ Fixes #
 - [ ] No `Math.random()` / hardcoded secrets / `pgTable` / `docker`?
 - [ ] Domain folder `.slyxup.online` naming correct?
 - [ ] Conventional commit (`feat(auth): ...`)?
-- [ ] No Dashboard/Billing beyond placeholder (V1 scope)?
+- [ ] No Dashboard/Orgs beyond V1 scope? Billing changes confined to billing.slyxup.online (auth has zero billing)?
 
 ## Screenshots / Logs
 

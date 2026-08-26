@@ -6,9 +6,12 @@ import {
 } from './errors.js';
 import type {
   AuthResponse,
+  ChangePasswordInput,
   ErrorResponse,
   Result,
+  RevokeSessionsResponse,
   SessionResponse,
+  SessionsResponse,
   SignInInput,
   SignUpInput,
   SlyxupClientOptions,
@@ -49,10 +52,18 @@ export class SlyxupClient {
     signUp: (input: SignUpInput) => Promise<AuthResponse>;
     signIn: (input: SignInInput) => Promise<AuthResponse>;
     signOut: () => Promise<{ ok: true }>;
+    resendVerification: (email: string) => Promise<{ ok: true }>;
   };
 
   readonly sessions: {
     get: () => Promise<SessionResponse>;
+    list: () => Promise<SessionsResponse>;
+    revoke: (sessionId: string) => Promise<{ ok: true }>;
+    revokeOthers: () => Promise<RevokeSessionsResponse>;
+  };
+
+  readonly password: {
+    change: (input: ChangePasswordInput) => Promise<{ ok: true }>;
   };
 
   readonly users: {
@@ -131,6 +142,13 @@ export class SlyxupClient {
         const res = await post<{ ok: true }>('/v1/auth/sign-out');
         return res as { ok: true };
       },
+      resendVerification: async (email: string) => {
+        const res = await post<{ ok: true }>('/v1/verification/resend', {
+          email,
+        });
+        if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
+      },
     };
 
     this.sessions = {
@@ -138,6 +156,34 @@ export class SlyxupClient {
         const res = await request<SessionResponse>('/v1/session');
         if (!('session' in res)) throw new UnauthorizedError(res.error);
         return res;
+      },
+      list: async () => {
+        const res = await request<SessionsResponse>('/v1/sessions');
+        if (!('sessions' in res))
+          throw new SlyxupError(res.error, 400, 'api_error');
+        return res;
+      },
+      revoke: async (sessionId: string) => {
+        const res = await request<{ ok: true }>(`/v1/sessions/${sessionId}`, {
+          method: 'DELETE',
+        });
+        return res as { ok: true };
+      },
+      revokeOthers: async () => {
+        const res = await request<RevokeSessionsResponse>('/v1/sessions', {
+          method: 'DELETE',
+        });
+        if (!('revoked' in res))
+          throw new SlyxupError(res.error, 400, 'api_error');
+        return res;
+      },
+    };
+
+    this.password = {
+      change: async (input) => {
+        const res = await post<{ ok: true }>('/v1/user/password', input);
+        if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
       },
     };
 

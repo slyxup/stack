@@ -4,9 +4,16 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-08-24",
   "compatibility_flags": ["nodejs_compat"],
-  "vars": { "API_URL": "https://billing.slyxup.online", "AUTH_URL": "https://auth.slyxup.online" },
+  "vars": {
+    "API_URL": "https://billing.slyxup.online",
+    "AUTH_URL": "https://auth.slyxup.online",
+    "APP_URL": "https://stack.slyxup.online",
+    "CORS_ORIGINS": "https://stack.slyxup.online,https://auth.slyxup.online",
+    "PADDLE_ENVIRONMENT": "sandbox"
+  },
   "d1_databases": [
-    { "binding": "DB", "database_name": "slyxup_billing", "database_id": "5c5a0f61-3ca8-4e12-baf2-29e2d2ce9415", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "slyxup_billing", "database_id": "5c5a0f61-3ca8-4e12-baf2-29e2d2ce9415", "migrations_dir": "migrations" },
+    { "binding": "AUTH_DB", "database_name": "slyxup_auth", "database_id": "cfa91e79-cf3d-483f-94a0-0a9dc33cb31a" }
   ],
   "kv_namespaces": [{ "binding": "KV", "id": "74a592aa3b044d15bb780648c774b906" }],
   "observability": { "enabled": true },

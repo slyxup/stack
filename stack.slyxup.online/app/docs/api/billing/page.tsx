@@ -1,16 +1,16 @@
 import { CodeBlock, CopyForLLM } from '../../copy';
 
 const LLM = `# Billing API
-Paddle-backed billing under /v1.
+Paddle-backed billing, served by billing.slyxup.online (dedicated billing Worker).
 
-GET  /v1/billing/plans?project_id=...   -> [{ id, name, price, interval }]
-POST /v1/billing/checkout               { planId, sessionToken } -> { url }
-GET  /v1/billing/subscription           -> current subscription | null
-POST /v1/webhooks/paddle                Paddle events (HMAC verified)
+GET  https://billing.slyxup.online/v1/billing/plans?projectId=...   -> [{ id, name, price, interval }]
+POST https://billing.slyxup.online/v1/billing/checkout              { planId } -> { checkoutUrl }
+GET  https://billing.slyxup.online/v1/billing/subscription          -> current subscription | null
+POST https://billing.slyxup.online/v1/webhooks/paddle               Paddle events (HMAC verified)
 
 Webhook events handled:
 subscription.created | updated | canceled, transaction.completed
-Secret: wrangler secret put PADDLE_WEBHOOK_SECRET
+Secret: wrangler secret put PADDLE_WEBHOOK_SECRET --config billing.slyxup.online/wrangler.jsonc
 `;
 
 export default function Page() {
@@ -20,7 +20,7 @@ export default function Page() {
         <h1 style={{ fontFamily: '"Space Grotesk",sans-serif', fontSize: 32, fontWeight: 700 }}>Billing API</h1>
         <CopyForLLM content={LLM} />
       </div>
-      <p style={{ color: '#7c8195', marginTop: 8, lineHeight: 1.7 }}>Plans and checkouts for your project, plus the single signed webhook endpoint Paddle calls. You never store card data.</p>
+      <p style={{ color: '#7c8195', marginTop: 8, lineHeight: 1.7 }}>Plans and checkouts for your project, plus the single signed webhook endpoint Paddle calls. Served by the dedicated billing Worker at <code>billing.slyxup.online</code> — sessions issued by <code>auth.slyxup.online</code> are validated directly against its D1. You never store card data.</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Endpoints</h2>
       <div style={{ border: '1px solid #232635', borderRadius: 12, overflow: 'hidden', marginTop: 12 }}>
@@ -44,10 +44,10 @@ export default function Page() {
       </div>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Example — create checkout</h2>
-      <CodeBlock>{`curl -X POST https://auth.slyxup.online/v1/billing/checkout \\
+      <CodeBlock>{`curl -X POST https://billing.slyxup.online/v1/billing/checkout \\
   -H 'Content-Type: application/json' \\
-  -d '{"planId":"plan_pro_monthly","sessionToken":"<slyxup session>"}'
-# 200 -> { "url": "https://buy.paddle.com/checkout/..." }`}</CodeBlock>
+  -d '{"planId":"plan_pro_monthly"}'
+# 200 -> { "ok": true, "checkoutUrl": "https://buy.paddle.com/checkout/..." }`}</CodeBlock>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Webhook security</h2>
       <p style={{ color: '#9ca3b8', fontSize: 14, lineHeight: 1.7 }}>

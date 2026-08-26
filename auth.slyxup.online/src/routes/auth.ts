@@ -27,7 +27,7 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
       input
     );
     setSessionCookie(c, sessionToken, expiresAt);
-    return c.json({ ok: true, user }, 201);
+    return c.json({ ok: true, user, sessionToken }, 201);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
     return c.json({ ok: false, error: msg }, 400);
@@ -42,9 +42,36 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
       input
     );
     setSessionCookie(c, sessionToken, expiresAt);
-    return c.json({ ok: true, user: { id: user.id, email: user.email } });
+    return c.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        emailVerified: user.emailVerified,
+      },
+      // Bearer token for server-to-server / console usage (cookies are
+      // SameSite=Lax and do not travel cross-origin)
+      sessionToken,
+      expiresAt: expiresAt.toISOString(),
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
+    if (msg === 'EMAIL_NOT_VERIFIED')
+      return c.json(
+        {
+          ok: false,
+          code: 'EMAIL_NOT_VERIFIED',
+          error:
+            'Please verify your email before signing in. Check your inbox, or resend via POST /v1/verification/resend.',
+        },
+        403
+      );
+    if (msg.startsWith('ACCOUNT_BLOCKED'))
+      return c.json(
+        { ok: false, code: 'ACCOUNT_BLOCKED', error: 'Account blocked' },
+        403
+      );
     return c.json({ ok: false, error: msg }, 401);
   }
 });
@@ -63,7 +90,12 @@ auth.get('/session', async (c) => {
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
   return c.json({
     ok: true,
-    user: { id: data.user.id, email: data.user.email },
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      role: data.user.role,
+      emailVerified: data.user.emailVerified,
+    },
     session: { id: data.session.id, expiresAt: data.session.expiresAt },
   });
 });

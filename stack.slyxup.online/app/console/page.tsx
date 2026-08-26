@@ -28,6 +28,9 @@ interface Domains {
 
 type Dev = { token: string; email: string };
 
+const VERIFY_HINT =
+  'Check your inbox for the verification link, then sign in again.';
+
 async function call<T>(path: string, dev: Dev | null, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...init,
@@ -49,6 +52,7 @@ export default function ConsolePage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authErr, setAuthErr] = useState<string | null>(null);
+  const [verifySent, setVerifySent] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -102,19 +106,39 @@ export default function ConsolePage() {
 
   async function submitAuth(e: FormEvent) {
     e.preventDefault();
-    setBusy(true); setAuthErr(null);
+    setBusy(true); setAuthErr(null); setVerifySent(false);
     try {
-      const path = mode === 'signin' ? '/v1/developers/lookup' : '/v1/developers/register';
-      const res = await call<{ developerId: string }>(path, null, {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      const next: Dev = { token: res.developerId, email };
+      if (mode === 'register') {
+        await call('/v1/auth/sign-up', null, {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        });
+        setVerifySent(true);
+        return;
+      }
+      const res = await call<{ sessionToken: string; user?: { role?: string } }>(
+        '/v1/auth/sign-in',
+        null,
+        { method: 'POST', body: JSON.stringify({ email, password }) }
+      );
+      const next: Dev = { token: res.sessionToken, email };
       localStorage.setItem('slyxup_dev', JSON.stringify(next));
       setDev(next);
     } catch (err) {
       setAuthErr(err instanceof Error ? err.message : 'Auth failed');
     } finally { setBusy(false); }
+  }
+
+  async function resendVerification() {
+    setBusy(true);
+    try {
+      await call('/v1/verification/resend', null, {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      setVerifySent(true);
+    } catch { /* server stays silent for unknown emails */ }
+    finally { setBusy(false); }
   }
 
   async function createProject(e: FormEvent) {
@@ -232,6 +256,9 @@ export default function ConsolePage() {
               <button type="button" className={mode === 'signin' ? 'on' : ''} onClick={() => setMode('signin')}>Sign in</button>
               <button type="button" className={mode === 'register' ? 'on' : ''} onClick={() => setMode('register')}>Create account</button>
             </div>
+            {verifySent && (
+              <p className="c-msg">{VERIFY_HINT} <button type="button" className="linkish" onClick={() => void resendVerification()}>Resend</button></p>
+            )}
             <form onSubmit={submitAuth} className="stack-form">
               <input className="cin" type="email" required placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               <input className="cin" type="password" required minLength={8} placeholder="Password (min 8 chars)" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -247,6 +274,7 @@ export default function ConsolePage() {
             <div className="console-top">
               <span className="mono who">{dev.email}</span>
               <div style={{ display: 'flex', gap: 8 }}>
+                <a className="btn-secondary c-btn" href="/console/admin">Admin panel</a>
                 <button className="btn-secondary c-btn" onClick={() => void loadAll(dev)}>Refresh</button>
                 <button className="btn-secondary c-btn" onClick={logout}>Log out</button>
               </div>
@@ -369,6 +397,7 @@ const CONSOLE_CSS = `
 .cin:focus { border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.18); }
 .c-err { color:#f0737d; font-size:13px; }
 .c-note { font-size:12px; color:#5b6070; margin-top:14px; line-height:1.5; }
+.linkish { background:none; border:none; color:#a5b4fc; font:inherit; cursor:pointer; text-decoration:underline; padding:0; }
 .console-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
 .who { color:#a5b4fc; font-size:13px; }
 .c-btn { padding:8px 14px; font-size:13px; cursor:pointer; border-radius:8px; }

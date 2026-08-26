@@ -4,9 +4,10 @@
 
 ```
 slyxup.online/stack/               ← monorepo (here, pnpm + wrangler)
-├── auth.slyxup.online/  → https://auth.slyxup.online (Hono Worker + D1 + KV)
-├── stack.slyxup.online/ → https://stack.slyxup.online (Next.js Pages)
-├── billing.slyxup.online/ → future Worker
+├── auth.slyxup.online/  → https://auth.slyxup.online (Hono Worker + D1 + KV — identity only)
+├── stack.slyxup.online/ → https://stack.slyxup.online (Next.js App Router static export → CF Workers assets; marketing + docs)
+├── billing.slyxup.online/ → https://billing.slyxup.online (Hono Worker + D1 — sole owner of billing)
+├── examples/  → starter apps
 └── packages/{core,react,nextjs,ui,cli,billing}
 ```
 

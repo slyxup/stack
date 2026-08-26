@@ -1,12 +1,15 @@
 'use client';
 
 import { SlyxUpProvider, useAuth, useUser } from '@slyxup/react';
-import { SignIn, SignUp, UserButton, SlyxUpStyles } from '@slyxup/ui';
+import { SignIn, SignUp, UserButton, SlyxUpStyles, UserProfile } from '@slyxup/ui';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 function Dashboard() {
   const { isSignedIn, isLoaded, signOut } = useAuth();
   const { user } = useUser();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const router = useRouter();
 
   if (!isLoaded) return <div style={{ padding: 40, textAlign: 'center', color: '#6f6f7b' }}>Loading…</div>;
 
@@ -33,21 +36,38 @@ function Dashboard() {
             <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>Welcome back</h1>
             <p style={{ color: '#6f6f7b', fontSize: 14, marginTop: 4 }}>{user?.email} · Verified user</p>
           </div>
-          <button
-            onClick={() => signOut()}
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              background: '#16161d',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              padding: '9px 14px',
-              cursor: 'pointer',
-            }}
-          >
-            Sign out
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setProfileOpen(true)}
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                background: 'transparent',
+                color: '#16161d',
+                border: '1px solid #d8d8e8',
+                borderRadius: 10,
+                padding: '9px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              Account settings
+            </button>
+            <button
+              onClick={() => signOut()}
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                background: '#16161d',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                padding: '9px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
@@ -64,9 +84,16 @@ function Dashboard() {
         </div>
 
         <div style={{ background: '#f7f7fa', borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 1.6, color: '#6f6f7b' }}>
-          <strong style={{ color: '#16161d' }}>Platform demo:</strong> Ye SlyxUp Auth ka live use hai. Upar `UserButton` me avatar dropdown, `SignIn`/`SignUp` cards, `useUser()` se profile — sab isi `packages/*` se chal raha hai jo abhi `feat/api-contract` pe banaya.
+          <strong style={{ color: '#16161d' }}>Platform demo:</strong> Ye SlyxUp Auth ka live use hai. `UserButton` avatar dropdown, `SignIn`/`SignUp` cards, aur **Account settings** button se Clerk-style `<UserProfile />` (profile edit, password change, session revoke, delete account) — sab isi `packages/*` se chal raha hai.
         </div>
       </div>
+
+      {profileOpen && (
+        <UserProfile
+          onClose={() => setProfileOpen(false)}
+          onDeleted={() => router.push('/')}
+        />
+      )}
 
       <p style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#9a9aa6' }}>
         API: {process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online'} · SlyxUp SDK v0.2.0

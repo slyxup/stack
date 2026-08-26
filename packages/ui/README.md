@@ -1,6 +1,6 @@
 # @slyxup/ui
 
-Prebuilt, themeable auth components — sign-in cards, user button, password flows. Built on [`@slyxup/react`](../react). **Zero CSS dependencies** — styles are self-contained and injected once.
+Prebuilt, themeable auth + billing components — sign-in cards, user button, password flows, pricing table. Built on [`@slyxup/react`](../react). **Zero CSS dependencies** — styles are self-contained and injected once.
 
 ## Install
 
@@ -54,9 +54,36 @@ import { UserButton } from '@slyxup/ui';
 
 Renders nothing until loaded; shows initials or avatar image.
 
-### `<UserProfile />`
+### `<UserProfile />` — full account settings (Clerk-style)
 
-Edit first/last name and avatar URL with inline save confirmation.
+Two-tab account panel — Profile and Security. Renders as a centered modal by default; pass `modal={false}` for inline use.
+
+```tsx
+import { UserProfile } from '@slyxup/ui';
+import { useState } from 'react';
+
+const [open, setOpen] = useState(false);
+
+{open && (
+  <UserProfile
+    modal                          // default true — overlay + centered card, Esc/click-outside closes
+    onClose={() => setOpen(false)}
+    onDeleted={() => (window.location.href = '/')}  // after account deletion
+  />
+)}
+```
+
+**Profile tab** — avatar preview from URL, first/last name editing with save confirmation, email row with a verified/unverified badge and one-click resend verification.
+
+**Security tab** — change password (validates current password server-side, min 8 chars, confirm-match check), active sessions list parsed into `Browser · OS` device labels showing IP, created and expiry dates, per-session revoke buttons, "sign out other devices", and a type-`DELETE`-to-confirm danger zone for permanent account deletion.
+
+| Prop | Required | Default | Purpose |
+|---|---|---|---|
+| `modal` | no | `true` | Overlay + centered card vs inline card |
+| `onClose` | no | — | Modal close callback |
+| `onDeleted` | no | — | Fired after the account is deleted |
+
+Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GET/DELETE /v1/sessions`) and `@slyxup/react >= auth hooks`.
 
 ### Password flows
 
@@ -75,6 +102,42 @@ Edit first/last name and avatar URL with inline save confirmation.
 ```
 
 Redirects to the hosted OAuth flow.
+
+### `<PricingTable />` — billing plans grid
+
+```tsx
+import { PricingTable } from '@slyxup/ui';
+import { usePlans, useCheckout } from '@slyxup/react';
+
+const { plans, loading } = usePlans(projectId);
+const { checkout } = useCheckout();
+
+<PricingTable
+  plans={plans}
+  loading={loading}
+  onSelect={(plan) => checkout(plan.id)}   // → Paddle hosted checkout
+/>
+```
+
+Clean pricing grid with a "popular" badge driven by `plan.isPopular`.
+
+### `<BillingPortal />` — current plan + invoices
+
+```tsx
+import { BillingPortal } from '@slyxup/ui';
+import { useSubscription, useInvoices } from '@slyxup/react';
+
+const { subscription } = useSubscription(projectId);
+const { invoices } = useInvoices();
+
+<BillingPortal
+  subscription={subscription}
+  invoices={invoices}
+  onCancel={cancelSubscription}            // optional; omit to hide button
+/>
+```
+
+Shows current plan, status, renewal date, invoice history, and an optional cancel action.
 
 ## Theming
 

@@ -4,7 +4,10 @@ export { KeyholeMark, GoogleIcon, GitHubIcon, CheckIcon } from './icons';
 export { SignIn, type SignInProps } from './components/SignIn/SignIn';
 export { SignUp, type SignUpProps } from './components/SignUp/SignUp';
 export { UserButton } from './components/UserButton/UserButton';
-export { UserProfile } from './components/UserProfile/UserProfile';
+export {
+  UserProfile,
+  type UserProfileProps,
+} from './components/UserProfile/UserProfile';
 export {
   ForgotPassword,
   type ForgotPasswordProps,

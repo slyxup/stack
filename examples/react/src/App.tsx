@@ -1,11 +1,18 @@
 import { SlyxUpProvider, useAuth, useUser } from '@slyxup/react';
-import { SignIn, SignUp, SlyxUpStyles, UserButton } from '@slyxup/ui';
+import {
+  SignIn,
+  SignUp,
+  SlyxUpStyles,
+  UserButton,
+  UserProfile,
+} from '@slyxup/ui';
 import { useState } from 'react';
 
 function Demo() {
   const { isSignedIn, isLoaded } = useAuth();
   const { user } = useUser();
   const [mode, setMode] = useState<'in' | 'up'>('in');
+  const [profileOpen, setProfileOpen] = useState(false);
 
   if (!isLoaded)
     return (
@@ -43,6 +50,30 @@ function Demo() {
       <p style={{ color: '#6f6f7b', fontSize: 14 }}>
         {user?.email} · React SPA demo
       </p>
+
+      <button
+        type="button"
+        onClick={() => setProfileOpen(true)}
+        style={{
+          font: 'inherit',
+          fontSize: 13.5,
+          fontWeight: 600,
+          background: '#16161d',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 10,
+          padding: '10px 16px',
+          cursor: 'pointer',
+          marginTop: 16,
+        }}
+      >
+        Account settings
+      </button>
+      <p style={{ color: '#9a9aa6', fontSize: 12.5, marginTop: 10 }}>
+        Opens the Clerk-style <code>&lt;UserProfile /&gt;</code> — edit profile,
+        change password, manage sessions, delete account.
+      </p>
+
       <pre
         style={{
           background: '#f7f7fa',
@@ -55,6 +86,13 @@ function Demo() {
       >
         {JSON.stringify(user, null, 2)}
       </pre>
+
+      {profileOpen && (
+        <UserProfile
+          onClose={() => setProfileOpen(false)}
+          onDeleted={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }
@@ -65,6 +103,7 @@ export default function App() {
       publishableKey={
         import.meta.env.VITE_SLYXUP_PUBLISHABLE_KEY ?? 'pk_test_demo'
       }
+      apiUrl={import.meta.env.VITE_SLYXUP_API_URL}
     >
       <SlyxUpStyles />
       <header

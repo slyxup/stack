@@ -3,7 +3,8 @@
 ## 1. V1 NOT to build (from PLAN.md §30)
 
 - Dashboard, Organizations, SAML/SCIM, Enterprise SSO
-- Billing Teams, Analytics, Storage, AI (only auth V1; billing is placeholder)
+- Billing Teams, Analytics, Storage, AI (auth stays identity-only)
+- **NEVER add billing tables/routes to `slyxup_auth` or the auth Worker** — billing.slyxup.online is the sole billing owner (its own D1 + Paddle webhooks). Auth ↔ billing integration happens only via billing's read-only `AUTH_DB` session check.
 - Passkeys, Mobile SDK, Vue/Svelte SDK, React Native
 - Multi-region, complex admin panel
 
@@ -47,7 +48,7 @@ If AI adds these, it’s out of scope — stop.
 
 ## 6. What AI can do when blocked
 
-- Ask: “This needs Billing — V1 placeholder only. Should I stub or skip?”
+- Ask: “This needs new auth-side tables — should identity own this, or does it belong in billing.slyxup.online?” (billing data NEVER goes into slyxup_auth)
 - Suggest: batch helper, `d1-batch.ts` util, `crypto` wrapper
 - Never silently add Postgres/Docker/Next auth logic to `auth.slyxup.online`
 

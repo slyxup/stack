@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { getDb } from '../lib/db';
-import { userProfiles, users } from '../lib/schema';
+import { hashPassword, verifyPassword } from '../lib/password';
+import { sessions, userProfiles, users } from '../lib/schema';
 
 export async function updateUser(
   env: { DB: D1Database },
@@ -47,4 +48,94 @@ export async function ensureProfile(env: { DB: D1Database }, userId: string) {
   };
   await db.insert(userProfiles).values(profile);
   return profile;
+}
+
+/** Change password: verify current, then rehash. Throws on bad current password. */
+export async function changePassword(
+  env: { DB: D1Database },
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+) {
+  const db = getDb(env);
+  const user = await db.select().from(users).where(eq(users.id, userId)).get();
+  if (!user) throw new Error('User not found');
+  // OAuth-only accounts have no password to replace
+  if (!user.passwordHash) throw new Error('No password set for this account');
+  const ok = await verifyPassword(currentPassword, user.passwordHash);
+  if (!ok) throw new Error('Current password is incorrect');
+  const passwordHash = await hashPassword(newPassword);
+  await db
+    .update(users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+  return { ok: true };
+}
+
+export interface SessionListItem {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  expiresAt: Date;
+  createdAt: Date;
+  isCurrent: boolean;
+}
+
+/** List all sessions for a user; marks which one the current request belongs to. */
+export async function listSessions(
+  env: { DB: D1Database },
+  userId: string,
+  currentToken: string
+): Promise<SessionListItem[]> {
+  const db = getDb(env);
+  const rows = await db
+    .select({
+      id: sessions.id,
+      token: sessions.token,
+      ipAddress: sessions.ipAddress,
+      userAgent: sessions.userAgent,
+      expiresAt: sessions.expiresAt,
+      createdAt: sessions.createdAt,
+    })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, new Date())))
+    .orderBy(desc(sessions.updatedAt))
+    .all();
+  return rows.map(({ token, ...rest }) => ({
+    ...rest,
+    isCurrent: token === currentToken,
+  }));
+}
+
+/** Revoke one session — ownership enforced via userId match. */
+export async function revokeSession(
+  env: { DB: D1Database },
+  userId: string,
+  sessionId: string
+) {
+  const db = getDb(env);
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)));
+  return { ok: true };
+}
+
+/** Revoke every session except the caller's current one. Returns count. */
+export async function revokeOtherSessions(
+  env: { DB: D1Database },
+  userId: string,
+  currentToken: string
+) {
+  const db = getDb(env);
+  const result = await db
+    .delete(sessions)
+    .where(
+      and(
+        eq(sessions.userId, userId),
+        ne(sessions.token, currentToken),
+        gt(sessions.expiresAt, new Date())
+      )
+    )
+    .run();
+  return { ok: true, revoked: result.meta.changes ?? 0 };
 }

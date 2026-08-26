@@ -43,6 +43,31 @@ export interface SessionResponse {
   session: Pick<SlyxupSession, 'id' | 'expiresAt'>;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface SlyxupSessionInfo {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  expiresAt: string;
+  createdAt: string;
+  /** true when this session belongs to the caller's current cookie */
+  isCurrent: boolean;
+}
+
+export interface SessionsResponse {
+  ok: true;
+  sessions: SlyxupSessionInfo[];
+}
+
+export interface RevokeSessionsResponse {
+  ok: true;
+  revoked: number;
+}
+
 export interface UserResponse {
   ok: true;
   user: SlyxupUser;

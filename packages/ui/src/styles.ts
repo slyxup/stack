@@ -198,6 +198,136 @@ export const CSS = `
 .slx-menu-item:hover { background: color-mix(in srgb, var(--slx-ink) 5%, transparent); }
 .slx-menu-item:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--slx-accent-soft); }
 .slx-menu-item-danger { color: var(--slx-danger); }
+
+/* ── User profile shell (Clerk-style) ── */
+.slx-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(10,10,16,.55);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.slx-profile {
+  width: 100%; max-width: 660px; max-height: min(640px, 90vh);
+  background: var(--slx-bg);
+  border: 1px solid var(--slx-border);
+  border-radius: calc(var(--slx-radius) + 6px);
+  box-shadow: 0 24px 70px rgba(10,10,20,.3);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.slx-profile-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--slx-border);
+}
+.slx-profile-title { font-family: var(--slx-display); font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
+.slx-profile-close {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: var(--slx-muted); font-size: 17px; line-height: 1;
+  transition: background .15s, color .15s;
+}
+.slx-profile-close:hover { background: color-mix(in srgb, var(--slx-ink) 6%, transparent); color: var(--slx-ink); }
+.slx-profile-close:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft); }
+.slx-profile-body { display: flex; flex: 1; min-height: 0; }
+.slx-profile-nav {
+  width: 168px; flex-shrink: 0;
+  border-right: 1px solid var(--slx-border);
+  padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;
+}
+.slx-profile-nav-btn {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; text-align: left; box-sizing: border-box;
+  font: inherit; font-size: 13.5px; font-weight: 500;
+  color: var(--slx-muted); background: none; border: none;
+  border-radius: 8px; padding: 9px 11px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.slx-profile-nav-btn:hover { color: var(--slx-ink); background: color-mix(in srgb, var(--slx-ink) 5%, transparent); }
+.slx-profile-nav-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--slx-accent-soft); }
+.slx-profile-nav-btn.on {
+  color: var(--slx-accent);
+  background: var(--slx-accent-soft);
+  font-weight: 600;
+}
+.slx-profile-content { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 24px 26px; }
+@media (max-width: 560px) {
+  .slx-overlay { padding: 12px; align-items: flex-end; }
+  .slx-profile-body { flex-direction: column; overflow-y: auto; max-height: 86vh; }
+  .slx-profile-nav {
+    width: 100%; flex-direction: row; gap: 6px;
+    border-right: none; border-bottom: 1px solid var(--slx-border); padding: 8px;
+  }
+  .slx-profile-nav-btn { width: auto; flex: 1; justify-content: center; }
+}
+
+/* ── Profile sections ── */
+.slx-profile-sec { margin-bottom: 26px; }
+.slx-profile-sec:last-child { margin-bottom: 0; }
+.slx-sec-title {
+  font-family: var(--slx-display); font-size: 13px; font-weight: 650;
+  letter-spacing: .02em; text-transform: uppercase; color: var(--slx-muted);
+  margin: 0 0 12px;
+}
+.slx-avatar-lg {
+  width: 72px; height: 72px; border-radius: 50%;
+  border: 1px solid var(--slx-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--slx-accent), #9a6cf0);
+  overflow: hidden; flex-shrink: 0;
+}
+.slx-avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+.slx-avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.slx-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--slx-border);
+}
+.slx-row:last-child { border-bottom: none; }
+.slx-row-label { font-size: 12.5px; color: var(--slx-muted); margin: 0 0 2px; }
+.slx-row-value { font-size: 14px; font-weight: 500; word-break: break-all; }
+.slx-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 650; letter-spacing: .03em;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+}
+.slx-badge-ok {
+  color: #1e9e4a; background: color-mix(in srgb, #34a853 12%, transparent);
+}
+.slx-badge-warn {
+  color: #b07a12; background: color-mix(in srgb, #eab308 15%, transparent);
+}
+.slx-badge-accent { color: var(--slx-accent); background: var(--slx-accent-soft); }
+
+/* ── Session rows ── */
+.slx-session {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--slx-border);
+  border-radius: var(--slx-radius); margin-bottom: 8px;
+}
+.slx-session-meta { min-width: 0; }
+.slx-session-device { font-size: 13.5px; font-weight: 600; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+.slx-session-sub { font-size: 12px; color: var(--slx-muted); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slx-btn-danger-outline {
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--slx-danger); background: none;
+  border: 1px solid color-mix(in srgb, var(--slx-danger) 40%, transparent);
+  border-radius: 8px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
+  transition: background .15s;
+}
+.slx-btn-danger-outline:hover { background: color-mix(in srgb, var(--slx-danger) 10%, transparent); }
+.slx-btn-danger-outline:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--slx-danger) 18%, transparent); }
+
+/* ── Danger zone ── */
+.slx-danger-zone {
+  border: 1px solid color-mix(in srgb, var(--slx-danger) 35%, transparent);
+  background: color-mix(in srgb, var(--slx-danger) 4%, transparent);
+  border-radius: calc(var(--slx-radius) + 2px);
+  padding: 16px;
+}
+.slx-danger-title { font-size: 13.5px; font-weight: 650; color: var(--slx-danger); margin: 0 0 4px; }
+.slx-danger-desc { font-size: 12.5px; color: var(--slx-muted); line-height: 1.5; margin: 0 0 12px; }
 `;
 
 let injected = false;

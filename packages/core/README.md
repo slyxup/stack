@@ -23,10 +23,18 @@ const client = new SlyxupClient({
 await client.auth.signUp({ email: 'ada@example.com', password: 'password123', firstName: 'Ada' });
 await client.auth.signIn({ email: 'ada@example.com', password: 'password123' });
 await client.auth.signOut();
+await client.auth.resendVerification('ada@example.com');   // resend email verification
 
 // ── Sessions ──
 const { session, user } = await client.sessions.get();
 // session.expiresAt — ISO date; throws UnauthorizedError (401) when signed out
+const { sessions } = await client.sessions.list();
+// SlyxupSessionInfo[]: { id, ipAddress, userAgent, expiresAt, createdAt, isCurrent }
+await client.sessions.revoke('session-id');  // revoke one device
+const { revoked } = await client.sessions.revokeOthers();  // sign out everywhere else
+
+// ── Password ──
+await client.password.change({ currentPassword, newPassword });
 
 // ── Users ──
 const me = await client.users.me();       // full profile
@@ -65,7 +73,12 @@ try {
 | `auth.signUp(input)` | POST | `/v1/auth/sign-up` |
 | `auth.signIn(input)` | POST | `/v1/auth/sign-in` |
 | `auth.signOut()` | POST | `/v1/auth/sign-out` |
+| `auth.resendVerification(email)` | POST | `/v1/verification/resend` |
 | `sessions.get()` | GET | `/v1/session` |
+| `sessions.list()` | GET | `/v1/sessions` |
+| `sessions.revoke(id)` | DELETE | `/v1/sessions/:id` |
+| `sessions.revokeOthers()` | DELETE | `/v1/sessions` |
+| `password.change(input)` | POST | `/v1/user/password` |
 | `users.me()` | GET | `/v1/user` |
 | `users.update(patch)` | PATCH | `/v1/user` |
 | `users.delete()` | DELETE | `/v1/user` |

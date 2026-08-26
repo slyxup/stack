@@ -12,10 +12,17 @@ const CONFIG_DIR = join(homedir(), '.config', 'slyxup');
 export const CREDENTIALS_PATH = join(CONFIG_DIR, 'credentials.json');
 
 export interface Credentials {
-  /** Developer ID used as Bearer token for management API */
-  developerId: string;
+  /** Session token from POST /v1/auth/sign-in — used as Bearer for the management API */
+  token: string;
+  /** Legacy field kept for older configs; superseded by `token` */
+  developerId?: string;
   email: string;
   apiUrl: string;
+}
+
+/** The credential to send as Bearer — prefers session tokens. */
+export function bearerOf(creds: Credentials): string {
+  return creds.token ?? creds.developerId ?? '';
 }
 
 export function loadCredentials(): Credentials | null {

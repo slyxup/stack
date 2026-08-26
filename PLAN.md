@@ -70,10 +70,14 @@ auth.slyxup.online
     -> Bindings: DB (D1), KV, STORAGE (R2)
 
 billing.slyxup.online
-    SlyxUp Billing — FUTURE (reserved, V1 me kuch nahi) — CF Worker + D1
-    -> File structure: slyxup.online/stack/billing.slyxup.online/  (placeholder Worker)
-    -> Deploy target: https://billing.slyxup.online (future, wrangler deploy)
+    SlyxUp Billing — LIVE — CF Worker + D1 (slyxup_billing) + KV
+    -> File structure: slyxup.online/stack/billing.slyxup.online/  (full billing Worker)
+    -> Deploy target: https://billing.slyxup.online (wrangler deploy)
     -> Packages: slyxup.online/stack/packages/billing -> @slyxup/billing
+    -> SINGLE OWNER of all billing data: plans, subscriptions, invoices, customers, webhook_events
+    -> Paddle webhooks land ONLY here: POST /v1/webhooks/paddle
+    -> Validates user sessions by reading auth D1 directly via AUTH_DB binding (no HTTP hop)
+    -> AUTH HAS ZERO BILLING CODE/TABLES — auth.slyxup.online is identity-only
 
 slyxup.online
     Monorepo root — Workspace/slyxup.online/  (contains stack/ as requested)
@@ -105,7 +109,7 @@ Workspace/slyxup.online/  →  repo root (github.com/slyxup/stack — CF Workers
 ├── stack/                → monorepo (inside slyxup.online as requested)
 │   ├── auth.slyxup.online/  (Worker + D1 + KV + R2 — wrangler.jsonc)
 │   ├── stack.slyxup.online/ (Pages/Worker — wrangler.jsonc assets)
-│   ├── billing.slyxup.online/  [future placeholder Worker]
+│   ├── billing.slyxup.online/  [billing Worker — LIVE]
 │   └── packages/  (core, react, nextjs, ui, cli, billing→@slyxup/billing)
 ├── PLAN.md
 └── README.md
@@ -128,15 +132,15 @@ github.com/slyxup
 Stack monorepo (updated — renamed from auth to stack for future billing):
 
 github.com/slyxup/stack   →  Workspace/stack/  (contains auth + billing + marketing)
-  ├── auth.slyxup.online/      (auth service)
-  ├── billing.slyxup.online/   (billing service — future placeholder)
+  ├── auth.slyxup.online/      (auth service — identity only, no billing)
+  ├── billing.slyxup.online/   (billing service — LIVE, sole owner of billing tables)
   ├── stack.slyxup.online/     (marketing)
   └── packages/*               (@slyxup/* SDKs)
 
 Legacy / alternative split (if you later split repo):
 
 github.com/slyxup/auth     → standalone auth (now part of stack monorepo)
-github.com/slyxup/billing  → standalone billing (future, now placeholder in stack/billing.slyxup.online)
+github.com/slyxup/billing  → standalone billing (live, in stack/billing.slyxup.online)
 
 Future products (all inside stack monorepo or as separate repos later):
 
@@ -237,7 +241,7 @@ Workspace/slyxup.online/   ->  Workspace/slyxup.online/  (root — CF monorepo)
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── billing.slyxup.online/  ->  BILLING (future, placeholder) (deploy to https://billing.slyxup.online)
+├── billing.slyxup.online/  ->  BILLING (LIVE) (deploy to https://billing.slyxup.online)
 │   ├── src/
 │   │   ├── index.ts
 │   │   ├── routes/
@@ -337,7 +341,7 @@ Workspace/slyxup.online/   ->  Workspace/slyxup.online/  (root — CF monorepo)
 │       ├── package.json
 │       └── tsconfig.json
 │
-│   └── billing/  ->  @slyxup/billing (future)
+│   └── billing/  ->  @slyxup/billing
 │       ├── src/
 │       │   └── index.ts
 │       ├── package.json
@@ -880,7 +884,7 @@ It is deployed from stack/stack.slyxup.online/ in this repository.
 No auth logic, no session handling — sirf static/marketing content.
 
 > NOTE: Landing UI domain is stack.slyxup.online — ONLY marketing. Auth ka sara kaam auth.slyxup.online (stack/auth.slyxup.online/) par hoga.
-> billing.slyxup.online future placeholder — stack/billing.slyxup.online/
+> billing.slyxup.online live billing Worker — stack/billing.slyxup.online/ (sole owner of billing tables; auth has zero billing code)
 > auth.slyxup.online ka use API + Hosted Pages ke liye hai, stack.slyxup.online ka nahi.
 
 
@@ -1061,7 +1065,7 @@ Conceptually (CF):
 wrangler.jsonc (per domain):
   auth.slyxup.online/wrangler.jsonc  → bindings: DB (D1 slyxup_auth), KV, R2
   stack.slyxup.online/wrangler.jsonc → assets: .next (Pages)
-  billing.slyxup.online/wrangler.jsonc → D1 slyxup_billing (future)
+  billing.slyxup.online/wrangler.jsonc → D1 slyxup_billing + AUTH_DB (read-only sessions)
 
 D1:
   wrangler d1 create slyxup_auth
@@ -1099,14 +1103,14 @@ Cloudflare Pages/Workers
         ↓
 stack.slyxup.online  (sirf marketing pages - no project/keys UI) — route: stack.slyxup.online/*
 
-For billing (future) — CF Worker:
+For billing — CF Worker:
 
 GitHub
 github.com/slyxup/stack
         ↓
 wrangler deploy (context: slyxup.online/stack/billing.slyxup.online/)
         ↓
-billing.slyxup.online (placeholder — V1 me disabled) — D1 slyxup_billing
+billing.slyxup.online (LIVE) — D1 slyxup_billing, sole owner of plans/subscriptions/invoices
 
 These should be deployed separately via wrangler.
 slyxup.online is now the monorepo root (Workspace/slyxup.online/) containing stack/ — not a separate untouch project anymore (moved inside as you requested).
@@ -1231,7 +1235,7 @@ Only merge if everything passes.
 @slyxup/nextjs
 @slyxup/ui
 @slyxup/cli
-@slyxup/billing  (future — from stack/packages/billing)
+@slyxup/billing  (from stack/packages/billing — talks to billing.slyxup.online)
 
 Use changesets or another versioning system.
 
@@ -1383,7 +1387,7 @@ SLYXUP STACK (auth + billing)
  @slyxup/react   @slyxup/nextjs
         │           │
         ▼           │
-   @slyxup/ui   @slyxup/billing (future)
+   @slyxup/ui   @slyxup/billing
         │
    @slyxup/billing depends on core
 
@@ -1493,11 +1497,11 @@ User browser
       ↓
 stack.slyxup.online (ONLY marketing/docs — no auth logic, no dashboard)
 
-Billing is separate (future):
+Billing is separate (billing.slyxup.online — sole billing owner):
 
 User browser
       ↓
-billing.slyxup.online (placeholder — billing.slyxup.online/src/routes)
+billing.slyxup.online (LIVE — billing.slyxup.online/src/routes)
 
 slyxup.online -> Workspace/slyxup.online/ clean sibling — isme kuch nahi karna (see stack/ monorepo)
 stack/ -> Workspace/stack/ → github.com/slyxup/stack (auth + billing + marketing)

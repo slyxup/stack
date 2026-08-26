@@ -15,6 +15,13 @@ export const updateUserSchema = z.object({
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(8).max(128),
+});
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
 export const listUsersSchema = z.object({
   projectId: z.string().uuid(),
   limit: z.coerce.number().int().min(1).max(100).default(20),

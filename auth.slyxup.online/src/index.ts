@@ -1,9 +1,11 @@
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { getDb } from './lib/db';
 import { checkRateLimit } from './lib/rate-limit';
+import { projects } from './lib/schema';
 import adminRoute from './routes/admin';
 import auditRoute from './routes/audit';
 import auth from './routes/auth';
-import billingRoute from './routes/billing';
 import developersRoute from './routes/developers';
 import keysRoute from './routes/keys';
 import oauthRoute from './routes/oauth';
@@ -11,11 +13,11 @@ import projectsRoute from './routes/projects';
 import sessionsRoute from './routes/sessions';
 import usersRoute from './routes/users';
 import verificationRoute from './routes/verification';
-import webhookRoute from './routes/webhooks';
 
 // SlyxUp Auth Worker — CF Workers + D1 + KV
 // Deploy: https://auth.slyxup.online (wrangler deploy)
 // API: /v1/*  Hosted Pages: /sign-in etc.
+// NOTE: Billing lives ONLY in billing.slyxup.online (separate Worker + D1).
 
 type Bindings = {
   DB: D1Database;
@@ -28,7 +30,7 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// CORS — allow configured origins + any localhost dev port
+// CORS — allow configured origins + localhost dev + live project custom domains
 app.use('*', async (c, next) => {
   const origin = c.req.header('Origin') ?? '';
   const allowed = (c.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim());
@@ -40,10 +42,50 @@ app.use('*', async (c, next) => {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
     'Access-Control-Max-Age': '86400',
   };
-  if (
-    origin &&
-    (allowed.includes(origin) || allowed.includes('*') || isLocalhost)
-  ) {
+
+  let allow =
+    !!origin &&
+    (allowed.includes(origin) || allowed.includes('*') || isLocalhost);
+
+  // Dynamic: custom domains registered on LIVE projects (KV-cached 60s).
+  // Any platform built with the SDK gets CORS automatically — no redeploy.
+  if (!allow && origin.startsWith('https://')) {
+    try {
+      let hosts: string[] | null = null;
+      const cached = await c.env.KV.get('cors_live_domains');
+      if (cached) {
+        hosts = JSON.parse(cached) as string[];
+      } else {
+        const db = getDb(c.env);
+        const rows = await db
+          .select({ domains: projects.allowedDomains })
+          .from(projects)
+          .where(eq(projects.environment, 'live'))
+          .all();
+        hosts = [
+          ...new Set(
+            rows.flatMap((r) => (Array.isArray(r.domains) ? r.domains : []))
+          ),
+        ];
+        await c.env.KV.put('cors_live_domains', JSON.stringify(hosts), {
+          expirationTtl: 60,
+        });
+      }
+      if (hosts) {
+        let host = new URL(origin).hostname.toLowerCase();
+        host = host.replace(/^www\./, '');
+        allow = hosts.some(
+          (h) => h.replace(/^www\./, '').toLowerCase() === host
+        );
+      }
+    } catch (e) {
+      console.error(
+        JSON.stringify({ evt: 'cors_domain_lookup_failed', msg: String(e) })
+      );
+    }
+  }
+
+  if (allow) {
     corsHeaders['Access-Control-Allow-Origin'] = origin;
     corsHeaders['Access-Control-Allow-Credentials'] = 'true';
     corsHeaders.Vary = 'Origin';
@@ -95,8 +137,6 @@ app.route('/v1/developers', developersRoute);
 app.route('/v1/oauth', oauthRoute);
 app.route('/v1/sessions', sessionsRoute);
 app.route('/v1/admin', adminRoute);
-app.route('/v1/billing', billingRoute);
-app.route('/v1/webhooks', webhookRoute);
 app.route('/v1/audit', auditRoute);
 app.route('/v1', auth); // also mount session at /v1/session
 
