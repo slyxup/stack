@@ -106,16 +106,20 @@ export const CSS = `
 .slx-btn {
   width: 100%; box-sizing: border-box;
   font-family: var(--slx-font); font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
-  color: #fff; background: var(--slx-accent);
-  border: none; border-radius: var(--slx-radius);
+  color: #fff; background: #0a0a0f;
+  border: 1px solid #0a0a0f; border-radius: var(--slx-radius);
   padding: 11px 14px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  transition: background .15s, transform .06s;
+  transition: background .15s, transform .06s, border-color .15s;
 }
-.slx-btn:hover { background: var(--slx-accent-hover); }
-.slx-btn:active { transform: scale(.985); }
-.slx-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft), 0 0 0 1px var(--slx-accent); }
+.slx-btn:hover { background: #1a1a23; border-color: #1a1a23; }
+.slx-btn:active { transform: scale(.985); background: #000; }
+.slx-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(10,10,15,.14), 0 0 0 1px #0a0a0f; }
 .slx-btn[disabled] { opacity: .6; cursor: not-allowed; }
+@media (prefers-color-scheme: dark) {
+  .slyxup-root:not(.slyxup-light) .slx-btn { background: #f2f2f5; color: #0a0a0f; border-color: #f2f2f5; }
+  .slyxup-root:not(.slyxup-light) .slx-btn:hover { background: #e6e6eb; border-color: #e6e6eb; }
+}
 .slx-spinner {
   width: 15px; height: 15px; flex: none;
   border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
