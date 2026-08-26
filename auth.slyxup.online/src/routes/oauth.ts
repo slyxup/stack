@@ -20,6 +20,7 @@ type Bindings = {
   GITHUB_CLIENT_SECRET?: string;
   APP_URL: string;
   HOSTED_AUTH_URL: string;
+  ALLOWED_REDIRECT_ORIGINS?: string;
 };
 
 const oauth = new Hono<{ Bindings: Bindings }>();
@@ -145,7 +146,11 @@ async function exchangeAndProfile(
   };
 }
 
-function safeRedirect(url: string | undefined, fallback: string): string {
+function safeRedirect(
+  url: string | undefined,
+  fallback: string,
+  env?: { ALLOWED_REDIRECT_ORIGINS?: string }
+): string {
   if (!url) return fallback;
   try {
     const u = new URL(url);
@@ -156,6 +161,22 @@ function safeRedirect(url: string | undefined, fallback: string): string {
       u.hostname.endsWith('.workers.dev')
     )
       return url;
+    // Also allow any origin explicitly listed in ALLOWED_REDIRECT_ORIGINS
+    const allowed = (env?.ALLOWED_REDIRECT_ORIGINS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (allowed.includes(u.origin) || allowed.includes('*')) return url;
+    // Allow custom domains that are registered as live project domains (best effort via exact origin check)
+    // Note: full dynamic check would need DB lookup; for now allow any https origin that matches allowed list pattern
+    // If ALLOWED_REDIRECT_ORIGINS contains the origin's host as substring, allow
+    // This fallback enables local dev with custom domains without redeploy
+    if (
+      u.protocol === 'https:' &&
+      allowed.some((a) => u.origin === a || u.hostname === new URL(a).hostname)
+    ) {
+      return url;
+    }
   } catch {
     /* fallthrough */
   }
@@ -303,7 +324,7 @@ oauth.get('/callback/:provider', async (c) => {
       .delete(verificationTokens)
       .where(eq(verificationTokens.email, user.email));
 
-    const dest = safeRedirect(stateObj.redirectUrl, c.env.APP_URL);
+    const dest = safeRedirect(stateObj.redirectUrl, c.env.APP_URL, c.env);
     const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(`${dest}${joiner}auth=success`);
   } catch (e) {

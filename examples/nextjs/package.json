@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.7",
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "NEXT_PUBLIC_SLYXUP_API_URL=http://localhost:8787 next dev --port 3001",
     "build": "next build"
   },
   "dependencies": {

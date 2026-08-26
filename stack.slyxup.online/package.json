@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "SlyxUp Stack — Marketing ONLY (https://stack.slyxup.online) — CF Pages/Workers",
   "scripts": {
-    "dev": "next dev",
+    "dev": "NEXT_PUBLIC_SLYXUP_API_URL=http://localhost:8787 next dev",
     "build": "next build",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf:dev": "wrangler pages dev .next --compatibility-date=2025-08-24",

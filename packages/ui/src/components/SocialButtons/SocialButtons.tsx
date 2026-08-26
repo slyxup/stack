@@ -34,7 +34,8 @@ export function SocialButtons({
             type="button"
             className="slx-social-btn"
             onClick={() => {
-              window.location.href = `${base}/${p}`;
+              const redirect = encodeURIComponent(window.location.href);
+              window.location.href = `${base}/${p}?redirect_url=${redirect}`;
             }}
           >
             <Icon /> {label}

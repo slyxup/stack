@@ -82,7 +82,18 @@ keys.get('/', async (c) => {
 });
 
 keys.delete('/:id', async (c) => {
-  await ProjectService.revokeApiKey(c.env, c.req.param('id'));
+  const developerId = c.get('developerId');
+  if (!developerId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const keyId = c.req.param('id');
+  const key = await ProjectService.getApiKeyById(c.env, keyId);
+  if (!key) return c.json({ ok: false, error: 'Not found' }, 404);
+  const member = await ProjectService.isProjectMember(
+    c.env,
+    key.projectId,
+    developerId
+  );
+  if (!member) return c.json({ ok: false, error: 'Forbidden' }, 403);
+  await ProjectService.revokeApiKey(c.env, keyId);
   return c.json({ ok: true });
 });
 

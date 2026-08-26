@@ -176,6 +176,11 @@ export async function listApiKeys(env: { DB: D1Database }, projectId: string) {
     .all();
 }
 
+export async function getApiKeyById(env: { DB: D1Database }, keyId: string) {
+  const db = getDb(env);
+  return db.select().from(apiKeys).where(eq(apiKeys.id, keyId)).get();
+}
+
 export async function revokeApiKey(env: { DB: D1Database }, keyId: string) {
   const db = getDb(env);
   await db.delete(apiKeys).where(eq(apiKeys.id, keyId));

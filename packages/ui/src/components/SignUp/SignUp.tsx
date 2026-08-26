@@ -54,7 +54,8 @@ export function SignUp({
   }
 
   function oauth(provider: 'google' | 'github') {
-    window.location.href = `${client.apiUrl}/v1/oauth/${provider}`;
+    const redirect = encodeURIComponent(window.location.href);
+    window.location.href = `${client.apiUrl}/v1/oauth/${provider}?redirect_url=${redirect}`;
   }
 
   const missingKey =

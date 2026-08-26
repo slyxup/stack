@@ -3,6 +3,7 @@ import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
 import { sessions, users, verificationTokens } from '../lib/schema';
+import { sendVerificationEmail } from './token.service';
 
 export async function signUp(
   env: { DB: D1Database },
@@ -69,6 +70,13 @@ export async function signUp(
     createdAt: now,
     updatedAt: now,
   });
+
+  // Deliver the verification email (best-effort, never blocks signup)
+  await sendVerificationEmail(
+    env as unknown as Record<string, string | undefined>,
+    input.email,
+    token
+  );
 
   return {
     userId,

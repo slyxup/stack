@@ -3,9 +3,50 @@ import { randomToken, randomUUID, timingSafeEqual } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword } from '../lib/password';
 import { passwordResetTokens, users, verificationTokens } from '../lib/schema';
+import {
+  resetPasswordEmailHtml,
+  trySend,
+  verificationEmailHtml,
+} from './email.service';
 
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h for verify
 const RESET_TTL_MS = 1000 * 60 * 60; // 1h for reset
+
+type Env = Record<string, string | undefined>;
+
+function authBase(env: Env): string {
+  return (env.HOSTED_AUTH_URL ?? env.APP_URL ?? '').replace(/\/$/, '');
+}
+
+/** Send the verify-email email (confirm page is hosted on this worker). */
+export async function sendVerificationEmail(
+  env: Env,
+  email: string,
+  token: string
+) {
+  const base = authBase(env);
+  if (!base) return;
+  const link = `${base}/v1/verification/confirm?token=${token}`;
+  await trySend(env, {
+    to: email,
+    subject: 'Verify your email — SlyxUp',
+    html: verificationEmailHtml(link),
+    text: `Verify your SlyxUp account: ${link} (expires in 24h)`,
+  });
+}
+
+/** Send the password-reset email (form hosted on this worker). */
+export async function sendResetEmail(env: Env, email: string, token: string) {
+  const base = authBase(env);
+  if (!base) return;
+  const link = `${base}/v1/verification/reset?token=${token}`;
+  await trySend(env, {
+    to: email,
+    subject: 'Reset your password — SlyxUp',
+    html: resetPasswordEmailHtml(link),
+    text: `Reset your SlyxUp password: ${link} (expires in 1 hour)`,
+  });
+}
 
 export async function createVerificationToken(
   env: { DB: D1Database },
@@ -56,7 +97,9 @@ export async function resendVerification(
     .get();
   // Do not reveal existence — always succeed silently
   if (!user) return null;
-  return createVerificationToken(env, user.id, user.email);
+  const token = await createVerificationToken(env, user.id, user.email);
+  await sendVerificationEmail(env as unknown as Env, user.email, token);
+  return token;
 }
 
 export async function forgotPassword(env: { DB: D1Database }, email: string) {
@@ -77,6 +120,7 @@ export async function forgotPassword(env: { DB: D1Database }, email: string) {
     used: false,
     createdAt: new Date(),
   });
+  await sendResetEmail(env as unknown as Env, email, token);
   return token;
 }
 
