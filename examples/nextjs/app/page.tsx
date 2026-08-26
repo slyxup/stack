@@ -4,6 +4,20 @@ import { SlyxUpProvider, useAuth, useUser } from '@slyxup/react';
 import { SignIn, SignUp, UserButton, SlyxUpStyles } from '@slyxup/ui';
 import { useState } from 'react';
 
+function MissingKeysBanner() {
+  const key = process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY;
+  if (key && key !== 'pk_test_demo' && !key.includes('REPLACE')) return null;
+  return (
+    <div style={{ maxWidth: 720, margin: '0 auto 24px', background: '#fff3cd', border: '1px solid #ffe69c', borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 1.6 }}>
+      <strong style={{ color: '#664d03' }}>Setup required:</strong> No publishable key found. Run in your project root:
+      <pre style={{ marginTop: 8, background: '#fff', border: '1px solid #ffe69c', borderRadius: 8, padding: 10, overflowX: 'auto', fontSize: 12 }}>
+        npx @slyxup/cli login{'\n'}npx @slyxup/cli project create "My App"{'\n'}npx @slyxup/cli keys create --project-id &lt;id&gt; --type publishable{'\n'}# then set NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY in .env.local
+      </pre>
+      <p style={{ marginTop: 8, color: '#664d03' }}>Without a valid key, sign-in will fail with 401. See <code>docs/getting-started.md</code>.</p>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { isSignedIn, isLoaded, signOut } = useAuth();
   const { user } = useUser();
@@ -13,6 +27,7 @@ function Dashboard() {
   if (!isSignedIn) {
     return (
       <div style={{ maxWidth: 420, margin: '0 auto' }}>
+        <MissingKeysBanner />
         <AuthCard />
       </div>
     );

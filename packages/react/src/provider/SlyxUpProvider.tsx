@@ -21,10 +21,17 @@ export function SlyxUpProvider({
   apiUrl,
   children,
 }: SlyxUpProviderProps) {
-  const client = useMemo(
-    () => new SlyxupClient({ publishableKey, apiUrl }),
-    [publishableKey, apiUrl]
-  );
+  const client = useMemo(() => {
+    if (!publishableKey && typeof window !== 'undefined') {
+      console.warn(
+        '[SlyxUp] No publishableKey provided. Set NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY in .env.local or pass publishableKey prop. Get your key: `npx @slyxup/cli keys create --project-id <id> --type publishable`'
+      );
+    }
+    return new SlyxupClient({
+      publishableKey: publishableKey ?? 'pk_test_missing',
+      apiUrl,
+    });
+  }, [publishableKey, apiUrl]);
 
   const [state, setState] = useState<{
     isLoaded: boolean;

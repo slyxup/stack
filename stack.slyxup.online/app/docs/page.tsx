@@ -62,12 +62,12 @@ npx @slyxup/cli project create "My App"
 npx @slyxup/cli keys create --project-id <id> --type publishable`}
           </div>
 
-          <h3 style={{ fontSize: 17, fontWeight: 650, marginTop: 28, marginBottom: 12 }}>Install SDKs</h3>
+          <h3 id="installation" style={{ fontSize: 17, fontWeight: 650, marginTop: 28, marginBottom: 12, scrollMarginTop: 84 }}>1. Install SDKs</h3>
           <div className="codeblock" style={{ margin: '16px 0' }}>
             npm install @slyxup/react @slyxup/ui @slyxup/core
           </div>
 
-          <h3 style={{ fontSize: 17, fontWeight: 650, marginTop: 28, marginBottom: 12 }}>Add Provider</h3>
+          <h3 id="auth-email" style={{ fontSize: 17, fontWeight: 650, marginTop: 28, marginBottom: 12, scrollMarginTop: 84 }}>1. Add Provider — Email & OAuth</h3>
           <div className="codeblock" style={{ margin: '16px 0' }}>
 {`import { SlyxUpProvider } from '@slyxup/react';
 
@@ -92,11 +92,11 @@ if (!user) redirect('/sign-in');`}
           </div>
 
           {/* API Reference */}
-          <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginTop: 44, marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+          <h2 id="api-auth" style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginTop: 44, marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,.06)', scrollMarginTop: 84 }}>
             API Reference
           </h2>
 
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginTop: 22, marginBottom: 10, color: '#9fa5fc' }}>Auth</h3>
+          <h3 id="api-auth" style={{ fontSize: 15, fontWeight: 600, marginTop: 22, marginBottom: 10, color: '#9fa5fc', scrollMarginTop: 84 }}>Auth</h3>
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', border: '1px solid #232635', borderRadius: 10 }}>
             <thead><tr style={{ background: '#12141d', textAlign: 'left' }}>
               <th style={{ padding: '9px 12px', fontWeight: 600 }}>Method</th>
