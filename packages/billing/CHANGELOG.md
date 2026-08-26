@@ -1,5 +1,11 @@
 # @slyxup/billing
 
+## 0.2.3
+
+### Patch Changes
+
+- [`f04c62b`](https://github.com/slyxup/stack/commit/f04c62bd0234a839a2b22d825818ea0c253e18f1) - Version alignment: 0.2.0/0.2.1 hit npm's 24h republish lock after an unpublished release. No code changes.
+
 ## 0.2.1
 
 ### Patch Changes
