@@ -65,17 +65,7 @@ export function SignUp({
   return (
     <div ref={cardRef} className={`slx-card${error ? ' slx-card-error' : ''}`}>
       {missingKey && (
-        <p
-          style={{
-            fontSize: 12,
-            background: '#fff3cd',
-            border: '1px solid #ffe69c',
-            borderRadius: 8,
-            padding: '8px 10px',
-            marginBottom: 14,
-            lineHeight: 1.4,
-          }}
-        >
+        <p className="slx-setup-note">
           <strong>Setup:</strong> Add{' '}
           <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> — run{' '}
           <code>npx @slyxup/cli keys create</code>

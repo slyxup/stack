@@ -11,6 +11,8 @@ export interface SignInProps {
   onSuccess?: () => void;
   /** Switch to sign up */
   onSignUpClick?: () => void;
+  /** Show "Forgot password?" — navigates via this callback */
+  onForgotPasswordClick?: () => void;
 }
 
 /** Email/password + OAuth sign-in card. */
@@ -18,6 +20,7 @@ export function SignIn({
   social = true,
   onSuccess,
   onSignUpClick,
+  onForgotPasswordClick,
 }: SignInProps) {
   injectStyles();
   const { signIn, client } = useAuth() as unknown as {
@@ -67,17 +70,7 @@ export function SignIn({
   return (
     <div ref={cardRef} className={`slx-card${error ? ' slx-card-error' : ''}`}>
       {missingKey && (
-        <p
-          style={{
-            fontSize: 12,
-            background: '#fff3cd',
-            border: '1px solid #ffe69c',
-            borderRadius: 8,
-            padding: '8px 10px',
-            marginBottom: 14,
-            lineHeight: 1.4,
-          }}
-        >
+        <p className="slx-setup-note">
           <strong>Setup:</strong> Add{' '}
           <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> to{' '}
           <code>.env.local</code> — run <code>npx @slyxup/cli keys create</code>
@@ -136,9 +129,20 @@ export function SignIn({
           />
         </div>
         <div className="slx-field">
-          <label className="slx-label" htmlFor="slx-signin-password">
-            Password
-          </label>
+          <div className="slx-row">
+            <label className="slx-label" htmlFor="slx-signin-password">
+              Password
+            </label>
+            {onForgotPasswordClick && (
+              <button
+                type="button"
+                className="slx-link slx-forgot"
+                onClick={onForgotPasswordClick}
+              >
+                Forgot password?
+              </button>
+            )}
+          </div>
           <input
             id="slx-signin-password"
             className="slx-input"
@@ -148,7 +152,6 @@ export function SignIn({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
           />
         </div>
         <button className="slx-btn" type="submit" disabled={busy}>

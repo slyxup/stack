@@ -6,7 +6,7 @@ const billing = new BillingClient();
 
 const plans   = await billing.listPlans(projectId);
 const session = await client.sessions.get();          // need auth first
-const url     = await billing.getCheckoutUrl(planId, session.token);
+await billing.checkout(planId); // redirects to hosted Paddle checkout
 window.location.href = url;                            // Paddle hosted checkout
 
 // After payment: Paddle fires webhook -> subscription.created
@@ -31,7 +31,7 @@ const plans = await billing.listPlans('prj_your-project-id');
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>2. Get a checkout URL</h2>
       <p style={{ color: '#7c8195', fontSize: 14, lineHeight: 1.7 }}>The user must be signed in — the session token is what links the eventual subscription to the buyer:</p>
       <CodeBlock>{`const { sessionToken } = await client.sessions.get();
-const url = await billing.getCheckoutUrl(planId, sessionToken);
+await billing.checkout(planId); // redirects to Paddle
 window.location.href = url;`}</CodeBlock>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>3. React hook shortcut</h2>

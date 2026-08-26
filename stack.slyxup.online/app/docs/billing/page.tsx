@@ -22,7 +22,7 @@ const plans = await billing.listPlans(projectId);
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Checkout</h2>
       <CodeBlock>{`import { BillingClient } from '@slyxup/billing';
 const billing = new BillingClient();
-const url = await billing.getCheckoutUrl(planId, sessionToken);
+await billing.checkout(planId); // redirects to Paddle
 // redirect user to url — Paddle handles payment, then webhook creates subscription`}</CodeBlock>
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Webhooks</h2>
       <p style={{ color: '#7c8195', fontSize: 14 }}>Configure in Paddle: <code>https://billing.slyxup.online/v1/webhooks/paddle</code> — handles <code>subscription.created</code> <code>subscription.canceled</code> <code>transaction.completed</code></p>

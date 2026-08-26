@@ -37,6 +37,7 @@ import { SignIn, SignUp } from '@slyxup/ui';
   social                       // show Google/GitHub buttons (default true)
   onSuccess={() => router.push('/dashboard')}
   onSignUpClick={() => setMode('sign-up')}
+  onForgotPasswordClick={() => setMode('forgot')}
 />
 
 <SignUp onSignInClick={() => setMode('sign-in')} />
