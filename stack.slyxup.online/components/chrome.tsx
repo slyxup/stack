@@ -12,9 +12,10 @@ export function Nav() {
           <a href="/features">Features</a>
           <a href="/docs">Docs</a>
           <a href="/pricing">Pricing</a>
+          <a href="/console">Console</a>
           <a href="https://github.com/slyxup/stack" target="_blank" rel="noreferrer">GitHub</a>
         </div>
-        <a className="nav-cta" href="#get-started">npx @slyxup/cli init</a>
+        <a className="nav-cta" href="/console">Open Console</a>
       </div>
     </nav>
   );
