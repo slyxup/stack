@@ -37,12 +37,40 @@ export interface BillingClientOptions {
   publishableKey?: string;
 }
 
+function getEnvApiUrl(): string | undefined {
+  // Next.js (process.env) + Vite (import.meta.env) + generic window check
+  try {
+    // @ts-ignore — process may not exist in browser
+    if (
+      typeof process !== 'undefined' &&
+      process.env?.NEXT_PUBLIC_SLYXUP_API_URL
+    )
+      return process.env.NEXT_PUBLIC_SLYXUP_API_URL;
+  } catch {}
+  try {
+    // @ts-ignore — import.meta may not exist in Node
+    if (
+      typeof import.meta !== 'undefined' &&
+      (import.meta as unknown as { env?: Record<string, string> }).env
+        ?.VITE_SLYXUP_API_URL
+    ) {
+      return (import.meta as unknown as { env: Record<string, string> }).env
+        .VITE_SLYXUP_API_URL;
+    }
+  } catch {}
+  return undefined;
+}
+
 export class BillingClient {
   readonly apiUrl: string;
   readonly publishableKey?: string;
 
   constructor(options: BillingClientOptions = {}) {
-    this.apiUrl = (options.apiUrl ?? process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online').replace(/\/$/, '');
+    this.apiUrl = (
+      options.apiUrl ??
+      getEnvApiUrl() ??
+      'https://auth.slyxup.online'
+    ).replace(/\/$/, '');
     this.publishableKey = options.publishableKey;
   }
 
@@ -53,30 +81,44 @@ export class BillingClient {
       credentials: 'include',
     });
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      throw new Error(typeof data.error === 'string' ? data.error : `Request failed (${res.status})`);
+      const data = (await res.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      throw new Error(
+        typeof data.error === 'string'
+          ? data.error
+          : `Request failed (${res.status})`
+      );
     }
     return res.json() as Promise<T>;
   }
 
   /** List plans — public endpoint, no auth needed */
   async listPlans(projectId: string): Promise<Plan[]> {
-    const res = await this.req<{ ok: true; plans: Plan[] }>(`/v1/billing/plans?projectId=${projectId}`);
+    const res = await this.req<{ ok: true; plans: Plan[] }>(
+      `/v1/billing/plans?projectId=${projectId}`
+    );
     return res.plans;
   }
 
   /** Get current subscription (requires session cookie) */
   async getSubscription(): Promise<Subscription | null> {
-    const res = await this.req<{ ok: true; subscription: Subscription | null }>('/v1/billing/subscription');
+    const res = await this.req<{ ok: true; subscription: Subscription | null }>(
+      '/v1/billing/subscription'
+    );
     return res.subscription;
   }
 
   /** Create checkout URL and redirect (requires session cookie) */
   async checkout(planId: string): Promise<void> {
-    const res = await this.req<{ ok: true; checkoutUrl?: string }>('/v1/billing/checkout', {
-      method: 'POST',
-      body: JSON.stringify({ planId }),
-    });
+    const res = await this.req<{ ok: true; checkoutUrl?: string }>(
+      '/v1/billing/checkout',
+      {
+        method: 'POST',
+        body: JSON.stringify({ planId }),
+      }
+    );
     if (res.checkoutUrl) window.location.href = res.checkoutUrl;
   }
 
@@ -87,7 +129,9 @@ export class BillingClient {
 
   /** List invoices */
   async listInvoices(): Promise<Invoice[]> {
-    const res = await this.req<{ ok: true; invoices: Invoice[] }>('/v1/billing/invoices');
+    const res = await this.req<{ ok: true; invoices: Invoice[] }>(
+      '/v1/billing/invoices'
+    );
     return res.invoices;
   }
 }
