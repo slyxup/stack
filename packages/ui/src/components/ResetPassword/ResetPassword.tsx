@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { CheckIcon, KeyholeMark } from '../../icons';
+import { injectStyles } from '../../styles';
 
 export interface ResetPasswordProps {
   /** Reset token (from email link ?token=...) */
@@ -14,6 +15,7 @@ export function ResetPassword({
   apiUrl,
   onSuccess,
 }: ResetPasswordProps) {
+  injectStyles();
   const [password, setPassword] = useState('');
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);

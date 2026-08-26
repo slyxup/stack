@@ -1,8 +1,10 @@
 import { useAuth, useUser } from '@slyxup/react';
 import { type FormEvent, useEffect, useState } from 'react';
+import { injectStyles } from '../../styles';
 
 /** Edit first/last name + avatar URL. */
 export function UserProfile() {
+  injectStyles();
   const { isLoaded, user, reload } = useUser();
   const { client } = useAuth();
   const [firstName, setFirstName] = useState('');

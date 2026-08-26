@@ -1,5 +1,6 @@
 import { useAuth, useUser } from '@slyxup/react';
 import { useEffect, useRef, useState } from 'react';
+import { injectStyles } from '../../styles';
 
 function initials(name: string | null | undefined, email: string): string {
   if (name?.trim()) return name.trim().slice(0, 1).toUpperCase();
@@ -8,6 +9,7 @@ function initials(name: string | null | undefined, email: string): string {
 
 /** Avatar + dropdown with profile actions and sign out. */
 export function UserButton() {
+  injectStyles();
   const { isLoaded, user } = useUser();
   const { signOut } = useAuth();
   const [open, setOpen] = useState(false);

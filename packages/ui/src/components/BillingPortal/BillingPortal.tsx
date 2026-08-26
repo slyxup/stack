@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { injectStyles } from '../../styles';
 
 interface Subscription {
   id: string;
@@ -28,6 +29,7 @@ export function BillingPortal({
   invoices,
   onCancel,
 }: BillingPortalProps) {
+  injectStyles();
   if (!subscription) {
     return (
       <div className="slx-card">

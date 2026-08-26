@@ -1,6 +1,7 @@
 import { SlyxupClient } from '@slyxup/core';
 import { type FormEvent, useEffect, useState } from 'react';
 import { CheckIcon, KeyholeMark } from '../../icons';
+import { injectStyles } from '../../styles';
 
 export interface ForgotPasswordProps {
   apiUrl?: string;
@@ -14,6 +15,7 @@ export function ForgotPassword({
   onSuccess,
   onBackToSignIn,
 }: ForgotPasswordProps) {
+  injectStyles();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);

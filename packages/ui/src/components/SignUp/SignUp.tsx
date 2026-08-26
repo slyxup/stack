@@ -2,6 +2,7 @@ import { SlyxupError } from '@slyxup/core';
 import { useAuth } from '@slyxup/react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { GitHubIcon, GoogleIcon, KeyholeMark } from '../../icons';
+import { injectStyles } from '../../styles';
 
 export interface SignUpProps {
   social?: boolean;
@@ -15,9 +16,10 @@ export function SignUp({
   onSuccess,
   onSignInClick,
 }: SignUpProps) {
+  injectStyles();
   const { signUp, client } = useAuth() as unknown as {
     signUp: ReturnType<typeof useAuth>['signUp'];
-    client: { publishableKey?: string };
+    client: { publishableKey?: string; apiUrl: string };
   };
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
@@ -52,7 +54,7 @@ export function SignUp({
   }
 
   function oauth(provider: 'google' | 'github') {
-    window.location.href = `/v1/oauth/${provider}`;
+    window.location.href = `${client.apiUrl}/v1/oauth/${provider}`;
   }
 
   const missingKey =

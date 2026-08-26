@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { CheckIcon, KeyholeMark } from '../../icons';
+import { injectStyles } from '../../styles';
 
 export interface EmailVerificationProps {
   /** Verification token (from email link ?token=...). If absent, shows resend form. */
@@ -14,6 +15,7 @@ export function EmailVerification({
   apiUrl,
   onSuccess,
 }: EmailVerificationProps) {
+  injectStyles();
   const [status, setStatus] = useState<
     'verifying' | 'success' | 'error' | 'resend'
   >(token ? 'verifying' : 'resend');

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { injectStyles } from '../../styles';
 
 interface Plan {
   id: string;
@@ -21,6 +22,7 @@ export interface PricingTableProps {
 
 /** Clean pricing grid with popular badge */
 export function PricingTable({ plans, onSelect, loading }: PricingTableProps) {
+  injectStyles();
   if (loading) {
     return (
       <div
