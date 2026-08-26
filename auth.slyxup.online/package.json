@@ -1,7 +1,7 @@
 {
   "name": "auth.slyxup.online",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SlyxUp Auth Worker — Hono + D1 + KV (https://auth.slyxup.online) — CF Workers",
   "type": "module",
   "scripts": {

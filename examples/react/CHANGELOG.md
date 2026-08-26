@@ -1,5 +1,13 @@
 # example-react
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`e110c4a`](https://github.com/slyxup/stack/commit/e110c4a1f4e136167d1efaaee41387159a78a04d)]:
+  - @slyxup/ui@0.2.3
+  - @slyxup/react@0.2.2
+
 ## 0.1.2
 
 ### Patch Changes

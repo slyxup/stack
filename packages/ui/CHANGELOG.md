@@ -1,5 +1,14 @@
 # @slyxup/ui
 
+## 0.2.3
+
+### Patch Changes
+
+- [`e110c4a`](https://github.com/slyxup/stack/commit/e110c4a1f4e136167d1efaaee41387159a78a04d) - Clerk-grade design overhaul + the big one: design tokens are now applied to `<html>` automatically, so inputs/buttons/cards always render with borders, radius and fonts in any host app (previously required a manual `.slyxup-root` wrapper). Adds `<SignIn onForgotPasswordClick>` and a refined dark mode.
+
+- Updated dependencies []:
+  - @slyxup/react@0.2.2
+
 ## 0.2.2
 
 ### Patch Changes

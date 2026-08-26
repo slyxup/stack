@@ -1,5 +1,12 @@
 # @slyxup/react
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`e110c4a`](https://github.com/slyxup/stack/commit/e110c4a1f4e136167d1efaaee41387159a78a04d)]:
+  - @slyxup/billing@0.2.0
+
 ## 0.2.1
 
 ### Patch Changes
