@@ -1,5 +1,11 @@
 # @slyxup/billing
 
+## 0.2.4
+
+### Patch Changes
+
+- [`ae2df60`](https://github.com/slyxup/stack/commit/ae2df60476e24fa349738b484cb14cbdfeaae6ae) - Retry publish: 0.2.3 hit an npm registry tombstone (npm/cli#8194). No code changes since 0.1.3 except internal formatting — version alignment only.
+
 ## 0.2.3
 
 ### Patch Changes
