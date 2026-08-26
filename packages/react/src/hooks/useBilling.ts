@@ -1,12 +1,20 @@
 'use client';
 
+import {
+  BillingClient,
+  type Invoice,
+  type Plan,
+  type Subscription,
+} from '@slyxup/billing';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BillingClient, type Plan, type Subscription, type Invoice } from '@slyxup/billing';
 
 const defaultClient = new BillingClient();
 
 export function useBilling(apiUrl?: string) {
-  const client = useMemo(() => (apiUrl ? new BillingClient({ apiUrl }) : defaultClient), [apiUrl]);
+  const client = useMemo(
+    () => (apiUrl ? new BillingClient({ apiUrl }) : defaultClient),
+    [apiUrl]
+  );
   return { client };
 }
 
@@ -17,9 +25,13 @@ export function usePlans(projectId: string | undefined, apiUrl?: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!projectId) { setLoading(false); return; }
+    if (!projectId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    client.listPlans(projectId)
+    client
+      .listPlans(projectId)
       .then(setPlans)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
       .finally(() => setLoading(false));
@@ -28,7 +40,10 @@ export function usePlans(projectId: string | undefined, apiUrl?: string) {
   return { plans, loading, error };
 }
 
-export function useSubscription(projectId: string | undefined, apiUrl?: string) {
+export function useSubscription(
+  projectId: string | undefined,
+  apiUrl?: string
+) {
   const { client } = useBilling(apiUrl);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +61,9 @@ export function useSubscription(projectId: string | undefined, apiUrl?: string) 
     }
   }, [client]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   return { subscription, loading, error, reload };
 }
@@ -57,7 +74,8 @@ export function useInvoices(apiUrl?: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    client.listInvoices()
+    client
+      .listInvoices()
       .then(setInvoices)
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
@@ -71,17 +89,20 @@ export function useCheckout(apiUrl?: string) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const checkout = useCallback(async (planId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await client.checkout(planId); // redirects to Paddle
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Checkout failed');
-    } finally {
-      setLoading(false);
-    }
-  }, [client]);
+  const checkout = useCallback(
+    async (planId: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        await client.checkout(planId); // redirects to Paddle
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Checkout failed');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client]
+  );
 
   return { checkout, loading, error };
 }

@@ -10,4 +10,10 @@ export {
 export { useAuth } from './hooks/useAuth';
 export { useUser } from './hooks/useUser';
 export { useSession } from './hooks/useSession';
-export { useBilling, usePlans, useSubscription, useInvoices, useCheckout } from './hooks/useBilling';
+export {
+  useBilling,
+  usePlans,
+  useSubscription,
+  useInvoices,
+  useCheckout,
+} from './hooks/useBilling';

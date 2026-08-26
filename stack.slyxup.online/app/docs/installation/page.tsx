@@ -9,38 +9,62 @@ npm install @slyxup/core @slyxup/react @slyxup/ui
 export default function Installation() {
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontFamily: '"Space Grotesk",sans-serif', fontSize: 32, fontWeight: 700 }}>Installation</h1>
+      <div className="fw-head">
+        <h1 className="h-doc">Installation</h1>
         <CopyForLLM content={LLM} />
       </div>
-      <p style={{ color: '#7c8195', marginTop: 8, lineHeight: 1.7 }}>Pick the packages you need. All are ESM, tree-shakable, and work in browsers, Node, and Workers.</p>
+      <p className="prose-p">
+        Pick the packages for your stack — ESM, tree-shakable, works in browsers, Node, and Cloudflare Workers.
+        The tab below installs exactly what each framework needs.
+      </p>
 
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Core</h2>
-      <CodeBlock>{`npm install @slyxup/core
-# provides SlyxupClient, errors, types`}</CodeBlock>
+      <h2 className="h-sec">Packages</h2>
+      <CodeBlock
+        variants={{
+          js: `npm install @slyxup/core            # SlyxupClient, errors, types`,
+          react: `npm install @slyxup/react @slyxup/core   # hooks + provider (peer: react ^18 || ^19)`,
+          nextjs: `npm install @slyxup/nextjs @slyxup/core  # server helpers + middleware (peer: next ^14 || ^15)`,
+        }}
+      />
+      <CodeBlock>{`# Optional extras, any framework:
+npm install @slyxup/ui               # prebuilt SignIn/SignUp/UserButton (needs @slyxup/react)
+npm install @slyxup/billing          # BillingClient + plans/subscriptions
+npm install -g @slyxup/cli           # projects, keys, env, doctor`}</CodeBlock>
 
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>React</h2>
-      <CodeBlock>{`npm install @slyxup/react @slyxup/core
-# peer: react ^18 || ^19`}</CodeBlock>
+      <h2 className="h-sec">What each package gives you</h2>
+      <div style={{ border: '1px solid #232635', borderRadius: 12, overflow: 'hidden', margin: '14px 0 24px' }}>
+        <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#12141d', textAlign: 'left' }}>
+              <th style={{ padding: '10px 14px' }}>Package</th>
+              <th style={{ padding: '10px 14px', color: '#7c8195' }}>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ['@slyxup/core', 'Typed HTTP client, cookie jar, error classes'],
+              ['@slyxup/react', 'Provider, useAuth/useUser/useSession, auto-refresh'],
+              ['@slyxup/nextjs', 'Server auth(), middleware, App Router helpers'],
+              ['@slyxup/ui', 'Drop-in SignIn, SignUp, SocialButtons, UserButton'],
+              ['@slyxup/billing', 'Paddle checkout, plans, subscription state'],
+              ['@slyxup/cli', 'login, init, project/keys/env management'],
+            ].map(([p, d]) => (
+              <tr key={p} style={{ borderTop: '1px solid #1d2130' }}>
+                <td style={{ padding: '8px 14px', fontFamily: '"JetBrains Mono",monospace', fontSize: 12 }}>{p}</td>
+                <td style={{ padding: '8px 14px', color: '#7c8195' }}>{d}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Next.js</h2>
-      <CodeBlock>{`npm install @slyxup/nextjs
-# peer: next ^14 || ^15`}</CodeBlock>
+      <h2 className="h-sec">Environment variable</h2>
+      <CodeBlock>{`# .env.local (or .env for Vite with VITE_ prefix)
+NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_test_xxx`}</CodeBlock>
 
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>UI</h2>
-      <CodeBlock>{`npm install @slyxup/ui @slyxup/react
-# 8 components, zero CSS deps, DM Sans auto-injected`}</CodeBlock>
-
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>CLI</h2>
-      <CodeBlock>{`npm install -g @slyxup/cli
-slyxup --help`}</CodeBlock>
-
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Billing</h2>
-      <CodeBlock>{`npm install @slyxup/billing
-# BillingClient + usePlans/useSubscription hooks`}</CodeBlock>
-
-      <div style={{ marginTop: 32, padding: 16, background: 'rgba(99,102,241,.06)', border: '1px solid rgba(99,102,241,.15)', borderRadius: 12 }}>
-        <p style={{ fontSize: 14, lineHeight: 1.6 }}><strong>Tip:</strong> Use <code>pnpm add</code> or <code>yarn add</code> — all packages are <code>workspace:*</code> compatible for monorepos.</p>
+      <div className="prose-note">
+        <b>Monorepo?</b> All packages are workspace-compatible — swap <code className="inl">npm install</code> for{' '}
+        <code className="inl">pnpm add</code> / <code className="inl">yarn add</code>.
       </div>
     </div>
   );

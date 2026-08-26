@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useFramework, FrameworkTabs, FRAMEWORKS, type Framework } from '../../components/docs-framework';
 
 export function CopyForLLM({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    await (navigator as unknown as { clipboard: { writeText: (s: string) => Promise<void> } }).clipboard.writeText(content);
+    await navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -35,52 +36,95 @@ export function CopyForLLM({ content }: { content: string }) {
   );
 }
 
-export function CodeBlock({ children, copyContent }: { children: string; copyContent?: string }) {
+export type CodeVariants = Partial<Record<Framework, string>>;
+
+function pickVariant(variants: CodeVariants, fw: Framework): { code: string; exact: boolean } {
+  if (variants[fw]) return { code: variants[fw]!, exact: true };
+  const order: Framework[] = ['js', 'react', 'nextjs'];
+  for (const f of order) {
+    if (variants[f]) return { code: variants[f]!, exact: false };
+  }
+  return { code: '', exact: false };
+}
+
+export function CodeBlock({
+  children,
+  copyContent,
+  variants,
+}: {
+  children?: string;
+  copyContent?: string;
+  variants?: CodeVariants;
+}) {
+  const { fw } = useFramework();
   const [copied, setCopied] = useState(false);
-  const text = copyContent ?? children;
+
+  let text: string;
+  let active: Framework | null = null;
+  let showNote = false;
+
+  if (variants) {
+    const picked = pickVariant(variants, fw);
+    text = picked.code;
+    active = fw;
+    showNote = !picked.exact && Object.keys(variants).length > 0 && !!picked.code;
+  } else {
+    text = children ?? '';
+  }
 
   const copy = async () => {
-    await (navigator as unknown as { clipboard: { writeText: (s: string) => Promise<void> } }).clipboard.writeText(text);
+    await navigator.clipboard.writeText(copyContent ?? text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div style={{ position: 'relative', margin: '16px 0' }}>
-      <button
-        onClick={copy}
-        style={{
-          position: 'absolute',
-          top: 10,
-          right: 10,
-          fontSize: 11,
-          fontFamily: '"JetBrains Mono", monospace',
-          background: copied ? '#34d399' : '#232635',
-          color: copied ? '#fff' : '#9ca3b8',
-          border: 'none',
-          borderRadius: 6,
-          padding: '5px 10px',
-          cursor: 'pointer',
-        }}
-      >
-        {copied ? 'Copied!' : 'Copy'}
-      </button>
-      <pre
-        style={{
-          background: '#10121b',
-          border: '1px solid #232635',
-          borderRadius: 12,
-          padding: '16px 20px',
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: 13,
-          lineHeight: 1.7,
-          overflowX: 'auto',
-          whiteSpace: 'pre',
-          color: '#e6e6ec',
-        }}
-      >
-        {children}
-      </pre>
+    <div style={{ margin: '16px 0' }}>
+      {variants && (
+        <div className="fw-head" style={{ marginBottom: 10 }}>
+          <FrameworkTabs />
+        </div>
+      )}
+      {showNote && (
+        <p className="fw-note">No dedicated {FRAMEWORKS.find((f) => f.id === active)?.label} example yet — showing the closest one.</p>
+      )}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={copy}
+          style={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            fontSize: 11,
+            fontFamily: '"JetBrains Mono", monospace',
+            background: copied ? '#34d399' : '#232635',
+            color: copied ? '#fff' : '#9ca3b8',
+            border: 'none',
+            borderRadius: 6,
+            padding: '5px 10px',
+            cursor: 'pointer',
+            zIndex: 2,
+          }}
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+        <pre
+          style={{
+            background: '#10121b',
+            border: '1px solid #232635',
+            borderRadius: 12,
+            padding: '16px 20px',
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: 13,
+            lineHeight: 1.7,
+            overflowX: 'auto',
+            whiteSpace: 'pre',
+            color: '#e6e6ec',
+          }}
+        >
+          {text}
+        </pre>
+      </div>
     </div>
   );
 }

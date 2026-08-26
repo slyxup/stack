@@ -28,4 +28,3 @@ export interface Invoice {
   invoiceNumber: string | null;
   billedAt: string | null;
 }
-
