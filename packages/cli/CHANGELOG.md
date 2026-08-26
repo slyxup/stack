@@ -1,5 +1,11 @@
 # @slyxup/cli
 
+## 1.0.0
+
+### Major Changes
+
+- [`5190259`](https://github.com/slyxup/stack/commit/5190259645af406b955c21e2d25871875fc8e708) - **Security hardening.** `slyxup login` now uses the platform auth flow (`/v1/auth/sign-in`): accounts must have a verified email, and the stored credential is a revocable 7-day session token instead of a static developer id. The old open `/v1/developers/register|lookup` endpoints are gone server-side; legacy credentials stop working — log in again.
+
 ## 0.4.0
 
 ### Minor Changes

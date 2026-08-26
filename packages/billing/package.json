@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/billing",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "@slyxup/billing — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
