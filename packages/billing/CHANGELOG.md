@@ -1,5 +1,11 @@
 # @slyxup/billing
 
+## 0.4.0
+
+### Minor Changes
+
+- [`854a5b9`](https://github.com/slyxup/stack/commit/854a5b972efad4c03e3572c9ddfcf44d259afbce) - Version alignment: move to fresh minor range past registry tombstones (npm/cli#8194). No code changes.
+
 ## 0.2.4
 
 ### Patch Changes
