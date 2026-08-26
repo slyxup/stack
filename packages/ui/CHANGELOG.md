@@ -1,5 +1,15 @@
 # @slyxup/ui
 
+## 0.2.1
+
+### Patch Changes
+
+- [`2011599`](https://github.com/slyxup/stack/commit/2011599a9c989560e34bcea3147c18923e15962d) - UI polish: black buttons in light mode, better card vs page contrast, inline missing-key banner in SignIn/SignUp, provider warns on missing publishableKey.
+
+- Updated dependencies [[`2011599`](https://github.com/slyxup/stack/commit/2011599a9c989560e34bcea3147c18923e15962d), [`2011599`](https://github.com/slyxup/stack/commit/2011599a9c989560e34bcea3147c18923e15962d)]:
+  - @slyxup/core@0.2.1
+  - @slyxup/react@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
