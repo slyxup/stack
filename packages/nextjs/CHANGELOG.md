@@ -1,5 +1,12 @@
 # @slyxup/nextjs
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`2011599`](https://github.com/slyxup/stack/commit/2011599a9c989560e34bcea3147c18923e15962d)]:
+  - @slyxup/core@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes

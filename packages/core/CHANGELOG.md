@@ -1,5 +1,11 @@
 # @slyxup/core
 
+## 0.2.1
+
+### Patch Changes
+
+- [`2011599`](https://github.com/slyxup/stack/commit/2011599a9c989560e34bcea3147c18923e15962d) - CLI: new `slyxup auth` command group using @slyxup/core SDK — `auth signup`, `auth signin`, `auth verify` (email verification), `auth oauth` (opens Google/GitHub in browser). Browser open is non-blocking. CLI now depends on @slyxup/core.
+
 ## 0.2.0
 
 ### Minor Changes
