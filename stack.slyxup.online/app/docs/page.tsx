@@ -20,19 +20,22 @@ export default function DocsPage() {
           {DOCS_SIDEBAR.map((section) => (
             <div key={section.section} style={{ marginBottom: 28 }}>
               <p className="mono" style={{ fontSize: 11, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>{section.section}</p>
-              {section.items.map((item) => (
-                <a
-                  key={item.slug}
-                  href={item.slug}
-                  style={{
-                    display: 'block', fontSize: 13.5, color: '#7c8195',
-                    padding: '5px 0', transition: 'color .15s',
-                  }}
+              {section.items.map((item) => {
+                const hash = `#${item.slug.replace('/docs/', '').replace(/\//g, '-') || 'top'}`;
+                return (
+                  <a
+                    key={item.slug}
+                    href={hash}
+                    style={{
+                      display: 'block', fontSize: 13.5, color: '#7c8195',
+                      padding: '5px 0', transition: 'color .15s',
+                    }}
 
-                >
-                  {item.title}
-                </a>
-              ))}
+                  >
+                    {item.title}
+                  </a>
+                );
+              })}
             </div>
           ))}
         </aside>
@@ -47,7 +50,7 @@ export default function DocsPage() {
           </p>
 
           {/* Quick Start section */}
-          <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginTop: 36, marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+          <h2 id="quick-start" style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginTop: 36, marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,.06)', scrollMarginTop: 84 }}>
             Quick Start
           </h2>
           <p style={{ color: '#9ca3b8', fontSize: 15, lineHeight: 1.75, marginBottom: 14 }}>
