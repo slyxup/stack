@@ -13,10 +13,10 @@ export const CSS = `
   --slx-accent-hover: #4c4cc4;
   --slx-accent-soft: rgba(91, 91, 214, 0.1);
   --slx-bg: #ffffff;
-  --slx-bg-page: #f7f7fa;
+  --slx-bg-page: #f0f1f7;
   --slx-ink: #16161d;
   --slx-muted: #6f6f7b;
-  --slx-border: #e6e6ec;
+  --slx-border: #e0e0ea;
   --slx-danger: #d64550;
   --slx-radius: 12px;
   --slx-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -60,7 +60,7 @@ export const CSS = `
   border: 1px solid var(--slx-border);
   border-radius: calc(var(--slx-radius) + 4px);
   padding: 32px;
-  box-shadow: 0 1px 2px rgba(10,10,20,.04), 0 8px 24px rgba(10,10,20,.06);
+  box-shadow: 0 1px 3px rgba(16,16,29,.06), 0 12px 32px rgba(16,16,29,.1), 0 0 0 1px rgba(16,16,29,.02);
   box-sizing: border-box;
 }
 .slx-card-error { animation: slx-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
@@ -145,8 +145,12 @@ export const CSS = `
   content: ""; height: 1px; flex: 1; background: var(--slx-border);
 }
 .slx-footer { font-size: 13px; color: var(--slx-muted); margin-top: 20px; text-align: center; }
-.slx-link { color: var(--slx-accent); font-weight: 550; text-decoration: none; cursor: pointer; }
-.slx-link:hover { text-decoration: underline; }
+.slx-link {
+  color: var(--slx-accent); font-weight: 600; text-decoration: none; cursor: pointer;
+  background: none; border: none; font: inherit; font-size: inherit;
+  padding: 0; margin: 0;
+}
+.slx-link:hover { text-decoration: underline; color: var(--slx-accent-hover); }
 .slx-link:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft); border-radius: 4px; }
 
 /* ── Success state ── */
