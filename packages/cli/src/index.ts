@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { SlyxupClient } from '@slyxup/core';
 import { Command } from 'commander';
 import { CliApiError, api } from './api.js';
 import {
@@ -452,6 +454,128 @@ program
       if (!pass && label !== 'Framework detected') ok = false;
     }
     process.exit(ok ? 0 : 1);
+  });
+
+function openBrowser(url: string) {
+  const cmd =
+    process.platform === 'darwin'
+      ? 'open'
+      : process.platform === 'win32'
+        ? 'cmd'
+        : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+    child.unref();
+    child.on('error', () => {
+      console.log(`Open this URL in your browser:\n${url}`);
+    });
+  } catch {
+    console.log(`Open this URL in your browser:\n${url}`);
+  }
+  // Never block the CLI on a browser
+  setTimeout(() => process.exit(0), 1500).unref();
+}
+
+// ── auth (SDK-based, with verification + OAuth) ──
+const authCmd = program
+  .command('auth')
+  .description('App-user auth via SDK (email + OAuth)');
+
+authCmd
+  .command('signup')
+  .description('Sign up as app user (sends verification email)')
+  .option('-e, --email <email>')
+  .option('-p, --password <password>')
+  .option('--api-url <url>', DEFAULT_API_URL)
+  .action(async (opts) => {
+    const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
+    let email: string = opts.email;
+    let password: string = opts.password;
+    if (!email) {
+      process.stdout.write('Email: ');
+      email = await readLine();
+    }
+    if (!password) password = await readHidden('Password: ');
+    const client = new SlyxupClient({ apiUrl });
+    try {
+      const res = await client.auth.signUp({ email, password });
+      console.log(`Signed up: ${res.user.email} (id: ${res.user.id})`);
+      console.log(
+        'Check your email for verification link (Brevo noreply@slyxup.online).'
+      );
+      console.log(
+        `Verify: curl -X POST ${apiUrl}/v1/verification/verify -H "Content-Type: application/json" -d '{"token":"<from email>"}'`
+      );
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+authCmd
+  .command('signin')
+  .description('Sign in as app user')
+  .option('-e, --email <email>')
+  .option('-p, --password <password>')
+  .option('--api-url <url>', DEFAULT_API_URL)
+  .action(async (opts) => {
+    const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
+    let email: string = opts.email;
+    let password: string = opts.password;
+    if (!email) {
+      process.stdout.write('Email: ');
+      email = await readLine();
+    }
+    if (!password) password = await readHidden('Password: ');
+    const client = new SlyxupClient({ apiUrl });
+    try {
+      const res = await client.auth.signIn({ email, password });
+      console.log(`Signed in: ${res.user.email}`);
+      const sess = await client.sessions.get();
+      console.log(
+        `Session: ${sess.session.id} expires ${sess.session.expiresAt}`
+      );
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+authCmd
+  .command('verify')
+  .description('Verify email with token from Brevo email')
+  .requiredOption('--token <token>')
+  .option('--api-url <url>', DEFAULT_API_URL)
+  .action(async (opts) => {
+    const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
+    const res = await fetch(`${apiUrl}/v1/verification/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: opts.token }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(
+        (data as { error?: string }).error ?? `Verify failed (${res.status})`
+      );
+      process.exit(1);
+    }
+    console.log(`Verified: ${(data as { email?: string }).email ?? 'ok'}`);
+  });
+
+authCmd
+  .command('oauth')
+  .description('Start OAuth in browser (Google/GitHub)')
+  .option('--provider <provider>', 'google | github', 'google')
+  .option('--api-url <url>', DEFAULT_API_URL)
+  .action(async (opts) => {
+    const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
+    if (!['google', 'github'].includes(opts.provider)) {
+      console.error('provider must be google or github');
+      process.exit(1);
+    }
+    const url = `${apiUrl}/v1/oauth/${opts.provider}`;
+    console.log(`Opening ${url} ...`);
+    openBrowser(url);
   });
 
 // ── helpers ──

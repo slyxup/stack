@@ -1,7 +1,7 @@
 {
   "name": "@slyxup/cli",
   "version": "0.2.0",
-  "description": "@slyxup/cli \u2014 SlyxUp SDK",
+  "description": "@slyxup/cli — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,6 +28,7 @@
     "slyxup": "dist/index.js"
   },
   "dependencies": {
+    "@slyxup/core": "workspace:^",
     "commander": "^12.0.0"
   },
   "devDependencies": {
