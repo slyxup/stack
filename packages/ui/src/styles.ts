@@ -11,12 +11,12 @@ export const CSS = `
 .slyxup-root {
   --slx-accent: #5b5bd6;
   --slx-accent-hover: #4c4cc4;
-  --slx-accent-soft: rgba(91, 91, 214, 0.1);
+  --slx-accent-soft: rgba(91, 91, 214, 0.14);
   --slx-bg: #ffffff;
-  --slx-bg-page: #f0f1f7;
+  --slx-bg-page: #e9eaf6;
   --slx-ink: #16161d;
   --slx-muted: #6f6f7b;
-  --slx-border: #e0e0ea;
+  --slx-border: #d8d8e8;
   --slx-danger: #d64550;
   --slx-radius: 12px;
   --slx-font: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -60,9 +60,10 @@ export const CSS = `
   border: 1px solid var(--slx-border);
   border-radius: calc(var(--slx-radius) + 4px);
   padding: 32px;
-  box-shadow: 0 1px 3px rgba(16,16,29,.06), 0 12px 32px rgba(16,16,29,.1), 0 0 0 1px rgba(16,16,29,.02);
+  box-shadow: 0 4px 12px rgba(16,16,29,.08), 0 16px 40px rgba(16,16,29,.12), 0 0 0 1px rgba(16,16,29,.04);
   box-sizing: border-box;
 }
+.slyxup-root .slx-card { background: #ffffff; }
 .slx-card-error { animation: slx-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
 
 /* ── Header / keyhole mark ── */
