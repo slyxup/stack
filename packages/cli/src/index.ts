@@ -354,8 +354,12 @@ domains
 // ── init ──
 program
   .command('init')
-  .description('Detect framework and connect this app to a SlyxUp project')
+  .description(
+    'Connect this app to a SlyxUp project — creates project, key, and .env'
+  )
   .option('--api-url <url>', DEFAULT_API_URL)
+  .option('--project-id <id>', 'use an existing project (skips selection)')
+  .option('--new <name>', 'create a new project with this name')
   .action(async (opts) => {
     const cwd = process.cwd();
     const d = detectFramework(cwd);
@@ -374,24 +378,111 @@ program
     const existingKey = readEnvKey(cwd);
     if (existingKey) {
       console.log(
-        `\nPublishable key already configured (${existingKey.slice(0, 12)}…). Nothing to do.`
+        `\n✓ Publishable key already configured (${existingKey.slice(0, 12)}…). Nothing to do.`
       );
       return;
     }
 
     const creds = needCreds();
+    try {
+      // Resolve project: --project-id > --new > single existing > first
+      let projectId = opts.projectId as string | undefined;
+      let projectName = opts.new as string | undefined;
 
-    console.log('\n? Create a new project or use an existing one?');
-    console.log('  ❯ create  (slyxup project create)');
-    console.log('    select  (slyxup project list → slyxup keys create)');
-    console.log('\nNon-interactive flow for now:');
-    console.log('  1. slyxup project create "My App"');
-    console.log('  2. slyxup keys create --project-id <id> --type publishable');
-    console.log('  3. add NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY to .env.local');
-    console.log('  4. npm i @slyxup/react @slyxup/ui   (or pnpm/yarn/bun)');
+      if (!projectId && !projectName) {
+        const res = await api.listProjects(creds);
+        if (res.projects.length === 1) {
+          projectId = res.projects[0].id;
+          projectName = res.projects[0].name;
+          console.log(
+            `\nUsing your only project: ${projectName} (${projectId})`
+          );
+        } else if (res.projects.length > 1) {
+          console.log('\nYour projects:');
+          res.projects.forEach((p, i) =>
+            console.log(`  [${i}] ${p.name} (${p.slug})`)
+          );
+          process.stdout.write(
+            'Pick a project number, or type a new project name: '
+          );
+          const answer = await readLine();
+          const idx = Number(answer);
+          if (!Number.isNaN(idx) && res.projects[idx]) {
+            projectId = res.projects[idx].id;
+            projectName = res.projects[idx].name;
+          } else if (answer.trim()) {
+            projectName = answer.trim();
+          } else {
+            throw new Error('No project selected.');
+          }
+        }
+      }
 
-    void creds;
-    void opts;
+      if (!projectId) {
+        const name = projectName ?? 'My App';
+        const created = await api.createProject(creds, {
+          name,
+          slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        });
+        projectId = created.project.id;
+        projectName = created.project.name;
+        console.log(`✓ Project created: ${projectName} (${projectId})`);
+      }
+
+      // Publishable test key
+      const key = await api.createKey(creds, {
+        projectId,
+        type: 'publishable',
+        environment: 'test',
+        name: 'default',
+      });
+      console.log(`✓ Publishable key created: ${key.key.slice(0, 16)}…`);
+
+      // Write env file
+      const envFile = d.framework === 'nextjs' ? '.env.local' : '.env.local';
+      const envPath = join(cwd, envFile);
+      const line1 = `NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=${key.key}`;
+      const line2 = `NEXT_PUBLIC_SLYXUP_API_URL=${creds.apiUrl}`;
+      let content = '';
+      if (existsSync(envPath)) {
+        const { readFileSync } = await import('node:fs');
+        content = readFileSync(envPath, 'utf8');
+        if (!content.endsWith('\n')) content += '\n';
+      }
+      appendFileSync(
+        envPath,
+        `${line1}\n${line2}\n${content.includes('SLYXUP') ? '' : ''}`
+      );
+      console.log(`✓ Wrote ${envFile}`);
+
+      // Install SDKs
+      const pm = d.packageManager;
+      const installCmd =
+        pm === 'npm'
+          ? 'npm i @slyxup/react @slyxup/ui'
+          : pm === 'yarn'
+            ? 'yarn add @slyxup/react @slyxup/ui'
+            : pm === 'bun'
+              ? 'bun add @slyxup/react @slyxup/ui'
+              : 'pnpm add @slyxup/react @slyxup/ui';
+
+      console.log(`
+Done! Next steps:
+  1. ${installCmd}
+  2. Add to your app:
+
+     import { SlyxUpProvider } from '@slyxup/react';
+     import { SignIn } from '@slyxup/ui';
+
+     <SlyxUpProvider publishableKey={process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY}>
+       <SignIn />
+     </SlyxUpProvider>
+
+Project: ${projectName} (${projectId})
+Docs: https://stack.slyxup.online/docs/quick-start`);
+    } catch (e) {
+      fail(e);
+    }
   });
 
 // ── env pull ──
