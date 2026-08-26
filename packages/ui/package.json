@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/ui",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "@slyxup/ui — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",

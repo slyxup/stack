@@ -1,5 +1,11 @@
 # @slyxup/cli
 
+## 1.0.1
+
+### Patch Changes
+
+- [`29df6c7`](https://github.com/slyxup/stack/commit/29df6c792a56f9f9d3d9bfbb85f46a5cda545468) - Republish: previous release run hit an npm registry race (E400 on unchanged artifacts). No code changes — version alignment only.
+
 ## 1.0.0
 
 ### Major Changes
