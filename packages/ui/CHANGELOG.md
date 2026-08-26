@@ -1,5 +1,11 @@
 # @slyxup/ui
 
+## 0.2.2
+
+### Patch Changes
+
+- [`9a14a5f`](https://github.com/slyxup/stack/commit/9a14a5f1357cd3e6bafc0957b1144d5e51d552e2) - Components now self-inject styles and fonts (no more missing borders/radius/fonts if `<SlyxUpStyles />` was forgotten). OAuth buttons redirect to the correct API origin instead of a relative path that broke on deployed apps.
+
 ## 0.2.1
 
 ### Patch Changes

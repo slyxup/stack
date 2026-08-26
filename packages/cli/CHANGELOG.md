@@ -1,5 +1,11 @@
 # @slyxup/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- [`ecfe276`](https://github.com/slyxup/stack/commit/ecfe276ad4a71ab6be70ee86650ffa08985b3006) - `slyxup init` is now a real setup wizard: picks or creates a project interactively, creates a publishable key, writes `.env.local`, and prints exact install + usage steps for your package manager.
+
 ## 0.3.0
 
 ### Minor Changes
