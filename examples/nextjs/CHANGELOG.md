@@ -1,5 +1,13 @@
 # example-nextjs
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @slyxup/react@0.2.5
+  - @slyxup/ui@0.2.6
+
 ## 0.1.5
 
 ### Patch Changes
