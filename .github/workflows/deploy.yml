@@ -22,8 +22,7 @@ jobs:
 
   deploy-stack:
     runs-on: ubuntu-latest
-    # Stack now includes dynamic dashboard (/dashboard/[projectId]) — deploy via opennextjs-cloudflare (Workers).
-    # Static export (out/) no longer used — dashboard needs SSR (projectId is dynamic).
+    # Stack is dynamic (dashboard) — deploy via opennext Workers (not Pages static export)
     # Project: stack-slyxup-online → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.online
     steps:
       - uses: actions/checkout@v4
