@@ -23,17 +23,16 @@ jobs:
 
   deploy-stack:
     runs-on: ubuntu-latest
-    # Stack is MARKETING ONLY — Pages (NOT Worker). Uses Next.js static export (out/) via Pages.
-    # Project: stack-slyxup-online → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.online (active in Pages)
-    # Always deploy on main so marketing latest. Auth/billing are Workers.
+    # Stack now includes dynamic dashboard (/dashboard/[projectId]) — deploy via opennextjs-cloudflare (Workers).
+    # Static export (out/) no longer used — dashboard needs SSR (projectId is dynamic).
+    # Project: stack-slyxup-online → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.online
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter stack.slyxup.online build # next.config.mjs output: 'export' -> out/
-      - run: npx wrangler pages deploy stack.slyxup.online/out --project-name=stack-slyxup-online --branch=main --commit-dirty=true
+      - run: pnpm --filter stack.slyxup.online run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
