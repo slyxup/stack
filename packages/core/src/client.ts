@@ -254,3 +254,4 @@ export class SlyxupClient {
 export * from './types.js';
 export * from './errors.js';
 // test publish after fix
+// final test for auto version after fixing strict
