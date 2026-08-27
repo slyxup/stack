@@ -56,3 +56,4 @@ pnpm-debug.log*
 .cache
 .tmp
 temp
+.open-next/
