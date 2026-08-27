@@ -8,8 +8,7 @@ on:
 jobs:
   deploy-auth:
     runs-on: ubuntu-latest
-    # run if auth, packages, or billing changed (auth depends on core)
-    if: contains(toJSON(github.event.head_commit.modified), 'auth.slyxup.online/') || contains(toJSON(github.event.head_commit.added), 'auth.slyxup.online/') || contains(toJSON(github.event.commits), 'auth')
+    # Deploy auth on every push to main (auth depends on @slyxup/core, so package changes must redeploy)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -40,7 +39,7 @@ jobs:
 
   deploy-billing:
     runs-on: ubuntu-latest
-    if: contains(toJSON(github.event.head_commit.modified), 'billing.slyxup.online/')
+    # Deploy billing on every push (depends on packages)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

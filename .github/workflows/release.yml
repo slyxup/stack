@@ -21,21 +21,70 @@ jobs:
         with: { node-version: 20, cache: pnpm, registry-url: "https://registry.npmjs.org" }
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Version packages (consume changesets, commit + push)
+
+      - name: Auto version packages if changed
         run: |
           git config user.name "slyxup-bot"
           git config user.email "bot@users.noreply.github.com"
-          pnpm changeset version
-          if git diff --quiet; then
-            echo "No version changes."
-          else
-            git commit -am "chore: version packages [skip ci]"
-            git push
+          if git log -1 --pretty=%B | grep -q "chore: version packages"; then
+            echo "Version commit, skipping auto-version."
+            exit 0
           fi
+          # Also skip if no package files changed in this push
+          if ! git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^packages/"; then
+            echo "No packages/ changes in this push, skipping version bump."
+            exit 0
+          fi
+          changed=""
+          for pkg in packages/*; do
+            if [ ! -d "$pkg" ]; then continue; fi
+            name=$(basename "$pkg")
+            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^$pkg/"; then
+              echo "Detected changes in $pkg"
+              changed="$changed $pkg"
+              cur=$(node -p "require('./$pkg/package.json').version")
+              echo "Current $name version: $cur"
+              (cd "$pkg" && npm version patch --no-git-tag-version)
+              new=$(node -p "require('./$pkg/package.json').version")
+              echo "$name: $cur -> $new"
+            fi
+          done
+          if [ -z "$changed" ]; then
+            echo "No package changes to version."
+            exit 0
+          fi
+          # Update lockfile after version bumps
+          pnpm install --no-frozen-lockfile 2>&1 | tail -5
+          if git diff --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+          git add packages/*/package.json pnpm-lock.yaml
+          git commit -m "chore: version packages [skip ci]"
+          git push
+          echo "Pushed version bump."
+
       - name: Publish to npm
-        run: pnpm changeset publish
+        run: |
+          # Only publish if the last commit was a version bump or packages changed
+          # Check if current HEAD contains version bump or if packages were changed recently
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "packages/.*package.json"; then
+            echo "Publishing changed packages..."
+            # Publish each changed package that has a version bump
+            for pkg in packages/*; do
+              if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^$pkg/package.json"; then
+                echo "Publishing $pkg..."
+                (cd "$pkg" && npm publish --access public --provenance) || echo "Publish failed for $pkg (maybe already published)"
+              fi
+            done
+          else
+            echo "No package.json version changes, trying pnpm publish filter..."
+            # Fallback: try publishing any unpublished versions
+            pnpm -r publish --access public --provenance --no-git-checks || echo "No packages to publish or publish failed (may be already published)"
+          fi
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Sync local main after version commit
         run: git pull --rebase origin main || true
