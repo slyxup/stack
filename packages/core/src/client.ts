@@ -254,3 +254,4 @@ export class SlyxupClient {
 export * from './types.js';
 export * from './errors.js';
 // auto-version test 2026-08-27T10:01:57Z
+// ensure auto-version works for packages
