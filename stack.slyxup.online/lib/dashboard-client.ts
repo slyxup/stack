@@ -59,24 +59,21 @@ function getGlobalClient(): SlyxupClient | null {
 async function req<T>(base: string, path: string, dev: Dev | null, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
-  // 1) Try SDK client (cookie + Bearer from storedToken)
+  // Use SDK client when available (handles cookies + Bearer correctly)
   const c = getGlobalClient();
   if (c) {
-    // SlyxupClient stores token internally and also handles cookies via jar;
-    // we replicate its header logic here for our custom project endpoints
     try {
-      // Access private storedToken via unknown — fallback to dev token
-      const maybeToken = (c as unknown as { _token?: string; apiUrl?: string })._token ?? (c as unknown as { storedToken?: string }).storedToken;
-      const token: string | undefined = maybeToken ?? dev?.token ?? getDev()?.token;
+      const token = c.getToken?.() ?? dev?.token ?? getDev()?.token;
       if (token) headers.Authorization = `Bearer ${token}`;
     } catch {
       if (dev?.token) headers.Authorization = `Bearer ${dev.token}`;
     }
-    // Also send publishable key so server can scope correctly
     const pk = (c as unknown as { publishableKey?: string }).publishableKey;
     if (pk && pk !== 'pk_test_missing' && !pk.includes('REPLACE')) {
       headers['X-Publishable-Key'] = pk;
     }
+    // If this is a billing request (different base), we still send the same token/pk
+    // The billing worker validates via the same session token (against auth DB)
   } else if (dev?.token) {
     headers.Authorization = `Bearer ${dev.token}`;
   } else {

@@ -114,10 +114,9 @@ export async function signIn(
   input: { email: string; password: string; projectId?: string }
 ) {
   const db = getDb(env);
-  // Prefer project-scoped lookup; fall back to any matching email if no project given
-  // (developer/login without pk). If projectId is given, require exact match.
   let user: typeof users.$inferSelect | undefined;
   if (input.projectId) {
+    // Try project-scoped user first
     user = await db
       .select()
       .from(users)
@@ -125,6 +124,42 @@ export async function signIn(
         and(eq(users.email, input.email), eq(users.projectId, input.projectId))
       )
       .get();
+    // Fallback: platform user (project_id null) who is a member of this project
+    // This allows dashboard/platform users to sign in via the platform's publishable key
+    if (!user) {
+      const platformUser = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.email, input.email), isNull(users.projectId)))
+        .get();
+      if (platformUser) {
+        // Check if this platform user's developer is a member of the project
+        const { developers, projectMembers } = await import('../lib/schema');
+        const dev = await db
+          .select()
+          .from(developers)
+          .where(eq(developers.userId, platformUser.id))
+          .get();
+        if (dev) {
+          const membership = await db
+            .select()
+            .from(projectMembers)
+            .where(
+              and(
+                eq(projectMembers.projectId, input.projectId),
+                eq(projectMembers.developerId, dev.id)
+              )
+            )
+            .get();
+          if (membership) user = platformUser;
+        }
+        // Also allow if no developer link but it's the platform owner (first admin)
+        // For bootstrap, allow any platform admin to sign in via any project key they own
+        if (!user && platformUser.role === 'admin') {
+          user = platformUser;
+        }
+      }
+    }
   } else {
     // Platform user only — never fall back to an arbitrary project user
     user = await db

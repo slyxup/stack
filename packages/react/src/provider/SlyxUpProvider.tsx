@@ -16,22 +16,59 @@ export interface SlyxUpProviderProps {
   children: ReactNode;
 }
 
+function resolveEnvKey(): string | undefined {
+  try {
+    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })?.process?.env;
+    if (env) {
+      return (
+        env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY ??
+        env.VITE_SLYXUP_PUBLISHABLE_KEY ??
+        env.REACT_APP_SLYXUP_PUBLISHABLE_KEY ??
+        env.EXPO_PUBLIC_SLYXUP_PUBLISHABLE_KEY ??
+        env.SLYXUP_PUBLISHABLE_KEY ??
+        env.PLASMO_PUBLIC_SLYXUP_PUBLISHABLE_KEY ??
+        undefined
+      );
+    }
+  } catch {}
+  return undefined;
+}
+
+function resolveEnvApiUrl(): string | undefined {
+  try {
+    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })?.process?.env;
+    if (env) {
+      return (
+        env.NEXT_PUBLIC_SLYXUP_API_URL ??
+        env.VITE_SLYXUP_API_URL ??
+        env.REACT_APP_SLYXUP_API_URL ??
+        env.EXPO_PUBLIC_SLYXUP_API_URL ??
+        env.SLYXUP_API_URL ??
+        undefined
+      );
+    }
+  } catch {}
+  return undefined;
+}
+
 export function SlyxUpProvider({
   publishableKey,
   apiUrl,
   children,
 }: SlyxUpProviderProps) {
+  const resolvedKey = publishableKey ?? resolveEnvKey();
+  const resolvedApiUrl = apiUrl ?? resolveEnvApiUrl();
   const client = useMemo(() => {
-    if (!publishableKey && typeof window !== 'undefined') {
+    if (!resolvedKey && typeof window !== 'undefined') {
       console.warn(
-        '[SlyxUp] No publishableKey provided. Set NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY in .env.local or pass publishableKey prop. Get your key: `npx @slyxup/cli keys create --project-id <id> --type publishable`'
+        '[SlyxUp] No publishableKey provided. Tried NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY, VITE_SLYXUP_PUBLISHABLE_KEY, REACT_APP_SLYXUP_PUBLISHABLE_KEY, EXPO_PUBLIC_SLYXUP_PUBLISHABLE_KEY, SLYXUP_PUBLISHABLE_KEY. Set one in .env.local or pass publishableKey prop. Get your key: `npx @slyxup/cli keys create --project-id <id> --type publishable`'
       );
     }
     return new SlyxupClient({
-      publishableKey: publishableKey ?? 'pk_test_missing',
-      apiUrl,
+      publishableKey: resolvedKey ?? 'pk_test_missing',
+      apiUrl: resolvedApiUrl,
     });
-  }, [publishableKey, apiUrl]);
+  }, [resolvedKey, resolvedApiUrl]);
 
   const [state, setState] = useState<{
     isLoaded: boolean;

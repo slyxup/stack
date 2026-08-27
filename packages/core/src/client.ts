@@ -50,6 +50,8 @@ function createCookieJar() {
 export class SlyxupClient {
   readonly publishableKey?: string;
   readonly apiUrl: string;
+  private _getToken?: () => string | undefined;
+  private _request?: <T>(path: string, init?: RequestInit) => Promise<T>;
 
   readonly auth: {
     signUp: (input: SignUpInput) => Promise<AuthResponse>;
@@ -75,13 +77,25 @@ export class SlyxupClient {
     delete: () => Promise<{ ok: true }>;
   };
 
+  /** Get current session token (for custom project APIs that need Bearer) */
+  getToken(): string | undefined {
+    return this._getToken?.();
+  }
+  /** Raw request for custom endpoints (uses same auth headers + cookies as SDK) */
+  async request<T>(path: string, init?: RequestInit): Promise<T> {
+    if (!this._request) throw new Error('Client not initialized');
+    return this._request<T>(path, init);
+  }
+
   constructor(options: SlyxupClientOptions = {}) {
     const jar = createCookieJar();
     let storedToken: string | undefined;
     this.publishableKey = options.publishableKey;
     this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
+    this._getToken = () => storedToken;
+    // _request will be assigned after `request` is defined below
 
-    const request = async <T>(
+    const requestInner = async <T>(
       path: string,
       init: RequestInit & { body?: string } = {}
     ): Promise<Result<T>> => {
@@ -138,7 +152,7 @@ export class SlyxupClient {
     };
 
     const post = <T>(path: string, body?: unknown) =>
-      request<T>(path, {
+      requestInner<T>(path, {
         method: 'POST',
         body: body === undefined ? undefined : JSON.stringify(body),
       });
@@ -175,24 +189,24 @@ export class SlyxupClient {
 
     this.sessions = {
       get: async () => {
-        const res = await request<SessionResponse>('/v1/session');
+        const res = await requestInner<SessionResponse>('/v1/session');
         if (!('session' in res)) throw new UnauthorizedError(res.error);
         return res;
       },
       list: async () => {
-        const res = await request<SessionsResponse>('/v1/sessions');
+        const res = await requestInner<SessionsResponse>('/v1/sessions');
         if (!('sessions' in res))
           throw new SlyxupError(res.error, 400, 'api_error');
         return res;
       },
       revoke: async (sessionId: string) => {
-        const res = await request<{ ok: true }>(`/v1/sessions/${sessionId}`, {
+        const res = await requestInner<{ ok: true }>(`/v1/sessions/${sessionId}`, {
           method: 'DELETE',
         });
         return res as { ok: true };
       },
       revokeOthers: async () => {
-        const res = await request<RevokeSessionsResponse>('/v1/sessions', {
+        const res = await requestInner<RevokeSessionsResponse>('/v1/sessions', {
           method: 'DELETE',
         });
         if (!('revoked' in res))
@@ -211,12 +225,12 @@ export class SlyxupClient {
 
     this.users = {
       me: async () => {
-        const res = await request<UserResponse>('/v1/user');
+        const res = await requestInner<UserResponse>('/v1/user');
         if (!('user' in res)) throw new UnauthorizedError(res.error);
         return res;
       },
       update: async (input) => {
-        const res = await request<UserResponse>('/v1/user', {
+        const res = await requestInner<UserResponse>('/v1/user', {
           method: 'PATCH',
           body: JSON.stringify(input),
         });
@@ -225,12 +239,14 @@ export class SlyxupClient {
         return res;
       },
       delete: async () => {
-        const res = await request<{ ok: true }>('/v1/user', {
+        const res = await requestInner<{ ok: true }>('/v1/user', {
           method: 'DELETE',
         });
         return res as { ok: true };
       },
     };
+
+    this._request = requestInner as unknown as <T>(path: string, init?: RequestInit) => Promise<T>;
   }
 }
 
