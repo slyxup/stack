@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "@slyxup/core — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
