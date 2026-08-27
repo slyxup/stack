@@ -45,6 +45,15 @@ export async function signUp(
     .from(users);
   const role = count === 0 ? 'admin' : 'user';
 
+  // Security: after bootstrap, require a publishable key (projectId) for sign-ups.
+  // Dashboard sign-ups send the platform project's pk (slyxup-platform) and are scoped correctly.
+  // Direct API calls without a key would create unscoped platform users — reject them.
+  if (!input.projectId && count > 0) {
+    throw new Error(
+      'Publishable key required. Provide X-Publishable-Key header for sign-up.'
+    );
+  }
+
   await db.insert(users).values({
     id: userId,
     projectId: input.projectId ?? null,
