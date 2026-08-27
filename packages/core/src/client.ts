@@ -253,3 +253,4 @@ export class SlyxupClient {
 // Re-exports so consumers can import from '@slyxup/core'
 export * from './types.js';
 export * from './errors.js';
+// auto-version test 2026-08-27T10:01:57Z
