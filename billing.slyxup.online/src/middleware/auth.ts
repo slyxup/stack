@@ -78,7 +78,7 @@ export const requireAdmin = createMiddleware<Env>(async (c, next) => {
   if (token) {
     const nowSec = Math.floor(Date.now() / 1000);
     const row = await c.env.AUTH_DB.prepare(
-      `SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1`
+      'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1'
     )
       .bind(token, nowSec)
       .first<{ user_id: string }>();
