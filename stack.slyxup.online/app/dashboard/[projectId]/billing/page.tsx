@@ -210,6 +210,115 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Manage plans (project owner) */}
+      <div className="panel" style={{ marginTop: 22 }}>
+        <div className="panel-head">
+          <h3>Manage plans</h3>
+          <span className="hint">Create or edit the plans your customers will see.</span>
+        </div>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget as HTMLFormElement);
+            const name = String(fd.get('name') || '').trim();
+            const amount = Number(fd.get('amount') || 0);
+            const currency = String(fd.get('currency') || 'USD').toUpperCase();
+            const interval = String(fd.get('interval') || 'month') as 'month' | 'year';
+            const trialDays = Number(fd.get('trialDays') || 0);
+            const features = String(fd.get('features') || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (!name || !amount) return;
+            setBusy(true);
+            setErr(null);
+            try {
+              await billingApi('/v1/admin/plans', dev, {
+                method: 'POST',
+                body: JSON.stringify({
+                  projectId,
+                  name,
+                  paddlePriceId: `price_${Date.now()}`,
+                  amount: Math.round(amount * 100),
+                  currency,
+                  interval,
+                  trialDays,
+                  features,
+                }),
+              });
+              (e.target as HTMLFormElement).reset();
+              await load(dev);
+            } catch (e2) {
+              setErr(e2 instanceof Error ? e2.message : 'Failed to create plan');
+            } finally {
+              setBusy(false);
+            }
+          }}
+          style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr', marginBottom: 12 }}
+        >
+          <input name="name" placeholder="Plan name (e.g. Pro)" className="cin" required />
+          <input name="amount" placeholder="Amount (e.g. 29)" type="number" min={0} step={0.01} className="cin" required />
+          <input name="currency" placeholder="USD" defaultValue="USD" className="cin" />
+          <select name="interval" className="cin" defaultValue="month">
+            <option value="month">month</option>
+            <option value="year">year</option>
+          </select>
+          <input name="trialDays" placeholder="Trial days (0)" type="number" min={0} className="cin" />
+          <input name="features" placeholder="Features (comma separated)" className="cin" style={{ gridColumn: '1 / -1' }} />
+          <button type="submit" className="btn-primary" disabled={busy} style={{ gridColumn: '1 / -1' }}>
+            + Create plan
+          </button>
+        </form>
+        {plans.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {plans.map((p) => (
+              <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <span className="mono" style={{ fontSize: 12 }}>{p.name} · {money(p.amount, p.currency)}/{p.interval}</span>
+                <span style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    className="btn-secondary c-btn"
+                    disabled={busy}
+                    onClick={async () => {
+                      const newName = window.prompt('New name', p.name);
+                      if (!newName) return;
+                      setBusy(true);
+                      try {
+                        await billingApi(`/v1/admin/plans/${p.id}`, dev, { method: 'PATCH', body: JSON.stringify({ name: newName }) });
+                        await load(dev);
+                      } catch (e2) {
+                        setErr(e2 instanceof Error ? e2.message : 'Failed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="btn-secondary c-btn danger"
+                    disabled={busy}
+                    onClick={async () => {
+                      if (!window.confirm(`Delete ${p.name}?`)) return;
+                      setBusy(true);
+                      try {
+                        await billingApi(`/v1/admin/plans/${p.id}`, dev, { method: 'DELETE' });
+                        await load(dev);
+                      } catch (e2) {
+                        setErr(e2 instanceof Error ? e2.message : 'Failed');
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Invoices */}
       <div className="panel" style={{ marginTop: 22 }}>
         <h3>Invoices</h3>

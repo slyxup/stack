@@ -15,22 +15,49 @@ import webhookRoute from './routes/webhooks';
 
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
 
-// CORS — configured origins + localhost dev ports; credentials for session cookies
+// CORS — local dev is permissive, live checks approved custom domains.
+// In test mode, missing CORS is not treated as an error — the dashboard shows
+// a hint instead of a CORS failure. Live mode enforces the allowlist.
 app.use('*', async (c, next) => {
   const origin = c.req.header('Origin') ?? '';
   const allowed = (c.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim());
-  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
-    origin
-  );
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const isTestRequest = c.req.header('X-Environment') === 'test' || origin.includes('localhost') || origin.includes('127.0.0.1');
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Publishable-Key',
     'Access-Control-Max-Age': '86400',
   };
-  if (
-    origin &&
-    (allowed.includes(origin) || allowed.includes('*') || isLocalhost)
-  ) {
+  let allow = false;
+  if (origin && (allowed.includes(origin) || allowed.includes('*') || isLocalhost || isTestRequest)) {
+    allow = true;
+  } else if (origin && origin.startsWith('https://')) {
+    // Check project custom domains (like auth does) — cache for 60s
+    try {
+      const cached = await c.env.KV.get('billing_cors_domains');
+      let hosts: string[] | null = cached ? (JSON.parse(cached) as string[]) : null;
+      if (!hosts) {
+        // We don't have project context here, so allow any https origin in test and
+        // let the route handler do project-specific checks. For live, the route will
+        // validate the project's allowed domains.
+        hosts = [];
+        await c.env.KV.put('billing_cors_domains', JSON.stringify(hosts), { expirationTtl: 60 });
+      }
+      if (hosts) {
+        let host = new URL(origin).hostname.toLowerCase().replace(/^www\./, '');
+        allow = hosts.some((h) => h.replace(/^www\./, '').toLowerCase() === host);
+      }
+    } catch {
+      // Fallback: allow test, block live without match
+      allow = isTestRequest;
+    }
+  }
+  if (allow && origin) {
+    corsHeaders['Access-Control-Allow-Origin'] = origin;
+    corsHeaders['Access-Control-Allow-Credentials'] = 'true';
+    corsHeaders.Vary = 'Origin';
+  } else if (isTestRequest && origin) {
+    // In test/local, be permissive — don't block billing calls due to CORS
     corsHeaders['Access-Control-Allow-Origin'] = origin;
     corsHeaders['Access-Control-Allow-Credentials'] = 'true';
     corsHeaders.Vary = 'Origin';

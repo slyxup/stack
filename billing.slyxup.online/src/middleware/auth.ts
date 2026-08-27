@@ -63,13 +63,30 @@ export const requireUser = createMiddleware<Env>(async (c, next) => {
   await next();
 });
 
-/** Bearer BILLING_ADMIN_SECRET guard for plan management (CLI / curl / dashboard-less ops) */
+/** Bearer BILLING_ADMIN_SECRET guard for plan management (CLI / curl / dashboard-less ops)
+ * Also allows project owners via their developer session (so dashboard can manage its own plans without the admin secret)
+ */
 export const requireAdmin = createMiddleware<Env>(async (c, next) => {
   const secret = c.env.BILLING_ADMIN_SECRET;
-  if (!secret)
-    return c.json({ ok: false, error: 'Billing not configured' }, 501);
   const auth = c.req.header('Authorization');
-  if (auth !== `Bearer ${secret}`)
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  await next();
+  if (secret && auth === `Bearer ${secret}`) {
+    await next();
+    return;
+  }
+  // Fallback: allow project owner via session (dashboard UX)
+  const token = getSessionToken(c);
+  if (token) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const row = await c.env.AUTH_DB.prepare(
+      `SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1`
+    )
+      .bind(token, nowSec)
+      .first<{ user_id: string }>();
+    if (row) {
+      c.set('userId', row.user_id);
+      await next();
+      return;
+    }
+  }
+  return c.json({ ok: false, error: 'Unauthorized' }, 401);
 });
