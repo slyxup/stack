@@ -44,8 +44,18 @@ jobs:
               changed="$changed $pkg"
               cur=$(node -p "require('./$pkg/package.json').version")
               echo "Current $name version: $cur"
-              (cd "$pkg" && npm version patch --no-git-tag-version)
-              new=$(node -p "require('./$pkg/package.json').version")
+              # Bump patch via node (avoid npm version which doesn't understand workspace:*)
+              node -e "
+                const fs=require('fs');
+                const p='./$pkg/package.json';
+                const j=JSON.parse(fs.readFileSync(p,'utf8'));
+                const v=j.version.split('.');
+                v[2]=String(parseInt(v[2])+1);
+                j.version=v.join('.');
+                fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
+                console.log(j.version);
+              " > /tmp/newver
+              new=$(cat /tmp/newver)
               echo "$name: $cur -> $new"
             fi
           done
