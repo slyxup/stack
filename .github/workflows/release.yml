@@ -70,7 +70,7 @@ jobs:
             exit 0
           fi
           git add packages/*/package.json pnpm-lock.yaml
-          git commit -m "chore: version packages [skip ci]"
+          git commit -m "chore: version packages"
           git push
           echo "Pushed version bump."
 
