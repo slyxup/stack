@@ -71,7 +71,7 @@ export default function Pricing() {
               {TIERS.map((t) => (
                 <div key={t.name} className={`card price-card${t.hot ? ' hot' : ''}`}>
                   {t.hot && <span className="badge-hot">current</span>}
-                  <h3 style={{ fontSize: 15, color: '#8a90a3', fontWeight: 550 }}>{t.name}</h3>
+                  <h3 style={{ fontSize: 15, color: 'var(--text-dim)', fontWeight: 550 }}>{t.name}</h3>
                   <div className="price">
                     {t.price} <small>{t.per}</small>
                   </div>
@@ -85,7 +85,7 @@ export default function Pricing() {
                     target={t.cta.href.startsWith('http') ? '_blank' : undefined}
                     rel="noreferrer"
                     className={`btn-primary btn-block mono${t.hot ? '' : ' btn-ghost'}`}
-                    style={t.hot ? {} : { background: 'transparent', border: '1px solid #2b2f45' }}
+                    style={t.hot ? {} : { background: 'transparent', border: '1px solid var(--border-strong)' }}
                   >
                     {t.cta.label}
                   </a>

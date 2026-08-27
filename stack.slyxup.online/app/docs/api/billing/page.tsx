@@ -3,10 +3,19 @@ import { CodeBlock, CopyForLLM } from '../../copy';
 const LLM = `# Billing API
 Paddle-backed billing, served by billing.slyxup.online (dedicated billing Worker).
 
-GET  https://billing.slyxup.online/v1/billing/plans?projectId=...   -> [{ id, name, price, interval }]
-POST https://billing.slyxup.online/v1/billing/checkout              { planId } -> { checkoutUrl }
+GET  https://billing.slyxup.online/v1/billing/plans?projectId=...   -> [{ id, name, amount, interval }]
+POST https://billing.slyxup.online/v1/billing/checkout              { planId, successUrl? } -> { checkoutUrl }
 GET  https://billing.slyxup.online/v1/billing/subscription          -> current subscription | null
+POST https://billing.slyxup.online/v1/billing/subscription/cancel   -> cancel at period end
+POST https://billing.slyxup.online/v1/billing/subscription/resume   -> undo scheduled cancellation
+GET  https://billing.slyxup.online/v1/billing/invoices              -> [{ id, amount, status, billedAt }]
 POST https://billing.slyxup.online/v1/webhooks/paddle               Paddle events (HMAC verified)
+
+Admin plan management (requires BILLING_ADMIN_SECRET):
+GET    https://billing.slyxup.online/v1/admin/plans?projectId=
+POST   https://billing.slyxup.online/v1/admin/plans                  { projectId, name, paddlePriceId, ... }
+PATCH  https://billing.slyxup.online/v1/admin/plans/:id             { name?, amount?, ... }
+DELETE https://billing.slyxup.online/v1/admin/plans/:id              -> soft-delete (isActive=false)
 
 Webhook events handled:
 subscription.created | updated | canceled, transaction.completed
@@ -31,10 +40,17 @@ export default function Page() {
               ['GET', '/v1/billing/plans', 'List plans for a project'],
               ['POST', '/v1/billing/checkout', 'Create Paddle checkout URL'],
               ['GET', '/v1/billing/subscription', 'Current user subscription'],
+              ['POST', '/v1/billing/subscription/cancel', 'Cancel at period end'],
+              ['POST', '/v1/billing/subscription/resume', 'Undo scheduled cancellation'],
+              ['GET', '/v1/billing/invoices', 'Invoice history'],
               ['POST', '/v1/webhooks/paddle', 'Paddle events (HMAC verified)'],
+              ['GET', '/v1/admin/plans', 'List all plans (admin)'],
+              ['POST', '/v1/admin/plans', 'Create plan (admin)'],
+              ['PATCH', '/v1/admin/plans/:id', 'Update plan (admin)'],
+              ['DELETE', '/v1/admin/plans/:id', 'Deactivate plan (admin)'],
             ].map(([m, p, d]) => (
               <tr key={p + m} style={{ borderTop: '1px solid #1d2130' }}>
-                <td style={{ padding: '8px 14px' }}><span className="mono" style={{ fontSize: 11, fontWeight: 700, color: m === 'GET' ? '#34d399' : '#a5b4fc' }}>{m}</span></td>
+                <td style={{ padding: '8px 14px' }}><span className="mono" style={{ fontSize: 11, fontWeight: 700, color: m === 'GET' ? '#34d399' : 'var(--accent)' }}>{m}</span></td>
                 <td style={{ padding: '8px 14px', fontFamily: '"JetBrains Mono",monospace', fontSize: 12 }}>{p}</td>
                 <td style={{ padding: '8px 14px', color: '#7c8195' }}>{d}</td>
               </tr>
@@ -46,12 +62,12 @@ export default function Page() {
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Example — create checkout</h2>
       <CodeBlock>{`curl -X POST https://billing.slyxup.online/v1/billing/checkout \\
   -H 'Content-Type: application/json' \\
-  -d '{"planId":"plan_pro_monthly"}'
+  -d '{"planId":"plan_pro_monthly","successUrl":"https://example.com/success"}'
 # 200 -> { "ok": true, "checkoutUrl": "https://buy.paddle.com/checkout/..." }`}</CodeBlock>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Webhook security</h2>
       <p style={{ color: '#9ca3b8', fontSize: 14, lineHeight: 1.7 }}>
-        The raw body is HMAC-verified with <code>PADDLE_WEBHOOK_SECRET</code> using a timing-safe compare before any parsing. Invalid signatures get <code>401</code>. See <a href="/docs/billing/webhooks" style={{ color: '#6366f1' }}>Webhooks</a>.
+        The raw body is HMAC-verified with <code>PADDLE_WEBHOOK_SECRET</code> using a timing-safe compare before any parsing. Invalid signatures get <code>401</code>. See <a href="/docs/billing/webhooks" style={{ color: 'var(--accent)' }}>Webhooks</a>.
       </p>
     </div>
   );

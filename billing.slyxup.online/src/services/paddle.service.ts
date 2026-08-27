@@ -45,18 +45,16 @@ interface PaddleCustomer {
   name?: string | null;
 }
 
-/** Find a Paddle customer by email or create one */
-export async function getOrCreateCustomer(
+/**
+ * B8: Create a Paddle customer by email (used only when no local row exists).
+ * The primary lookup is now done in checkout.ts via our `customers` table by userId,
+ * avoiding cross-user email collisions.
+ */
+export async function createPaddleCustomer(
   config: PaddleConfig,
   email: string,
   name?: string
 ): Promise<PaddleCustomer> {
-  const found = await paddleFetch<PaddleCustomer[]>(
-    config,
-    'GET',
-    `/customers?email=${encodeURIComponent(email)}&per_page=1`
-  );
-  if (found.length > 0) return found[0];
   return paddleFetch<PaddleCustomer>(config, 'POST', '/customers', {
     email,
     name,

@@ -1,7 +1,15 @@
 import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
-import { sessions, userProfiles, users } from '../lib/schema';
+import {
+  auditLogs,
+  oauthAccounts,
+  passwordResetTokens,
+  sessions,
+  userProfiles,
+  users,
+  verificationTokens,
+} from '../lib/schema';
 
 export async function updateUser(
   env: { DB: D1Database },
@@ -25,7 +33,19 @@ export async function updateUser(
 
 export async function deleteUser(env: { DB: D1Database }, userId: string) {
   const db = getDb(env);
+  // Explicit deletes for D1 safety — even though FK cascades should handle
+  // sessions/oauth/tokens, we delete explicitly so no orphans survive if
+  // pragma foreign_keys is off or migration is mid-flight.
+  await db.delete(sessions).where(eq(sessions.userId, userId));
+  await db.delete(oauthAccounts).where(eq(oauthAccounts.userId, userId));
+  await db
+    .delete(verificationTokens)
+    .where(eq(verificationTokens.userId, userId));
+  await db
+    .delete(passwordResetTokens)
+    .where(eq(passwordResetTokens.userId, userId));
   await db.delete(userProfiles).where(eq(userProfiles.userId, userId));
+  // Keep audit logs (userId -> SET NULL) for compliance, then remove user
   await db.delete(users).where(eq(users.id, userId));
 }
 

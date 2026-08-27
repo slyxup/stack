@@ -7,8 +7,13 @@ function initials(name: string | null | undefined, email: string): string {
   return email.slice(0, 1).toUpperCase();
 }
 
+export interface UserButtonProps {
+  /** Called when "Profile settings" is clicked. Use to open <UserProfile />. */
+  onProfileClick?: () => void;
+}
+
 /** Avatar + dropdown with profile actions and sign out. */
-export function UserButton() {
+export function UserButton({ onProfileClick }: UserButtonProps) {
   injectStyles();
   const { isLoaded, user } = useUser();
   const { signOut } = useAuth();
@@ -35,6 +40,11 @@ export function UserButton() {
     return <div className="slx-userbtn-avatar" aria-hidden="true" />;
   const email = user?.email ?? '';
   const name = user?.firstName;
+
+  function handleProfileClick() {
+    setOpen(false);
+    onProfileClick?.();
+  }
 
   async function onSignOut() {
     await signOut();
@@ -72,7 +82,7 @@ export function UserButton() {
             type="button"
             className="slx-menu-item"
             role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={handleProfileClick}
           >
             Profile settings
           </button>

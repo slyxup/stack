@@ -19,6 +19,8 @@ const plans = await billing.listPlans('prj_your-project-id');
 // Plan[] — amount, currency, interval ('month' | 'year'), features[], isPopular
 
 await billing.checkout(plan.id);        // redirects browser to Paddle hosted checkout
+// Optional: pass a success URL
+await billing.checkout(plan.id, 'https://example.com/success');
 
 const sub = await billing.getSubscription();  // Subscription | null
 if (sub?.status === 'active') unlockProFeatures();
@@ -34,7 +36,7 @@ const invoices = await billing.listInvoices();  // Invoice[] newest first
 | Method | Returns | Purpose |
 |---|---|---|
 | `listPlans(projectId)` | `Plan[]` | Plans configured for a project |
-| `checkout(planId)` | `void` | Redirects to Paddle hosted checkout |
+| `checkout(planId, successUrl?)` | `void` | Redirects to Paddle hosted checkout |
 | `getSubscription()` | `Subscription \| null` | Current user's subscription |
 | `cancelSubscription()` | `void` | Cancels at period end |
 | `listInvoices()` | `Invoice[]` | Invoice history |

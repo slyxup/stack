@@ -10,11 +10,13 @@ POST   /v1/auth/sign-in           { email, password }
 POST   /v1/auth/sign-out
 GET    /v1/session                -> { session, user }
 GET    /v1/user                   -> full user
-PATCH  /v1/user                   { firstName?, lastName?, avatarUrl? }
+PATCH  /v1/user                   { firstName?, lastName?, avatarUrl?, preferences? }
 DELETE /v1/user                   -> delete account
-POST   /v1/verification/verify    { code }
-POST   /v1/password/forgot        { email }
-POST   /v1/password/reset         { token, password }
+POST   /v1/verification/verify    { token }
+POST   /v1/verification/resend    { email }
+POST   /v1/user/password          { currentPassword, newPassword }
+POST   /v1/verification/password/forgot  { email }
+POST   /v1/verification/password/reset   { token, password }
 GET    /v1/oauth/:provider        -> redirect to provider
 GET    /v1/oauth/callback/:provider
 `;
@@ -41,15 +43,17 @@ export default function Page() {
               ['GET', '/v1/user', 'Full profile'],
               ['PATCH', '/v1/user', 'Update profile'],
               ['DELETE', '/v1/user', 'Delete account (cascades)'],
-              ['POST', '/v1/verification/verify', 'Verify email with code'],
-              ['POST', '/v1/password/forgot', 'Send reset email'],
-              ['POST', '/v1/password/reset', 'Reset with token'],
-              ['POST', '/v1/password/change', 'Change password (authed)'],
+              ['POST', '/v1/verification/verify', 'Verify email with token'],
+              ['POST', '/v1/verification/resend', 'Resend verification email'],
+              ['POST', '/v1/user/password', 'Change password (authed)'],
+              ['POST', '/v1/verification/password/forgot', 'Send reset email'],
+              ['POST', '/v1/verification/password/reset', 'Reset with token'],
               ['GET', '/v1/oauth/google', 'Start Google OAuth'],
               ['GET', '/v1/oauth/github', 'Start GitHub OAuth'],
+              ['GET', '/v1/oauth/callback/:provider', 'OAuth callback'],
             ].map(([m, p, d]) => (
               <tr key={p + m} style={{ borderTop: '1px solid #1d2130' }}>
-                <td style={{ padding: '8px 14px' }}><span className="mono" style={{ fontSize: 11, fontWeight: 700, color: m === 'GET' ? '#34d399' : m === 'DELETE' ? '#f87171' : '#a5b4fc' }}>{m}</span></td>
+                <td style={{ padding: '8px 14px' }}><span className="mono" style={{ fontSize: 11, fontWeight: 700, color: m === 'GET' ? '#34d399' : m === 'DELETE' ? '#f87171' : 'var(--accent)' }}>{m}</span></td>
                 <td style={{ padding: '8px 14px', fontFamily: '"JetBrains Mono",monospace', fontSize: 12 }}>{p}</td>
                 <td style={{ padding: '8px 14px', color: '#7c8195' }}>{d}</td>
               </tr>
@@ -65,7 +69,7 @@ export default function Page() {
 # 200 -> Set-Cookie: slyxup_session=...; HttpOnly; Secure`}</CodeBlock>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Errors</h2>
-      <p style={{ color: '#9ca3b8', fontSize: 14, lineHeight: 1.7 }}><code>400</code> validation · <code>401</code> bad credentials/expired session · <code>403</code> blocked · <code>429</code> rate limit (20/min per IP) · errors are always <code>{`{ "error": { "code", "message" } }`}</code>.</p>
+      <p style={{ color: '#9ca3b8', fontSize: 14, lineHeight: 1.7 }}><code>400</code> validation · <code>401</code> bad credentials/expired session · <code>403</code> blocked or email not verified · <code>429</code> rate limit (20/min per IP) · errors are <code>{`{ "ok": false, "error": "message" }`}</code>. Specific errors like <code>EMAIL_NOT_VERIFIED</code> or <code>ACCOUNT_BLOCKED</code> include a <code>"code"</code> field.</p>
     </div>
   );
 }

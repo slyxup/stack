@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { BrandShield } from './icons';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Nav() {
   return (
@@ -9,13 +10,16 @@ export function Nav() {
           <span className="brand-mark"><BrandShield /></span> SlyxUp
         </Link>
         <div className="nav-links">
-          <a href="/features">Features</a>
-          <a href="/docs">Docs</a>
-          <a href="/pricing">Pricing</a>
-          <a href="/console">Console</a>
+          <Link href="/features">Features</Link>
+          <Link href="/docs">Docs</Link>
+          <Link href="/pricing">Pricing</Link>
+          <Link href="/dashboard">Dashboard</Link>
           <a href="https://github.com/slyxup/stack" target="_blank" rel="noreferrer">GitHub</a>
         </div>
-        <a className="nav-cta" href="/console">Open Console</a>
+        <div className="nav-right">
+          <ThemeToggle />
+          <Link className="nav-cta" href="/dashboard">Open Dashboard</Link>
+        </div>
       </div>
     </nav>
   );
@@ -29,9 +33,9 @@ export function Footer() {
         <div className="foot-links">
           <a href="https://github.com/slyxup/stack">GitHub</a>
           <a href="https://www.npmjs.com/package/@slyxup/core">npm</a>
-          <a href="/docs">Docs</a>
-          <a href="/pricing">Pricing</a>
-          <a href="/features">Features</a>
+          <Link href="/docs">Docs</Link>
+          <Link href="/pricing">Pricing</Link>
+          <Link href="/features">Features</Link>
         </div>
       </div>
     </footer>

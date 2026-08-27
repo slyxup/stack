@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
@@ -94,16 +94,18 @@ export async function listProjects(
 ) {
   const db = getDb(env);
   const memberships = await db
-    .select()
+    .select({ projectId: projectMembers.projectId })
     .from(projectMembers)
     .where(eq(projectMembers.developerId, developerId))
     .all();
   const ids = memberships.map((m) => m.projectId);
   if (ids.length === 0) return [];
-  const rows = await Promise.all(
-    ids.map((id) => db.select().from(projects).where(eq(projects.id, id)).get())
-  );
-  return rows.filter(Boolean);
+  const rows = await db
+    .select()
+    .from(projects)
+    .where(inArray(projects.id, ids))
+    .all();
+  return rows;
 }
 
 export async function getProject(env: { DB: D1Database }, projectId: string) {
@@ -131,10 +133,18 @@ export async function isProjectMember(
 }
 
 // ── API Keys ──
-function generateKey(prefix: string): { full: string; hash: string } {
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function generateKey(prefix: string): { full: string; raw: string } {
   const secret = randomToken(24);
   const full = `${prefix}_${secret}`;
-  return { full, hash: btoa(full) }; // simple reversible-free storage marker; replace with SHA-256 in prod hardening
+  return { full, raw: full };
 }
 
 export async function createApiKey(
@@ -148,14 +158,15 @@ export async function createApiKey(
 ) {
   const db = getDb(env);
   const prefix = `${input.type === 'publishable' ? 'pk' : 'sk'}_${input.environment}`;
-  const { full, hash } = generateKey(prefix);
+  const { full, raw } = generateKey(prefix);
+  const hashedKey = await sha256Hex(raw);
   const now = new Date();
   const key = {
     id: randomUUID(),
     projectId: input.projectId,
     name: input.name,
     prefix,
-    hashedKey: hash,
+    hashedKey,
     environment: input.environment,
     type: input.type,
     lastUsedAt: null,
@@ -165,6 +176,32 @@ export async function createApiKey(
   };
   await db.insert(apiKeys).values(key);
   return { ...key, key: full }; // only returned once at creation
+}
+
+export async function verifyApiKey(
+  env: { DB: D1Database },
+  rawKey: string
+): Promise<{ projectId: string; type: string; environment: string } | null> {
+  const db = getDb(env);
+  const hash = await sha256Hex(rawKey.trim());
+  const row = await db
+    .select()
+    .from(apiKeys)
+    .where(eq(apiKeys.hashedKey, hash))
+    .get();
+  if (!row) return null;
+  // Touch lastUsedAt asynchronously (best-effort)
+  void db
+    .update(apiKeys)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(apiKeys.id, row.id))
+    .run()
+    .catch(() => {});
+  return {
+    projectId: row.projectId,
+    type: row.type,
+    environment: row.environment,
+  };
 }
 
 export async function listApiKeys(env: { DB: D1Database }, projectId: string) {

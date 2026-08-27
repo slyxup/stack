@@ -32,7 +32,8 @@ import { SlyxUpProvider } from '@slyxup/react';
 ### `useAuth()` — sign in / out / state
 
 ```tsx
-const { isLoaded, isSignedIn, userId, signIn, signUp, signOut } = useAuth();
+const { isLoaded, isSignedIn, userId, client, signIn, signUp, signOut } = useAuth();
+// client: SlyxupClient instance (use client.apiUrl, client.publishableKey, etc.)
 
 if (!isLoaded) return <Spinner />;
 if (!isSignedIn) return <button onClick={() => signIn({ email, password })}>Sign in</button>;
@@ -44,8 +45,9 @@ await signOut();                              // clears session, updates state
 ### `useUser()` — full profile
 
 ```tsx
-const { user, isSignedIn, reload } = useUser();
+const { user, isSignedIn, isSignedOut, isLoaded, reload } = useUser();
 // user: { id, email, firstName, lastName, avatarUrl, emailVerified, ... }
+// isSignedOut: true when loaded and not signed in (convenience boolean)
 <p>{user?.firstName}</p>
 ```
 

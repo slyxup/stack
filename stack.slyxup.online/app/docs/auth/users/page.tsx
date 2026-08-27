@@ -10,7 +10,7 @@ GET    /v1/admin/users           -> list users (admin only)
 SDK:
 const me = await client.users.me();
 await client.users.update({ firstName: 'Ada' });
-await client.users.deleteAccount();
+await client.users.delete();
 `;
 
 export default function Page() {
@@ -51,10 +51,12 @@ const user = await currentUser(); // server-side, no waterfall`,
 // mutate + optimistic update via provider context:
 await updateUser({ firstName: 'Ada' });`,
           nextjs: `'use server';
-import { slyxupServer } from '@slyxup/nextjs/server';
+import { currentUser } from '@slyxup/nextjs/server';
+import { SlyxupClient } from '@slyxup/core';
 
 export async function updateProfile(fd: FormData) {
-  await slyxupServer().users.update({ firstName: fd.get('name') as string });
+  const client = new SlyxupClient();
+  await client.users.update({ firstName: fd.get('name') as string });
   revalidatePath('/settings');
 }`,
         }}
@@ -69,8 +71,14 @@ export async function updateProfile(fd: FormData) {
   await deleteAccount();
 }`,
           nextjs: `'use server';
+import { SlyxupClient } from '@slyxup/core';
+import { cookies } from 'next/headers';
+
 export async function deleteAccountAction() {
-  await slyxupServer().users.deleteAccount();
+  const client = new SlyxupClient();
+  await client.users.delete();
+  const cookieStore = await cookies();
+  cookieStore.delete('slyxup_session');
   redirect('/');
 }`,
         }}

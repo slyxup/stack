@@ -1,8 +1,12 @@
 import { zValidator } from '@hono/zod-validator';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getDb } from '../lib/db';
-import { developers, projects as projectsTable } from '../lib/schema';
+import {
+  developers,
+  projectDomains,
+  projects as projectsTable,
+} from '../lib/schema';
 import { addMemberSchema, createProjectSchema } from '../schemas/projects';
 import * as ProjectService from '../services/project.service';
 import { ensureDeveloper, userFromSession } from './developers';
@@ -88,22 +92,58 @@ projects.patch('/:id/domains', async (c) => {
     return c.json({ ok: false, error: 'action and domain required' }, 400);
   const project = await ProjectService.getProject(c.env, id);
   if (!project) return c.json({ ok: false, error: 'Not found' }, 404);
-  const current = (project.allowedDomains ?? []) as string[];
-  let updated: string[];
-  if (body.action === 'add') {
-    const clean = body.domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    if (current.includes(clean)) return c.json({ ok: true, domains: current });
-    updated = [...current, clean];
-  } else {
-    updated = current.filter((d) => d !== body.domain);
-  }
   const db = getDb(c.env);
-  await db
-    .update(projectsTable)
-    .set({ allowedDomains: updated, updatedAt: new Date() })
-    .where(eq(projectsTable.id, id));
+  const clean = body.domain
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '')
+    .toLowerCase();
+  if (body.action === 'add') {
+    // Insert into scalable domains table (idempotent)
+    const existing = await db
+      .select()
+      .from(projectDomains)
+      .where(
+        and(eq(projectDomains.projectId, id), eq(projectDomains.domain, clean))
+      )
+      .get();
+    if (!existing) {
+      await db.insert(projectDomains).values({
+        id: crypto.randomUUID(),
+        projectId: id,
+        domain: clean,
+        verified: false,
+        createdAt: new Date(),
+      });
+    }
+    // Keep JSON in sync for old clients
+    const current = (project.allowedDomains ?? []) as string[];
+    if (!current.includes(clean)) {
+      const updated = [...current, clean];
+      await db
+        .update(projectsTable)
+        .set({ allowedDomains: updated, updatedAt: new Date() })
+        .where(eq(projectsTable.id, id));
+    }
+  } else {
+    await db
+      .delete(projectDomains)
+      .where(
+        and(eq(projectDomains.projectId, id), eq(projectDomains.domain, clean))
+      );
+    const current = (project.allowedDomains ?? []) as string[];
+    const updated = current.filter((d) => d.toLowerCase() !== clean);
+    await db
+      .update(projectsTable)
+      .set({ allowedDomains: updated, updatedAt: new Date() })
+      .where(eq(projectsTable.id, id));
+  }
   await c.env.KV.delete('cors_live_domains');
-  return c.json({ ok: true, domains: updated });
+  const domains = await db
+    .select({ domain: projectDomains.domain })
+    .from(projectDomains)
+    .where(eq(projectDomains.projectId, id))
+    .all();
+  return c.json({ ok: true, domains: domains.map((d) => d.domain) });
 });
 
 projects.get('/:id/domains', async (c) => {
@@ -114,10 +154,19 @@ projects.get('/:id/domains', async (c) => {
   if (!member) return c.json({ ok: false, error: 'Forbidden' }, 403);
   const project = await ProjectService.getProject(c.env, id);
   if (!project) return c.json({ ok: false, error: 'Not found' }, 404);
+  const db = getDb(c.env);
+  const rows = await db
+    .select({ domain: projectDomains.domain })
+    .from(projectDomains)
+    .where(eq(projectDomains.projectId, id))
+    .all();
+  // Merge JSON + table for backward compat, deduped
+  const jsonDomains = (project.allowedDomains ?? []) as string[];
+  const merged = [...new Set([...jsonDomains, ...rows.map((r) => r.domain)])];
   return c.json({
     ok: true,
     environment: project.environment,
-    domains: project.allowedDomains ?? [],
+    domains: merged,
   });
 });
 

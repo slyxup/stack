@@ -3,7 +3,10 @@ export { KeyholeMark, GoogleIcon, GitHubIcon, CheckIcon } from './icons';
 
 export { SignIn, type SignInProps } from './components/SignIn/SignIn';
 export { SignUp, type SignUpProps } from './components/SignUp/SignUp';
-export { UserButton } from './components/UserButton/UserButton';
+export {
+  UserButton,
+  type UserButtonProps,
+} from './components/UserButton/UserButton';
 export {
   UserProfile,
   type UserProfileProps,
@@ -24,6 +27,14 @@ export {
   SocialButtons,
   type SocialButtonsProps,
 } from './components/SocialButtons/SocialButtons';
+export {
+  BillingPortal,
+  type BillingPortalProps,
+} from './components/BillingPortal/BillingPortal';
+export {
+  PricingTable,
+  type PricingTableProps,
+} from './components/PricingTable/PricingTable';
 
 import { useEffect } from 'react';
 import { injectStyles } from './styles';

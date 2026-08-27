@@ -7,7 +7,7 @@ import { verifyWebhookSignature } from '../services/paddle.service';
 
 // ── POST /v1/webhooks/paddle — Paddle Billing notifications ──
 // Configure in Paddle Dashboard > Developer tools > Notifications.
-// Events handled: subscription.*, transaction.completed, transaction.paid, adjustment.updated
+// Events handled: subscription.*, transaction.*, adjustment.updated
 
 interface PaddleEvent<T = Record<string, unknown>> {
   event_id: string;
@@ -56,9 +56,17 @@ const SUB_STATUSES = [
 function mapSubStatus(
   status: string | undefined
 ): (typeof SUB_STATUSES)[number] {
-  return (SUB_STATUSES as readonly string[]).includes(status ?? '')
-    ? (status as (typeof SUB_STATUSES)[number])
-    : 'past_due';
+  if ((SUB_STATUSES as readonly string[]).includes(status ?? ''))
+    return status as (typeof SUB_STATUSES)[number];
+  // B14: Log unmapped statuses
+  console.warn(
+    JSON.stringify({
+      level: 'warn',
+      msg: 'Unknown Paddle subscription status mapped to past_due',
+      raw_status: status,
+    })
+  );
+  return 'past_due';
 }
 
 function parseDate(s: string | null | undefined): Date | null {
@@ -108,6 +116,14 @@ async function applySubscriptionEvent(
     canceledAt: canceled ? new Date() : null,
   };
 
+  // B10: Preserve the earliest cancellation timestamp — don't overwrite an existing
+  // canceledAt with null when a non-canceled event arrives later.
+  const canceledAt =
+    canceled || existing?.canceledAt
+      ? (existing?.canceledAt ?? values.canceledAt)
+      : null;
+
+  // B3: Set updatedAt on conflict
   await db
     .insert(subscriptions)
     .values(values)
@@ -122,7 +138,8 @@ async function applySubscriptionEvent(
         currentPeriodStart: values.currentPeriodStart,
         currentPeriodEnd: values.currentPeriodEnd,
         cancelAtPeriodEnd: values.cancelAtPeriodEnd,
-        canceledAt: values.canceledAt,
+        canceledAt,
+        updatedAt: new Date(),
       },
     });
 }
@@ -158,6 +175,7 @@ async function applyTransactionCompleted(
   if (!userId || !projectId) return; // cannot attribute — skip
 
   const paid = data.status === 'completed' || data.status === 'paid';
+  // B3: Set updatedAt on conflict
   await db
     .insert(invoices)
     .values({
@@ -165,7 +183,7 @@ async function applyTransactionCompleted(
       subscriptionId: subscriptionId ?? null,
       userId,
       projectId,
-      amount: total, // cents (Paddle totals are strings of cents)
+      amount: total,
       currency: (data.details?.totals?.currency_code ?? 'USD').toUpperCase(),
       status: paid ? 'paid' : 'pending',
       invoiceNumber: data.invoice_number ?? null,
@@ -177,8 +195,34 @@ async function applyTransactionCompleted(
         status: paid ? 'paid' : 'pending',
         invoiceNumber: data.invoice_number ?? null,
         billedAt: parseDate(data.billed_at),
+        updatedAt: new Date(),
       },
     });
+}
+
+// B4: Handle transaction.canceled — correct invoice status
+async function applyTransactionCanceled(
+  db: ReturnType<typeof getDb>,
+  data: TxData
+): Promise<void> {
+  if (!data.id) return;
+  // Set invoice to pending if it was previously marked paid
+  await db
+    .update(invoices)
+    .set({ status: 'pending', updatedAt: new Date() })
+    .where(eq(invoices.paddleTransactionId, data.id));
+}
+
+// B4: Handle transaction.partially_refunded
+async function applyTransactionPartiallyRefunded(
+  db: ReturnType<typeof getDb>,
+  data: TxData
+): Promise<void> {
+  if (!data.id) return;
+  await db
+    .update(invoices)
+    .set({ status: 'refunded', updatedAt: new Date() })
+    .where(eq(invoices.paddleTransactionId, data.id));
 }
 
 async function applyAdjustment(
@@ -190,7 +234,7 @@ async function applyAdjustment(
   if (!data.transaction_id) return;
   await db
     .update(invoices)
-    .set({ status: 'refunded' })
+    .set({ status: 'refunded', updatedAt: new Date() })
     .where(eq(invoices.paddleTransactionId, data.transaction_id));
 }
 
@@ -225,44 +269,66 @@ app.post('/paddle', async (c) => {
 
   const db = getDb(c.env);
 
-  // Idempotency guard — unique paddle_event_id; duplicates are acked with 200
+  // B6+B7: Idempotency guard — processedAt is NULL at insert, set only on success.
+  // For duplicates: re-process failed events, skip completed ones.
+  let isNewEvent = false;
   try {
     await db.insert(webhookEvents).values({
       paddleEventId: event.event_id,
       eventType: event.event_type,
       occurredAt: parseDate(event.occurred_at),
       payload: event as unknown as Record<string, unknown>,
+      status: 'pending',
     });
+    isNewEvent = true;
   } catch (e) {
     if (e instanceof Error && e.message.includes('UNIQUE constraint failed')) {
-      return c.json({ ok: true, duplicate: true });
+      // Duplicate event — check if it previously failed (allow reprocessing)
+      const existing = await db
+        .select({ status: webhookEvents.status })
+        .from(webhookEvents)
+        .where(eq(webhookEvents.paddleEventId, event.event_id))
+        .get();
+      if (existing?.status !== 'failed') {
+        return c.json({ ok: true, duplicate: true });
+      }
+      // Update existing failed event to pending for reprocessing
+      await db
+        .update(webhookEvents)
+        .set({ status: 'pending', processedAt: null })
+        .where(eq(webhookEvents.paddleEventId, event.event_id));
+    } else {
+      throw e;
     }
-    throw e;
   }
 
-  try {
-    if (event.event_type.startsWith('subscription.')) {
-      await applySubscriptionEvent(db, event.data as unknown as SubData);
-    } else if (
-      event.event_type === 'transaction.completed' ||
-      event.event_type === 'transaction.paid'
-    ) {
-      await applyTransactionCompleted(db, event.data as unknown as TxData);
-    } else if (event.event_type === 'adjustment.updated') {
-      await applyAdjustment(db, event.data as AdjustmentData);
-    }
-  } catch (e) {
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        msg: 'webhook processing failed',
-        event_id: event.event_id,
-        event_type: event.event_type,
-        err: e instanceof Error ? e.message : String(e),
-      })
+  // B6: Processing errors are re-thrown so Paddle retries.
+  // Only ack success. processedAt is set after processing (B7).
+  if (event.event_type.startsWith('subscription.')) {
+    await applySubscriptionEvent(db, event.data as unknown as SubData);
+  } else if (
+    event.event_type === 'transaction.completed' ||
+    event.event_type === 'transaction.paid'
+  ) {
+    await applyTransactionCompleted(db, event.data as unknown as TxData);
+  } else if (event.event_type === 'adjustment.updated') {
+    await applyAdjustment(db, event.data as AdjustmentData);
+  } else if (event.event_type === 'transaction.canceled') {
+    // B4
+    await applyTransactionCanceled(db, event.data as unknown as TxData);
+  } else if (event.event_type === 'transaction.partially_refunded') {
+    // B4
+    await applyTransactionPartiallyRefunded(
+      db,
+      event.data as unknown as TxData
     );
-    // Ack to prevent retry storms on app bugs; event row is logged for replay
   }
+
+  // B6+B7: Mark as completed only after successful processing
+  await db
+    .update(webhookEvents)
+    .set({ processedAt: new Date(), status: 'completed' })
+    .where(eq(webhookEvents.paddleEventId, event.event_id));
 
   return c.json({ ok: true });
 });

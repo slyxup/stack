@@ -15,12 +15,46 @@ const app = new Hono<{
 
 app.use('*', requireUser);
 
-/** GET /v1/billing/subscription — current live subscription (any project) */
+/** GET /v1/billing/subscription — current user's subscription(s) */
 app.get('/', async (c) => {
   const userId = c.get('userId');
+  const projectId = c.req.query('projectId');
   const db = getDb(c.env);
 
-  const sub = await db
+  if (projectId) {
+    // B5+B9: Return the subscription for a specific project
+    const sub = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.projectId, projectId),
+          ne(subscriptions.status, 'canceled')
+        )
+      )
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1)
+      .get();
+
+    if (!sub) return c.json({ ok: true, subscription: null });
+    return c.json({
+      ok: true,
+      subscription: {
+        id: sub.id,
+        projectId: sub.projectId,
+        userId: sub.userId,
+        planId: sub.planId,
+        status: sub.status,
+        currentPeriodStart: isoOrNull(sub.currentPeriodStart),
+        currentPeriodEnd: isoOrNull(sub.currentPeriodEnd),
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      },
+    });
+  }
+
+  // B9: No projectId — return all non-canceled subscriptions
+  const list = await db
     .select()
     .from(subscriptions)
     .where(
@@ -30,13 +64,11 @@ app.get('/', async (c) => {
       )
     )
     .orderBy(desc(subscriptions.createdAt))
-    .limit(1)
-    .get();
+    .all();
 
-  if (!sub) return c.json({ ok: true, subscription: null });
   return c.json({
     ok: true,
-    subscription: {
+    subscriptions: list.map((sub) => ({
       id: sub.id,
       projectId: sub.projectId,
       userId: sub.userId,
@@ -45,7 +77,7 @@ app.get('/', async (c) => {
       currentPeriodStart: isoOrNull(sub.currentPeriodStart),
       currentPeriodEnd: isoOrNull(sub.currentPeriodEnd),
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
-    },
+    })),
   });
 });
 
@@ -56,29 +88,29 @@ app.post('/cancel', async (c) => {
     return c.json({ ok: false, error: 'Billing not configured' }, 501);
 
   const userId = c.get('userId');
+  const projectId = c.req.query('projectId');
   const db = getDb(c.env);
+
+  // B1+B5: Only allow canceling an active subscription, scoped by projectId
   const sub = await db
     .select()
     .from(subscriptions)
     .where(
-      and(eq(subscriptions.userId, userId), eq(subscriptions.status, 'active'))
+      and(
+        eq(subscriptions.userId, userId),
+        eq(subscriptions.status, 'active'),
+        projectId ? eq(subscriptions.projectId, projectId) : undefined
+      )
     )
     .orderBy(desc(subscriptions.createdAt))
+    .limit(1)
     .get();
 
-  const target =
-    sub ??
-    (
-      await db
-        .select()
-        .from(subscriptions)
-        .where(eq(subscriptions.userId, userId))
-        .orderBy(desc(subscriptions.createdAt))
-        .limit(1)
-    )[0];
-
-  if (!target || !target.paddleSubscriptionId)
-    return c.json({ ok: false, error: 'No active subscription' }, 404);
+  if (!sub || !sub.paddleSubscriptionId)
+    return c.json(
+      { ok: false, error: 'No active subscription to cancel' },
+      404
+    );
 
   const config = {
     apiKey,
@@ -89,13 +121,13 @@ app.post('/cancel', async (c) => {
   const { cancelSubscriptionAtPeriodEnd } = await import(
     '../services/paddle.service'
   );
-  await cancelSubscriptionAtPeriodEnd(config, target.paddleSubscriptionId);
+  await cancelSubscriptionAtPeriodEnd(config, sub.paddleSubscriptionId);
 
   // Optimistic local flag; authoritative state arrives via subscription.updated webhook
   await db
     .update(subscriptions)
     .set({ cancelAtPeriodEnd: true })
-    .where(eq(subscriptions.id, target.id));
+    .where(eq(subscriptions.id, sub.id));
 
   return c.json({ ok: true });
 });
@@ -107,7 +139,9 @@ app.post('/resume', async (c) => {
     return c.json({ ok: false, error: 'Billing not configured' }, 501);
 
   const userId = c.get('userId');
+  const projectId = c.req.query('projectId');
   const db = getDb(c.env);
+  // B5: Scope by projectId
   const sub = await db
     .select({
       id: subscriptions.id,
@@ -118,7 +152,8 @@ app.post('/resume', async (c) => {
       and(
         eq(subscriptions.userId, userId),
         eq(subscriptions.cancelAtPeriodEnd, true),
-        ne(subscriptions.status, 'canceled')
+        ne(subscriptions.status, 'canceled'),
+        projectId ? eq(subscriptions.projectId, projectId) : undefined
       )
     )
     .orderBy(desc(subscriptions.createdAt))

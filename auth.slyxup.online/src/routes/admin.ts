@@ -1,4 +1,4 @@
-import { desc, eq, like, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getDb } from '../lib/db';
 import { projects, sessions, users } from '../lib/schema';
@@ -21,6 +21,8 @@ admin.use('*', async (c, next) => {
     .where(eq(sessions.token, token))
     .get();
   if (!session) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  if (session.expiresAt < new Date())
+    return c.json({ ok: false, error: 'Session expired' }, 401);
   const user = await db
     .select()
     .from(users)
@@ -38,6 +40,12 @@ admin.post('/users/:id/block', async (c) => {
     .json<{ reason?: string }>()
     .catch(() => ({ reason: undefined as string | undefined }));
   const db = getDb(c.env);
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (!existing) return c.json({ ok: false, error: 'User not found' }, 404);
   await db
     .update(users)
     .set({
@@ -53,6 +61,12 @@ admin.post('/users/:id/block', async (c) => {
 admin.post('/users/:id/unblock', async (c) => {
   const userId = c.req.param('id');
   const db = getDb(c.env);
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (!existing) return c.json({ ok: false, error: 'User not found' }, 404);
   await db
     .update(users)
     .set({ blocked: false, blockedReason: null, updatedAt: new Date() })
@@ -68,6 +82,12 @@ admin.post('/users/:id/role', async (c) => {
   if (!body.role || !['user', 'admin'].includes(body.role))
     return c.json({ ok: false, error: 'role must be user or admin' }, 400);
   const db = getDb(c.env);
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  if (!existing) return c.json({ ok: false, error: 'User not found' }, 404);
   await db
     .update(users)
     .set({ role: body.role as 'user' | 'admin', updatedAt: new Date() })
@@ -108,7 +128,13 @@ admin.get('/users', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') ?? 50), 200);
   const offset = Number(c.req.query('offset') ?? 0);
   const db = getDb(c.env);
-  const where = q ? like(users.email, `%${q}%`) : undefined;
+  const escapedQ = q
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
+  const where = q
+    ? sql`${users.email} LIKE ${`%${escapedQ}%`} ESCAPE '\\'`
+    : undefined;
   const rows = await db
     .select({
       id: users.id,

@@ -22,7 +22,7 @@ export function CopyForLLM({ content }: { content: string }) {
         fontSize: 12,
         fontWeight: 550,
         fontFamily: '"JetBrains Mono", monospace',
-        color: copied ? '#34d399' : '#6366f1',
+        color: copied ? '#34d399' : 'var(--accent)',
         background: copied ? 'rgba(52,211,153,.1)' : 'rgba(99,102,241,.08)',
         border: `1px solid ${copied ? 'rgba(52,211,153,.2)' : 'rgba(99,102,241,.15)'}`,
         borderRadius: 8,

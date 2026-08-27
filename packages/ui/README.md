@@ -99,7 +99,10 @@ Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GE
 ### `<SocialButtons />`
 
 ```tsx
-<SocialButtons providers={['google', 'github']} basePath="/v1/oauth" />
+<SocialButtons providers={['google', 'github']} />
+{/* Default basePath is `${client.apiUrl}/v1/oauth` from the provider client.
+    Only override if you need a custom auth URL: */}
+<SocialButtons providers={['google']} basePath="https://auth.example.com/v1/oauth" />
 ```
 
 Redirects to the hosted OAuth flow.

@@ -64,7 +64,7 @@ export default function Home() {
             <div>
               <div className="sec-kicker" style={{ textAlign: 'left' }}>// developer experience</div>
               <h2 className="sec-title" style={{ textAlign: 'left' }}>Auth in five lines of client code</h2>
-              <p style={{ color: '#7c8195', fontSize: 15.5 }}>No SDK ceremony. One client, typed end to end, cookie sessions handled for you — including SSR in Next.js via <code style={{ color: '#a5b4fc' }}>currentUser()</code>.</p>
+              <p style={{ color: 'var(--text-dim)', fontSize: 15.5 }}>No SDK ceremony. One client, typed end to end, cookie sessions handled for you — including SSR in Next.js via <code style={{ color: 'var(--accent)' }}>currentUser()</code>.</p>
               <p style={{ marginTop: 18 }}><a className="btn-secondary" href="/features">Explore all features &rarr;</a></p>
             </div>
             <div className="codeblock">
@@ -80,7 +80,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="section" id="self-hosting" style={{ background: '#0d0e16', borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+        <section className="section" id="self-hosting" style={{ background: 'var(--bg-inset)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
           <div className="wrap grid2" style={{ alignItems: 'center', gap: 40 }}>
             <div className="codeblock">
               <span className="c-cm"># self-host in three commands</span>{'\n'}
@@ -94,7 +94,7 @@ export default function Home() {
             <div>
               <div className="sec-kicker" style={{ textAlign: 'left' }}>// no lock-in</div>
               <h2 className="sec-title" style={{ textAlign: 'left' }}>Self-host the whole platform</h2>
-              <p style={{ color: '#7c8195', fontSize: 15.5 }}>The hosted version runs the same code in this repo. Bring your own Cloudflare account, D1 database, Brevo sender and OAuth apps. Your users never touch our infrastructure unless you want them to.</p>
+              <p style={{ color: 'var(--text-dim)', fontSize: 15.5 }}>The hosted version runs the same code in this repo. Bring your own Cloudflare account, D1 database, Brevo sender and OAuth apps. Your users never touch our infrastructure unless you want them to.</p>
               <p style={{ marginTop: 18 }}><a className="btn-secondary" href="https://github.com/slyxup/stack" target="_blank" rel="noreferrer">Read the source &rarr;</a></p>
             </div>
           </div>

@@ -56,7 +56,7 @@ export default function Features() {
                   style={{
                     fontFamily: 'ui-monospace, Menlo, monospace',
                     fontSize: 14,
-                    color: '#9fa5ff',
+                    color: 'var(--accent)',
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
                     marginBottom: 20,
@@ -79,7 +79,8 @@ export default function Features() {
             <div className="sec-head" style={{ marginTop: 40 }}>
               <h2 className="sec-title">Not in V1 (on purpose)</h2>
               <p className="sec-sub">
-                Organizations, SAML/SCIM, passkeys, billing — planned, but not shipped half-baked.
+                Organizations, SAML/SCIM, passkeys — planned, but not shipped half-baked.
+                Billing and subscriptions are available in the dashboard.
                 V1 does fewer things properly.
               </p>
             </div>

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { getSessionToken } from './lib/cookies';
 import { getDb } from './lib/db';
 import { checkRateLimit } from './lib/rate-limit';
 import { projects } from './lib/schema';
@@ -9,10 +10,12 @@ import auth from './routes/auth';
 import developersRoute from './routes/developers';
 import keysRoute from './routes/keys';
 import oauthRoute from './routes/oauth';
+import projectUsersRoute from './routes/project-users';
 import projectsRoute from './routes/projects';
 import sessionsRoute from './routes/sessions';
 import usersRoute from './routes/users';
 import verificationRoute from './routes/verification';
+import { getSession } from './services/auth.service';
 
 // SlyxUp Auth Worker — CF Workers + D1 + KV
 // Deploy: https://auth.slyxup.online (wrangler deploy)
@@ -39,7 +42,8 @@ app.use('*', async (c, next) => {
   );
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+    'Access-Control-Allow-Headers':
+      'Content-Type, Authorization, Cookie, X-Publishable-Key',
     'Access-Control-Max-Age': '86400',
   };
 
@@ -48,7 +52,8 @@ app.use('*', async (c, next) => {
     (allowed.includes(origin) || allowed.includes('*') || isLocalhost);
 
   // Dynamic: custom domains registered on LIVE projects (KV-cached 60s).
-  // Any platform built with the SDK gets CORS automatically — no redeploy.
+  // Reads BOTH the new project_domains table (scalable) and the legacy
+  // projects.allowedDomains JSON for backward compat.
   if (!allow && origin.startsWith('https://')) {
     try {
       let hosts: string[] | null = null;
@@ -57,16 +62,29 @@ app.use('*', async (c, next) => {
         hosts = JSON.parse(cached) as string[];
       } else {
         const db = getDb(c.env);
-        const rows = await db
+        const jsonRows = await db
           .select({ domains: projects.allowedDomains })
           .from(projects)
           .where(eq(projects.environment, 'live'))
           .all();
-        hosts = [
-          ...new Set(
-            rows.flatMap((r) => (Array.isArray(r.domains) ? r.domains : []))
-          ),
-        ];
+        const jsonHosts = jsonRows.flatMap((r) =>
+          Array.isArray(r.domains) ? (r.domains as string[]) : []
+        );
+        // Scalable table — unlimited domains per project
+        let tableHosts: string[] = [];
+        try {
+          const { projectDomains } = await import('./lib/schema');
+          const tRows = await db
+            .select({ domain: projectDomains.domain })
+            .from(projectDomains)
+            .innerJoin(projects, eq(projectDomains.projectId, projects.id))
+            .where(eq(projects.environment, 'live'))
+            .all();
+          tableHosts = tRows.map((r) => r.domain);
+        } catch {
+          /* table may not exist yet before migration 0007 */
+        }
+        hosts = [...new Set([...jsonHosts, ...tableHosts])];
         await c.env.KV.put('cors_live_domains', JSON.stringify(hosts), {
           expirationTtl: 60,
         });
@@ -97,8 +115,38 @@ app.use('*', async (c, next) => {
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);
 });
 
-// Rate limiting on auth endpoints
-app.use('/v1/auth/*', async (c, next) => {
+// Rate limiting on sensitive endpoints
+const rateLimited = [
+  '/v1/auth/*',
+  '/v1/admin/*',
+  '/v1/verification/*',
+  '/v1/session',
+];
+for (const pattern of rateLimited) {
+  app.use(pattern, async (c, next) => {
+    const ip =
+      c.req.header('CF-Connecting-IP') ??
+      c.req.header('X-Forwarded-For') ??
+      'unknown';
+    const rl = await checkRateLimit(c.env.KV, `auth:${ip}`, 20, 60);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'Too many requests' }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rl.resetIn),
+          },
+        }
+      );
+    }
+    await next();
+  });
+}
+// OAuth initiation only (callback is excluded — it's server-to-server from provider)
+app.use('/v1/oauth/*', async (c, next) => {
+  if (c.req.path.includes('/callback/')) return next();
   const ip =
     c.req.header('CF-Connecting-IP') ??
     c.req.header('X-Forwarded-For') ??
@@ -132,13 +180,32 @@ app.route('/v1/auth', auth);
 app.route('/v1/user', usersRoute);
 app.route('/v1/verification', verificationRoute);
 app.route('/v1/projects', projectsRoute);
+app.route('/v1/projects', projectUsersRoute);
 app.route('/v1/keys', keysRoute);
 app.route('/v1/developers', developersRoute);
 app.route('/v1/oauth', oauthRoute);
 app.route('/v1/sessions', sessionsRoute);
 app.route('/v1/admin', adminRoute);
 app.route('/v1/audit', auditRoute);
-app.route('/v1', auth); // also mount session at /v1/session
+
+// Legacy SDK path — mount only the session endpoint at /v1/session (not the
+// full auth router, which would bypass /v1/auth/* rate limiting).
+app.get('/v1/session', async (c) => {
+  const token = getSessionToken(c);
+  if (!token) return c.json({ ok: false, error: 'No session' }, 401);
+  const data = await getSession(c.env, token);
+  if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  return c.json({
+    ok: true,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      role: data.user.role,
+      emailVerified: data.user.emailVerified,
+    },
+    session: { id: data.session.id, expiresAt: data.session.expiresAt },
+  });
+});
 
 export default {
   fetch(

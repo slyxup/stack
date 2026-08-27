@@ -122,9 +122,9 @@ export default async function Dashboard() {
       />
 
       <div className="prose-note">
-        <b>Next steps:</b> custom forms in the <a href="/docs/auth/email" style={{ color: '#818cf8' }}>Email &amp; Password guide</a>,
-        social login in <a href="/docs/auth/oauth" style={{ color: '#818cf8' }}>OAuth</a>, or browse{' '}
-        <a href="/docs/sdk/ui" style={{ color: '#818cf8' }}>@slyxup/ui</a> components.
+        <b>Next steps:</b> custom forms in the <a href="/docs/auth/email" style={{ color: 'var(--accent)' }}>Email &amp; Password guide</a>,
+        social login in <a href="/docs/auth/oauth" style={{ color: 'var(--accent)' }}>OAuth</a>, or browse{' '}
+        <a href="/docs/sdk/ui" style={{ color: 'var(--accent)' }}>@slyxup/ui</a> components.
       </div>
     </div>
   );

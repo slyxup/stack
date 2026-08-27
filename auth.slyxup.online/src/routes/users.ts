@@ -1,5 +1,6 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { sanitizeUser } from '../lib/sanitize';
 import { requireSession } from '../middleware/auth';
 import { changePasswordSchema, updateUserSchema } from '../schemas/users';
 import {
@@ -18,7 +19,7 @@ users.use('*', requireSession);
 users.patch('/', zValidator('json', updateUserSchema), async (c) => {
   const input = c.req.valid('json');
   const updated = await updateUser(c.env, c.get('userId'), input);
-  return c.json({ ok: true, user: updated });
+  return c.json({ ok: true, user: updated ? sanitizeUser(updated) : null });
 });
 
 // Change password (email/password accounts only)

@@ -52,10 +52,12 @@ function SignUpForm() {
 }`,
           nextjs: `// app/sign-up/actions.ts (server action)
 'use server';
-import { slyxupServer } from '@slyxup/nextjs/server';
+import { SlyxupClient } from '@slyxup/core';
+
+const client = new SlyxupClient();
 
 export async function signUp(fd: FormData) {
-  await slyxupServer().auth.signUp({
+  await client.auth.signUp({
     email: fd.get('email') as string,
     password: fd.get('password') as string,
   });
@@ -90,10 +92,11 @@ export default slyxupMiddleware({
           react: `const { signOut } = useAuth();
 <button onClick={() => signOut()}>Sign out</button>`,
           nextjs: `'use server';
-import { slyxupServer } from '@slyxup/nextjs/server';
+import { cookies } from 'next/headers';
 
 export async function signOutAction() {
-  await slyxupServer().auth.signOut();
+  const cookieStore = await cookies();
+  cookieStore.delete('slyxup_session');
   redirect('/');
 }`,
         }}
@@ -108,7 +111,7 @@ export async function signOutAction() {
 
       <div className="prose-note">
         <b>Email verification:</b> new accounts get a 6-digit code. Verify via{' '}
-        <a href="/docs/api/auth" style={{ color: '#818cf8' }}>POST /v1/verification/verify</a> or the prebuilt{' '}
+        <a href="/docs/api/auth" style={{ color: 'var(--accent)' }}>POST /v1/verification/verify</a> or the prebuilt{' '}
         <code className="inl">EmailVerification</code> component.
       </div>
     </div>

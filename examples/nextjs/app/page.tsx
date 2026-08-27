@@ -5,10 +5,9 @@ import { SignIn, SignUp, UserButton, SlyxUpStyles, UserProfile } from '@slyxup/u
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-function Dashboard() {
+function Dashboard({ onOpenProfile }: { onOpenProfile: () => void }) {
   const { isSignedIn, isLoaded, signOut } = useAuth();
   const { user } = useUser();
-  const [profileOpen, setProfileOpen] = useState(false);
   const router = useRouter();
 
   if (!isLoaded) return <div style={{ padding: 40, textAlign: 'center', color: '#6f6f7b' }}>Loading…</div>;
@@ -38,7 +37,7 @@ function Dashboard() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => setProfileOpen(true)}
+              onClick={onOpenProfile}
               style={{
                 fontSize: 13,
                 fontWeight: 600,
@@ -84,16 +83,9 @@ function Dashboard() {
         </div>
 
         <div style={{ background: '#f7f7fa', borderRadius: 12, padding: 16, fontSize: 13, lineHeight: 1.6, color: '#6f6f7b' }}>
-          <strong style={{ color: '#16161d' }}>Platform demo:</strong> Ye SlyxUp Auth ka live use hai. `UserButton` avatar dropdown, `SignIn`/`SignUp` cards, aur **Account settings** button se Clerk-style `<UserProfile />` (profile edit, password change, session revoke, delete account) — sab isi `packages/*` se chal raha hai.
+          <strong style={{ color: '#16161d' }}>Platform demo:</strong> Ye SlyxUp Auth ka live use hai. `UserButton` avatar dropdown, `SignIn`/`SignUp` cards, aur **Account settings** button se Clerk-style `<UserProfile />` (profile edit, password change, sessions, billing, delete account) — sab isi `packages/*` se chal raha hai.
         </div>
       </div>
-
-      {profileOpen && (
-        <UserProfile
-          onClose={() => setProfileOpen(false)}
-          onDeleted={() => router.push('/')}
-        />
-      )}
 
       <p style={{ textAlign: 'center', marginTop: 18, fontSize: 12, color: '#9a9aa6' }}>
         API: {process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online'} · SlyxUp SDK v0.2.0
@@ -119,8 +111,21 @@ function AuthCard() {
 }
 
 export default function Page() {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const router = useRouter();
+  const pk = process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY;
+  if (!pk) {
+    return (
+      <div style={{ maxWidth: 720, margin: '80px auto', padding: 24, textAlign: 'center' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Missing publishable key</h1>
+        <p style={{ color: '#6f6f7b', marginTop: 8 }}>Set <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> in <code>.env.local</code>.</p>
+        <pre style={{ background: '#f7f7fa', padding: 12, borderRadius: 8, marginTop: 16, textAlign: 'left', fontSize: 12 }}>slyxup login{'\n'}slyxup project create "Demo"{'\n'}slyxup keys create --project-id &lt;id&gt; --type publishable --json</pre>
+      </div>
+    );
+  }
+
   return (
-    <SlyxUpProvider publishableKey={process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY ?? 'pk_test_demo'} apiUrl={process.env.NEXT_PUBLIC_SLYXUP_API_URL}>
+    <SlyxUpProvider publishableKey={pk} apiUrl={process.env.NEXT_PUBLIC_SLYXUP_API_URL}>
       <SlyxUpStyles />
       {/* Topbar like real SaaS */}
       <header
@@ -151,13 +156,20 @@ export default function Page() {
             </span>
             SlyxUp Demo
           </div>
-          <UserButton />
+          <UserButton onProfileClick={() => setProfileOpen(true)} />
         </div>
       </header>
 
       <main style={{ padding: '40px 24px' }}>
-        <Dashboard />
+        <Dashboard onOpenProfile={() => setProfileOpen(true)} />
       </main>
+
+      {profileOpen && (
+        <UserProfile
+          onClose={() => setProfileOpen(false)}
+          onDeleted={() => router.push('/')}
+        />
+      )}
 
       <footer style={{ textAlign: 'center', padding: 32, fontSize: 12, color: '#9a9aa6' }}>
         SlyxUp Stack — open-source auth on Cloudflare Workers + D1 · <a href="https://github.com/slyxup/stack" style={{ color: '#5b5bd6' }}>github.com/slyxup/stack</a>

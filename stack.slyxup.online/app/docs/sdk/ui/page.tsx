@@ -5,10 +5,16 @@ Prebuilt auth components on top of @slyxup/react.
 
 import { SignIn, SignUp, SocialButtons, UserButton } from '@slyxup/ui';
 
-<SignIn />            -> email/password card, error + loading states
-<SignUp />            -> registration card with validation
-<SocialButtons />     -> Google/GitHub OAuth buttons (providers prop)
-<UserButton />        -> avatar menu: profile, sessions, sign out
+<SignIn />              -> email/password card, error + loading states
+<SignUp />              -> registration card with validation
+<SocialButtons />       -> Google/GitHub OAuth buttons (providers prop)
+<UserButton />          -> avatar menu: profile, sessions, sign out
+<UserProfile />         -> full account settings (profile + security tabs)
+<ForgotPassword />      -> email input for password reset
+<ResetPassword />       -> new password form (token from email)
+<EmailVerification />   -> auto-verify from emailed token
+<PricingTable />        -> billing plans grid
+<BillingPortal />       -> current plan + invoices
 
 Dependency chain: @slyxup/ui -> @slyxup/react -> @slyxup/core
 `;
@@ -28,9 +34,9 @@ export default function Page() {
 export default function Page() {
   return (
     <>
-      <SignIn onFinish={() => router.push('/dashboard')} />
+      <SignIn onSuccess={() => router.push('/dashboard')} />
       {/* or */}
-      <SignUp onFinish={() => router.push('/welcome')} />
+      <SignUp onSuccess={() => router.push('/welcome')} />
     </>
   );
 }`}</CodeBlock>

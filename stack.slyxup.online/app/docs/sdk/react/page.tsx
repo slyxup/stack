@@ -8,11 +8,12 @@ import { SlyxUpProvider } from '@slyxup/react';
 <SlyxUpProvider publishableKey="pk_test_xxx"><App /></SlyxUpProvider>
 
 Hooks:
-useAuth()    -> { isLoaded, isSignedIn, signIn, signUp, signOut }
-useUser()    -> { user, isLoaded }
-useSession() -> { session, isLoaded }
-usePlans(projectId)       -> { plans }       // billing
-useSubscription()         -> { subscription }
+useAuth()    -> { isLoaded, isSignedIn, userId, client, signIn, signUp, signOut }
+useUser()    -> { user, isLoaded, isSignedIn, isSignedOut, reload }
+useSession() -> { session, isLoaded, isSignedIn, reload }
+usePlans(projectId)              -> { plans, loading, error }
+useSubscription(projectId)       -> { subscription, loading, error, reload }
+useCheckout()                    -> { checkout, loading, error }
 
 Dependency: wraps @slyxup/core.
 `;
@@ -45,9 +46,10 @@ await signIn({ email, password });   // sets HttpOnly cookie via API`}</CodeBloc
 return isSignedIn ? <Dashboard /> : <Marketing />;`}</CodeBlock>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Billing hooks</h2>
-      <CodeBlock>{`import { usePlans, useSubscription } from '@slyxup/react';
+      <CodeBlock>{`import { usePlans, useSubscription, useCheckout } from '@slyxup/react';
 const { plans } = usePlans('prj_your-project-id');
-const { subscription } = useSubscription();`}</CodeBlock>
+const { subscription, loading } = useSubscription('prj_your-project-id');
+const { checkout } = useCheckout();`}</CodeBlock>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Install</h2>
       <CodeBlock copyContent={`npm install @slyxup/react @slyxup/core`}>{`npm install @slyxup/react @slyxup/core`}</CodeBlock>

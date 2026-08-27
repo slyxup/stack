@@ -23,6 +23,8 @@ audit.use('*', async (c, next) => {
     .where(eq(sessions.token, token))
     .get();
   if (!session) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  if (session.expiresAt < new Date())
+    return c.json({ ok: false, error: 'Session expired' }, 401);
   const user = await db
     .select()
     .from(users)

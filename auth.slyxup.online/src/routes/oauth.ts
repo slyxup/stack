@@ -328,10 +328,17 @@ oauth.get('/callback/:provider', async (c) => {
     const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(`${dest}${joiner}auth=success`);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'OAuth failed';
-    console.error(JSON.stringify({ evt: 'oauth_error', provider, msg }));
+    console.error(
+      JSON.stringify({
+        evt: 'oauth_error',
+        provider,
+        msg: e instanceof Error ? e.message : String(e),
+      })
+    );
     const joiner = base.includes('?') ? '&' : '?';
-    return c.redirect(`${base}/sign-in?error=${encodeURIComponent(msg)}`);
+    return c.redirect(
+      `${base}/sign-in?error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`
+    );
   }
 });
 

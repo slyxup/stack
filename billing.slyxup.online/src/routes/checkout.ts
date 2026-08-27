@@ -1,5 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { getDb } from '../lib/db';
@@ -20,16 +20,9 @@ const rateLimit = createMiddleware<Env>(async (c, next) => {
   const userId = c.get('userId');
   const rl = await checkRateLimit(c.env.KV, `checkout:${ip}:${userId}`, 10, 60);
   if (!rl.allowed)
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Too many requests' }),
-      {
-        status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': String(rl.resetIn),
-        },
-      }
-    );
+    return c.json({ ok: false, error: 'Too many requests' }, 429, {
+      'Retry-After': String(rl.resetIn),
+    });
   await next();
 });
 
@@ -59,20 +52,21 @@ app.post(
       .get();
     if (!plan || !plan.isActive) throw notFound('Plan not found');
 
-    // One live subscription per user per project
-    const existing = await db
+    // B2: Only block checkout if there's an active or trialing subscription.
+    // Allow re-engagement when the only existing sub is paused or past_due.
+    const blocking = await db
       .select({ id: subscriptions.id })
       .from(subscriptions)
       .where(
         and(
           eq(subscriptions.userId, userId),
           eq(subscriptions.projectId, plan.projectId),
-          ne(subscriptions.status, 'canceled')
+          inArray(subscriptions.status, ['active', 'trialing'])
         )
       )
       .get();
-    if (existing)
-      throw conflict('Subscription already exists for this project');
+    if (blocking)
+      throw conflict('Active subscription already exists for this project');
 
     const config = {
       apiKey,
@@ -81,24 +75,48 @@ app.post(
         : 'sandbox') as 'sandbox' | 'production',
     };
 
-    const { getOrCreateCustomer, createCheckout } = await import(
-      '../services/paddle.service'
-    );
-    const customer = await getOrCreateCustomer(config, userEmail);
+    // B8: Lookup our customer row by userId, not Paddle by email.
+    const existingCustomer = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.userId, userId))
+      .get();
+
+    let paddleCustomerId: string;
+    if (existingCustomer) {
+      paddleCustomerId = existingCustomer.paddleCustomerId ?? '';
+    } else {
+      const { createPaddleCustomer } = await import(
+        '../services/paddle.service'
+      );
+      const customer = await createPaddleCustomer(config, userEmail);
+      paddleCustomerId = customer.id;
+    }
+
+    // B3: Set updatedAt on conflict
     await db
       .insert(customers)
-      .values({ userId, email: userEmail, paddleCustomerId: customer.id })
+      .values({
+        userId,
+        email: userEmail,
+        paddleCustomerId,
+      })
       .onConflictDoUpdate({
         target: customers.userId,
-        set: { email: userEmail, paddleCustomerId: customer.id },
+        set: {
+          email: userEmail,
+          paddleCustomerId,
+          updatedAt: new Date(),
+        },
       });
 
     // Only send successUrl if provided — unapproved domains (e.g. localhost) make
     // Paddle reject the transaction; without it Paddle uses the default payment link.
+    const { createCheckout } = await import('../services/paddle.service');
     const checkout = await createCheckout(
       config,
       plan.paddlePriceId,
-      customer.id,
+      paddleCustomerId,
       successUrl,
       { userId, projectId: plan.projectId, planId: plan.id }
     );

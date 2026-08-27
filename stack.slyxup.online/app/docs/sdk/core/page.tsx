@@ -8,13 +8,13 @@ import { SlyxupClient, UnauthorizedError, RateLimitError } from '@slyxup/core';
 
 const client = new SlyxupClient({ publishableKey: 'pk_test_xxx' });
 
-Auth:      client.auth.signUp / signIn / signOut / verifyEmail
-           client.password.forgot / reset / change
-Sessions:  client.sessions.get() / revokeAll()
-Users:     client.users.me() / update() / deleteAccount()
+Auth:      client.auth.signUp / signIn / signOut / resendVerification
+Sessions:  client.sessions.get() / list() / revoke() / revokeOthers()
+Password:  client.password.change()
+Users:     client.users.me() / update() / delete()
 Billing:   client.billing.listPlans() (via @slyxup/billing)
 
-Errors: UnauthorizedError (401), ForbiddenError (403),
+Errors: UnauthorizedError (401), SlyxupError (base),
         RateLimitError (429), ValidationError (400)
 `;
 
@@ -40,10 +40,10 @@ const client = new SlyxupClient({
           <thead><tr style={{ background: '#12141d', textAlign: 'left' }}><th style={{ padding: '10px 14px' }}>Namespace</th><th style={{ padding: '10px 14px', color: '#7c8195' }}>Methods</th></tr></thead>
           <tbody>
             {[
-              ['client.auth', 'signUp, signIn, signOut, verifyEmail'],
-              ['client.password', 'forgot, reset, change'],
-              ['client.sessions', 'get, revokeAll'],
-              ['client.users', 'me, update, deleteAccount'],
+              ['client.auth', 'signUp, signIn, signOut, resendVerification'],
+              ['client.sessions', 'get, list, revoke, revokeOthers'],
+              ['client.password', 'change'],
+              ['client.users', 'me, update, delete'],
             ].map(([ns, m]) => (
               <tr key={ns} style={{ borderTop: '1px solid #1d2130' }}>
                 <td style={{ padding: '8px 14px', fontFamily: '"JetBrains Mono",monospace', fontSize: 12 }}>{ns}</td>
@@ -67,7 +67,7 @@ try {
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>Self-hosted base URL</h2>
       <CodeBlock>{`const client = new SlyxupClient({
   publishableKey: 'pk_live_xxx',
-  baseUrl: 'https://auth.example.com', // your own Worker
+  apiUrl: 'https://auth.example.com', // your own Worker
 });`}</CodeBlock>
     </div>
   );

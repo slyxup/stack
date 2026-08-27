@@ -4,7 +4,9 @@ import { getDb } from '../lib/db';
 import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
 
-// ── Public: list active plans for a project (no auth) ──
+// ── Public: list active plans for a project (no auth required).
+// Plans are public-facing product info; requiring auth here would break
+// pre-login plan selection in the SDK checkout flow. ──
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
 
 app.get('/', async (c) => {

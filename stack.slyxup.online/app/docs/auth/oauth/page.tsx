@@ -4,7 +4,7 @@ const LLM = `# OAuth — Google & GitHub
 GET https://auth.slyxup.online/v1/oauth/google        // start flow
 GET https://auth.slyxup.online/v1/oauth/github
 GET /v1/oauth/callback/:provider?code=...&state=...   // provider callback
-// state + PKCE protected, session cookie set on success,
+// state-protected (CSRF), session cookie set on success,
 // then redirect to an origin in ALLOWED_REDIRECT_ORIGINS
 `;
 
@@ -16,7 +16,7 @@ export default function Page() {
         <CopyForLLM content={LLM} />
       </div>
       <p className="prose-p">
-        Social sign-in with state + PKCE protection built in. The flow is a browser redirect — pick how you want to
+        Social sign-in with state-based CSRF protection built in. The flow is a browser redirect — pick how you want to
         start it for your framework.
       </p>
 
@@ -42,8 +42,8 @@ export function startGoogle() {
 
       <h2 className="h-sec">What happens on callback</h2>
       <CodeBlock>{`https://auth.slyxup.online/v1/oauth/callback/google?code=...&state=...
-// 1. state verified (CSRF), code exchanged with PKCE
-// 2. user upserted, matched by verified provider email
+// 1. state verified (CSRF protection)
+// 2. code exchanged for tokens, user upserted by verified email
 // 3. HttpOnly slyxup_session cookie set
 // 4. 302 -> first origin in ALLOWED_REDIRECT_ORIGINS`}</CodeBlock>
 

@@ -76,6 +76,8 @@ export interface UserResponse {
 export interface AuthResponse {
   ok: true;
   user: Pick<SlyxupUser, 'id' | 'email'>;
+  sessionToken?: string;
+  expiresAt?: string;
 }
 
 export interface ErrorResponse {

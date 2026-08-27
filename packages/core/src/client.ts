@@ -32,6 +32,9 @@ function createCookieJar() {
     header(): Record<string, string> {
       return jar ? { Cookie: jar } : {};
     },
+    clear() {
+      jar = undefined;
+    },
   };
 }
 
@@ -74,6 +77,7 @@ export class SlyxupClient {
 
   constructor(options: SlyxupClientOptions = {}) {
     const jar = createCookieJar();
+    let storedToken: string | undefined;
     this.publishableKey = options.publishableKey;
     this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
 
@@ -83,11 +87,25 @@ export class SlyxupClient {
     ): Promise<Result<T>> => {
       let res: Response;
       try {
+        // Build headers: prefer cookie jar (SSR), fall back to stored Bearer token (browser cross-origin)
+        const authHeaders: Record<string, string> = {};
+        const jarHeader = jar.header();
+        if (Object.keys(jarHeader).length > 0) {
+          Object.assign(authHeaders, jarHeader);
+        } else if (storedToken) {
+          authHeaders.Authorization = `Bearer ${storedToken}`;
+        }
+        // Always send publishable key so server can scope auth to the correct project
+        // and reject requests with invalid / missing keys (fixes demo-with-wrong-pk bug).
+        if (this.publishableKey && this.publishableKey !== 'pk_test_missing') {
+          authHeaders['X-Publishable-Key'] = this.publishableKey;
+        }
+
         res = await fetch(`${this.apiUrl}${path}`, {
           ...init,
           headers: {
             'Content-Type': 'application/json',
-            ...jar.header(),
+            ...authHeaders,
             ...init.headers,
           },
           credentials: 'include',
@@ -130,16 +148,20 @@ export class SlyxupClient {
         const res = await post<AuthResponse>('/v1/auth/sign-up', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 400, 'api_error');
+        if (res.sessionToken) storedToken = res.sessionToken;
         return res;
       },
       signIn: async (input) => {
         const res = await post<AuthResponse>('/v1/auth/sign-in', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 401, 'api_error');
+        if (res.sessionToken) storedToken = res.sessionToken;
         return res;
       },
       signOut: async () => {
         const res = await post<{ ok: true }>('/v1/auth/sign-out');
+        storedToken = undefined;
+        jar.clear();
         return res as { ok: true };
       },
       resendVerification: async (email: string) => {

@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
@@ -16,11 +16,23 @@ export async function signUp(
   }
 ) {
   const db = getDb(env);
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, input.email))
-    .get();
+  // Project-scoped uniqueness: same email can exist in different projects.
+  const existing = input.projectId
+    ? await db
+        .select()
+        .from(users)
+        .where(
+          and(
+            eq(users.email, input.email),
+            eq(users.projectId, input.projectId)
+          )
+        )
+        .get()
+    : await db
+        .select()
+        .from(users)
+        .where(and(eq(users.email, input.email), isNull(users.projectId)))
+        .get();
   if (existing) throw new Error('Email already exists');
 
   const passwordHash = await hashPassword(input.password);
@@ -93,11 +105,25 @@ export async function signIn(
   input: { email: string; password: string; projectId?: string }
 ) {
   const db = getDb(env);
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, input.email))
-    .get();
+  // Prefer project-scoped lookup; fall back to any matching email if no project given
+  // (developer/login without pk). If projectId is given, require exact match.
+  let user: typeof users.$inferSelect | undefined;
+  if (input.projectId) {
+    user = await db
+      .select()
+      .from(users)
+      .where(
+        and(eq(users.email, input.email), eq(users.projectId, input.projectId))
+      )
+      .get();
+  } else {
+    // Platform user only — never fall back to an arbitrary project user
+    user = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.email, input.email), isNull(users.projectId)))
+      .get();
+  }
   if (!user || !user.passwordHash) throw new Error('Invalid credentials');
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw new Error('Invalid credentials');
@@ -139,6 +165,7 @@ export async function getSession(env: { DB: D1Database }, token: string) {
     .where(eq(users.id, session.userId))
     .get();
   if (!user) return null;
+  if (!user.emailVerified) return null;
   return { session, user };
 }
 

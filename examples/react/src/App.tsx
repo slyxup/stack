@@ -71,7 +71,7 @@ function Demo() {
       </button>
       <p style={{ color: '#9a9aa6', fontSize: 12.5, marginTop: 10 }}>
         Opens the Clerk-style <code>&lt;UserProfile /&gt;</code> — edit profile,
-        change password, manage sessions, delete account.
+        change password, manage sessions, billing, delete account.
       </p>
 
       <pre
@@ -98,11 +98,44 @@ function Demo() {
 }
 
 export default function App() {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const pk = import.meta.env.VITE_SLYXUP_PUBLISHABLE_KEY;
+  if (!pk) {
+    return (
+      <div
+        style={{
+          maxWidth: 560,
+          margin: '80px auto',
+          padding: 24,
+          textAlign: 'center',
+        }}
+      >
+        <h1 style={{ fontSize: 20, fontWeight: 700 }}>
+          Missing publishable key
+        </h1>
+        <p style={{ color: '#6f6f7b', marginTop: 8 }}>
+          Set <code>VITE_SLYXUP_PUBLISHABLE_KEY</code> in <code>.env</code>.
+        </p>
+        <pre
+          style={{
+            background: '#f7f7fa',
+            padding: 12,
+            borderRadius: 8,
+            marginTop: 16,
+            textAlign: 'left',
+            fontSize: 12,
+          }}
+        >
+          slyxup login{'\n'}slyxup keys create --project-id &lt;id&gt; --type
+          publishable
+        </pre>
+      </div>
+    );
+  }
+
   return (
     <SlyxUpProvider
-      publishableKey={
-        import.meta.env.VITE_SLYXUP_PUBLISHABLE_KEY ?? 'pk_test_demo'
-      }
+      publishableKey={pk}
       apiUrl={import.meta.env.VITE_SLYXUP_API_URL}
     >
       <SlyxUpStyles />
@@ -117,9 +150,15 @@ export default function App() {
         }}
       >
         <strong>◆ SlyxUp React Demo</strong>
-        <UserButton />
+        <UserButton onProfileClick={() => setProfileOpen(true)} />
       </header>
       <Demo />
+      {profileOpen && (
+        <UserProfile
+          onClose={() => setProfileOpen(false)}
+          onDeleted={() => window.location.reload()}
+        />
+      )}
     </SlyxUpProvider>
   );
 }

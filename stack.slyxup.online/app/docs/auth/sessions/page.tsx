@@ -7,7 +7,7 @@ Expiry: 7 days, sliding refresh on activity.
 
 GET    /v1/session                -> current session + user
 POST   /v1/auth/sign-out          -> revoke current session
-DELETE /v1/sessions               -> revoke all devices
+DELETE /v1/sessions               -> revoke all other devices (keeps current)
 `;
 
 export default function Page() {
@@ -56,14 +56,15 @@ export default async function Layout({ children }) {
       <CodeBlock
         variants={{
           js: `await slyxup.auth.signOut();        // this device
-await slyxup.sessions.revokeAll();  // every device`,
+await slyxup.sessions.revokeOthers();  // every other device`,
           react: `const { signOut } = useAuth();
 <button onClick={() => signOut()}>Sign out</button>`,
           nextjs: `'use server';
-import { slyxupServer } from '@slyxup/nextjs/server';
+import { cookies } from 'next/headers';
 
 export async function signOutAction() {
-  await slyxupServer().auth.signOut();
+  const cookieStore = await cookies();
+  cookieStore.delete('slyxup_session');
   redirect('/');
 }`,
         }}

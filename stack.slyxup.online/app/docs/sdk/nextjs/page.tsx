@@ -10,6 +10,8 @@ const session = await auth();               // null if signed out
 Middleware:
 import { slyxupMiddleware } from '@slyxup/nextjs/middleware';
 export default slyxupMiddleware({ publicPaths: ['/', '/pricing'] });
+// OR use protectedPaths (whitelist) — mutually exclusive with publicPaths:
+export default slyxupMiddleware({ protectedPaths: ['/dashboard', '/settings'] });
 
 Cookie forwarding: reads slyxup_session from incoming cookies,
 validates against auth.slyxup.online/v1/session on the server side.
@@ -40,11 +42,19 @@ export default async function Dashboard() {
 import { slyxupMiddleware } from '@slyxup/nextjs/middleware';
 
 export default slyxupMiddleware({
-  publicPaths: ['/', '/pricing', '/docs'],
+  publicPaths: ['/', '/pricing', '/docs'],  // blacklist: these are public
   signInUrl: '/sign-in',
 });
 
+// OR use protectedPaths (whitelist) — mutually exclusive with publicPaths:
+// export default slyxupMiddleware({
+//   protectedPaths: ['/dashboard', '/settings'],  // only these require auth
+// });
+
 export const config = { matcher: ['/((?!_next|favicon).*)'] };`}</CodeBlock>
+      <p style={{ color: '#9ca3b8', fontSize: 14, lineHeight: 1.7, marginTop: 12 }}>
+        <code>publicPaths</code> and <code>protectedPaths</code> are mutually exclusive. Use <code>publicPaths</code> to whitelist public routes (everything else requires auth), or <code>protectedPaths</code> to whitelist protected routes (everything else is public).
+      </p>
 
       <h2 style={{ fontSize: 20, fontWeight: 700, marginTop: 32 }}>How cookies work</h2>
       <p style={{ color: '#9ca3b8', fontSize: 14, lineHeight: 1.7 }}>

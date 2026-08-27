@@ -42,15 +42,24 @@ export async function updateProfile(formData: FormData) {
 // middleware.ts (project root or src/)
 import { slyxupMiddleware } from '@slyxup/nextjs/middleware';
 
+// Option A: publicPaths (blacklist) — these routes are public, everything else requires auth
 export default slyxupMiddleware({
-  protectedPaths: ['/dashboard', '/settings'],  // default: everything except public paths
+  publicPaths: ['/', '/sign-in', '/sign-up', '/pricing'],
   signInUrl: '/sign-in',                        // redirect target (default)
 });
+
+// Option B: protectedPaths (whitelist) — only these routes require auth, everything else is public
+// export default slyxupMiddleware({
+//   protectedPaths: ['/dashboard', '/settings'],
+//   signInUrl: '/sign-in',
+// });
 
 export const config = {
   matcher: ['/((?!_next|favicon.ico).*)'],
 };
 ```
+
+> **Note:** `publicPaths` and `protectedPaths` are mutually exclusive. Use one or the other — do not pass both.
 
 Unauthenticated users are redirected to `/sign-in?redirect_url=<original path>`.
 
@@ -88,6 +97,7 @@ Cookie is `HttpOnly; Secure; SameSite=Lax`, 7-day expiry by default (`maxAge`/`d
 | `slyxupMiddleware(opts)` | `/middleware` | Next.js middleware factory |
 | `createSessionCookie(token)` | root | `Set-Cookie` value |
 | `clearSessionCookie()` | root | Clearing `Set-Cookie` value |
+| `SESSION_COOKIE_NAME` | root, `/server`, `/middleware` | `'slyxup_session'` (also exported as `MIDDLEWARE_SESSION_COOKIE` from `/middleware` and `COOKIE_NAME` from root — all refer to the same value) |
 
 ## React hooks
 

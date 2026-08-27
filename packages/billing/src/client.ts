@@ -111,12 +111,12 @@ export class BillingClient {
   }
 
   /** Create checkout URL and redirect (requires session cookie) */
-  async checkout(planId: string): Promise<void> {
+  async checkout(planId: string, successUrl?: string): Promise<void> {
     const res = await this.req<{ ok: true; checkoutUrl?: string }>(
       '/v1/billing/checkout',
       {
         method: 'POST',
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, ...(successUrl ? { successUrl } : {}) }),
       }
     );
     if (res.checkoutUrl) window.location.href = res.checkoutUrl;

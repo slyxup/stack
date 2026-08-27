@@ -175,9 +175,10 @@ export const webhookEvents = sqliteTable(
     eventType: text('event_type').notNull(),
     occurredAt: integer('occurred_at', { mode: 'timestamp' }),
     payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>(),
-    processedAt: integer('processed_at', { mode: 'timestamp' }).$defaultFn(
-      () => new Date()
-    ),
+    processedAt: integer('processed_at', { mode: 'timestamp' }),
+    status: text('status', { enum: ['pending', 'completed', 'failed'] })
+      .notNull()
+      .default('pending'),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
