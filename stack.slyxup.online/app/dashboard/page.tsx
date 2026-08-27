@@ -8,8 +8,6 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { api, type Dev } from '../../lib/dashboard-client';
 import { DASHBOARD_CSS } from '../../lib/dashboard-css';
 
-// Nohing just i have to deploy this also 
-
 function UniqueStyle({ css }: { css: string }) {
   const [rendered, setRendered] = useState(false);
   useEffect(() => {
