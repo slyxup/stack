@@ -320,13 +320,31 @@ export const CSS = `
   background: rgba(12, 12, 18, 0.55);
   backdrop-filter: blur(6px);
   animation: slx-rise .2s cubic-bezier(.22,.9,.32,1) both;
+  padding: 16px;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 /* ── UserProfile ── */
+.slx-profile-modal {
+  display: flex; flex-direction: column;
+  width: 720px; max-width: calc(100vw - 32px);
+  max-height: min(85vh, 720px);
+  background: var(--slx-bg);
+  border-radius: var(--slx-radius-lg);
+  box-shadow: var(--slx-shadow-pop);
+  overflow: hidden;
+  animation: slx-rise .28s cubic-bezier(.22,.9,.32,1) both;
+  box-sizing: border-box;
+}
 .slx-profile-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 22px 28px 18px;
   border-bottom: 1px solid var(--slx-border);
+  flex-shrink: 0;
+  background: var(--slx-bg);
+  position: relative;
+  z-index: 1;
 }
 .slx-profile-title {
   font-family: var(--slx-display);
@@ -340,17 +358,21 @@ export const CSS = `
   background: none; border: 1px solid var(--slx-border);
   color: var(--slx-muted); cursor: pointer; font-size: 16px;
   transition: background .12s, color .12s, border-color .12s;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .slx-profile-close:hover { background: var(--slx-bg-subtle); color: var(--slx-ink); border-color: var(--slx-border-strong); }
+.slx-profile-close:active { transform: scale(.95); }
 .slx-profile-close:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft); }
 
 .slx-profile-body {
-  display: flex; min-height: 480px; max-height: 80vh;
-  width: 720px; max-width: calc(100vw - 48px);
-  background: var(--slx-bg);
-  border-radius: var(--slx-radius-lg);
-  box-shadow: var(--slx-shadow-pop);
+  display: flex; flex: 1; min-height: 380px;
   overflow: hidden;
+  min-width: 0;
 }
 
 /* ── Left nav ── */
@@ -467,10 +489,94 @@ export const CSS = `
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 0; border-bottom: 1px solid var(--slx-border);
   font-size: 13px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .slx-invoice-row:last-child { border-bottom: none; }
 .slx-invoice-date { color: var(--slx-muted); }
 .slx-invoice-amount { font-weight: 600; color: var(--slx-ink-strong); }
+
+/* ── Billing plans grid (responsive) ── */
+.slx-billing-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.slx-plan-card {
+  border: 1px solid var(--slx-border);
+  border-radius: var(--slx-radius);
+  padding: 16px;
+  background: var(--slx-bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: border-color .15s, box-shadow .15s;
+}
+.slx-plan-card:hover { border-color: var(--slx-border-strong); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.slx-plan-card.popular { border-color: var(--slx-accent); box-shadow: 0 0 0 1px var(--slx-accent-soft); }
+.slx-plan-badge {
+  position: absolute; top: -10px; right: 12px;
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  color: #fff; background: linear-gradient(135deg, var(--slx-accent), #8b5cf6);
+  padding: 3px 8px; border-radius: 999px;
+}
+.slx-plan-name { font-size: 14px; font-weight: 600; color: var(--slx-ink-strong); margin: 0 0 6px; }
+.slx-plan-price { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; color: var(--slx-ink-strong); }
+.slx-plan-interval { font-size: 13px; color: var(--slx-muted); font-weight: 400; }
+.slx-plan-features { list-style: none; margin: 12px 0 16px; padding: 0; flex: 1; }
+.slx-plan-features li { font-size: 13px; color: var(--slx-ink); padding: 4px 0 4px 20px; position: relative; line-height: 1.45; }
+.slx-plan-features li::before { content: "✓"; position: absolute; left: 0; color: var(--slx-success); font-weight: 700; font-size: 12px; }
+.slx-plan-cta { width: 100%; margin-top: auto; }
+.slx-billing-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.slx-btn-secondary {
+  font: inherit; font-size: 13px; font-weight: 550;
+  color: var(--slx-ink); background: var(--slx-bg);
+  border: 1px solid var(--slx-border-strong); border-radius: var(--slx-radius-sm);
+  padding: 8px 14px; cursor: pointer;
+  transition: background .12s, border-color .12s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.slx-btn-secondary:hover { background: var(--slx-bg-subtle); }
+.slx-btn-secondary:active { transform: scale(.98); }
+.slx-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft); }
+.slx-btn-secondary[disabled] { opacity: .55; cursor: not-allowed; }
+.slx-billing-empty { text-align: center; padding: 24px 16px; color: var(--slx-muted); font-size: 13px; line-height: 1.5; }
+
+/* ── Mobile friendliness for UserProfile ── */
+@media (max-width: 680px) {
+  .slx-overlay { align-items: flex-start; padding: 12px; }
+  .slx-profile-modal {
+    width: 100%; max-width: 100%;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    margin: auto;
+    border-radius: var(--slx-radius-lg);
+  }
+  .slx-profile-body { flex-direction: column; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  .slx-profile-nav {
+    width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    border-right: none; border-bottom: 1px solid var(--slx-border);
+    padding: 8px; gap: 6px; scrollbar-width: none; -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+  }
+  .slx-profile-nav::-webkit-scrollbar { display: none; }
+  .slx-profile-nav-btn { white-space: nowrap; flex-shrink: 0; font-size: 13px; padding: 8px 12px; }
+  .slx-profile-content { padding: 16px; overflow: visible; }
+  .slx-profile-head { padding: 16px 16px 12px; }
+  .slx-profile-close { width: 40px; height: 40px; min-width: 40px; min-height: 40px; font-size: 18px; border-radius: 10px; }
+  .slx-avatar-row { gap: 12px; flex-wrap: wrap; }
+  .slx-billing-plans { grid-template-columns: 1fr; }
+  .slx-session { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .slx-session .slx-btn-danger-outline { align-self: stretch; text-align: center; justify-content: center; }
+  .slx-invoice-row { flex-wrap: wrap; gap: 6px; }
+}
+@media (max-width: 380px) {
+  .slx-profile-content { padding: 12px; }
+  .slx-profile-head { padding: 12px 12px 10px; }
+  .slx-profile-title { font-size: 16px; }
+}
 `;
 
 let injected = false;

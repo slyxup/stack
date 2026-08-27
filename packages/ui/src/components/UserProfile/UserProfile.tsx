@@ -13,10 +13,27 @@ export interface UserProfileProps {
 
 type Tab = 'profile' | 'security' | 'billing';
 
-function initials(user: { firstName: string | null; email: string }): string {
-  const n = user.firstName?.trim();
-  if (n) return n.slice(0, 1).toUpperCase();
+function initials(user: {
+  firstName: string | null;
+  lastName?: string | null;
+  email: string;
+}): string {
+  const f = user.firstName?.trim();
+  const l = user.lastName?.trim();
+  if (f && l) return (f[0] + l[0]).toUpperCase();
+  if (f) return f.slice(0, 1).toUpperCase();
+  if (l) return l.slice(0, 1).toUpperCase();
   return user.email.slice(0, 1).toUpperCase();
+}
+
+function displayName(user: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+}): string {
+  const parts = [user.firstName?.trim(), user.lastName?.trim()].filter(Boolean);
+  const name = parts.join(' ');
+  return name || user.email;
 }
 
 function deviceLabel(ua: string | null): string {
@@ -56,10 +73,25 @@ function formatDate(iso: string): string {
 }
 
 function formatCurrency(amount: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(amount / 100);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+interface Plan {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+  interval: string;
+  trialDays: number | null;
+  features: string[] | null;
+  isPopular: boolean;
 }
 
 export function UserProfile({
@@ -101,6 +133,7 @@ export function UserProfile({
   const [subscription, setSubscription] = useState<{
     id: string;
     status: string;
+    planId?: string | null;
     planName: string | null;
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
@@ -114,19 +147,24 @@ export function UserProfile({
       billedAt: string | null;
     }[]
   >([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [checkoutId, setCheckoutId] = useState<string | null>(null);
 
   // ── Danger zone state ──
   const [confirmText, setConfirmText] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Sync form fields when user loads/updates (ensures firstName/lastName show correctly
+  // after SlyxUpProvider fetches client.users.me()). Guard against stale overwrites.
   useEffect(() => {
     if (user) {
       setFirstName(user.firstName ?? '');
       setLastName(user.lastName ?? '');
       setAvatarUrl(user.avatarUrl ?? '');
     }
-  }, [user]);
+  }, [user?.firstName, user?.lastName, user?.avatarUrl]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -150,40 +188,123 @@ export function UserProfile({
 
   const loadBilling = useCallback(async () => {
     setBillingLoading(true);
+    setPlansLoading(true);
     try {
-      const billingUrl =
-        (client as unknown as { apiUrl: string }).apiUrl?.replace(
-          'auth.slyxup.online',
-          'billing.slyxup.online'
-        ) ?? 'https://billing.slyxup.online';
-      const token = (client as unknown as { _token?: string })?._token;
+      const rawApiUrl =
+        (client as unknown as { apiUrl: string }).apiUrl ?? 'https://auth.slyxup.online';
+      const billingUrl = rawApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+      const token = (client as unknown as { _token?: string; getToken?: () => string | undefined })?._token
+        ?? (client as unknown as { getToken?: () => string | undefined })?.getToken?.();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
       if (token) headers.Authorization = `Bearer ${token}`;
+      // Also forward publishable key if available (helps billing resolve project)
+      const pubKey = (client as unknown as { publishableKey?: string })?.publishableKey;
+      if (pubKey && pubKey !== 'pk_test_missing') headers['X-Publishable-Key'] = pubKey;
 
-      const [subRes, invRes] = await Promise.allSettled([
-        fetch(`${billingUrl}/v1/subscription`, {
-          headers,
-          credentials: 'include',
-        }),
-        fetch(`${billingUrl}/v1/invoices`, { headers, credentials: 'include' }),
-      ]);
+      // Derive projectId for plans: prefer user.projectId, then try subscription's projectId, fallback none
+      const projectId = (user as unknown as { projectId?: string | null })?.projectId ?? null;
 
-      if (subRes.status === 'fulfilled' && subRes.value.ok) {
-        const sub = await subRes.value.json();
-        if (sub.ok) setSubscription(sub.subscription ?? null);
+      // Fetch subscription + invoices (new /v1/billing/* with fallback to legacy /v1/*)
+      async function fetchJson(url: string) {
+        const res = await fetch(url, { headers, credentials: 'include' });
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
       }
-      if (invRes.status === 'fulfilled' && invRes.value.ok) {
-        const inv = await invRes.value.json();
-        if (inv.ok) setInvoices(inv.invoices ?? []);
+
+      // Subscription
+      let subData: unknown = null;
+      for (const path of [
+        `${billingUrl}/v1/billing/subscription${projectId ? `?projectId=${projectId}` : ''}`,
+        `${billingUrl}/v1/subscription`,
+      ]) {
+        try {
+          const j = await fetchJson(path) as Record<string, unknown>;
+          if (j && (j as { ok?: boolean }).ok !== false) {
+            subData = j;
+            break;
+          }
+        } catch {
+          // try next path
+        }
       }
+      if (subData) {
+        const sd = subData as {
+          ok?: boolean;
+          subscription?: Record<string, unknown> | null;
+          subscriptions?: Record<string, unknown>[];
+        };
+        let sub: Record<string, unknown> | null = null;
+        if (sd.subscription !== undefined) sub = sd.subscription as Record<string, unknown> | null;
+        else if (Array.isArray(sd.subscriptions) && sd.subscriptions.length > 0) sub = sd.subscriptions[0] as Record<string, unknown>;
+
+        if (sub) {
+          setSubscription({
+            id: String(sub.id ?? ''),
+            status: String(sub.status ?? 'active'),
+            planId: (sub.planId as string | null) ?? (sub.plan_id as string | null) ?? null,
+            planName: (sub.planName as string | null) ?? (sub.plan_name as string | null) ?? (sub.name as string | null) ?? null,
+            currentPeriodEnd: (sub.currentPeriodEnd as string | null) ?? (sub.current_period_end as string | null) ?? (sub.currentPeriod_end as string | null) ?? null,
+            cancelAtPeriodEnd: Boolean(sub.cancelAtPeriodEnd ?? sub.cancel_at_period_end ?? false),
+          });
+        } else {
+          setSubscription(null);
+        }
+      } else {
+        setSubscription(null);
+      }
+
+      // Invoices
+      for (const path of [`${billingUrl}/v1/billing/invoices`, `${billingUrl}/v1/invoices`]) {
+        try {
+          const invJ = (await fetchJson(path)) as { ok?: boolean; invoices?: unknown[] };
+          if (invJ?.ok !== false && Array.isArray(invJ.invoices)) {
+            setInvoices(
+              (invJ.invoices as Record<string, unknown>[]).map((inv) => ({
+                id: String(inv.id),
+                amount: Number(inv.amount ?? 0),
+                currency: String(inv.currency ?? 'USD'),
+                status: String(inv.status ?? 'pending'),
+                billedAt: (inv.billedAt as string | null) ?? (inv.billed_at as string | null) ?? null,
+              }))
+            );
+            break;
+          }
+        } catch {
+          // try next
+        }
+      }
+
+      // Plans (needs projectId — if missing, try without and degrade gracefully)
+      const planPaths: string[] = [];
+      if (projectId) planPaths.push(`${billingUrl}/v1/billing/plans?projectId=${projectId}`);
+      // Also try without projectId as last resort (will 400 but we catch)
+      planPaths.push(`${billingUrl}/v1/billing/plans?projectId=${projectId ?? ''}`);
+      planPaths.push(`${billingUrl}/v1/plans`);
+
+      let gotPlans = false;
+      for (const p of planPaths) {
+        try {
+          const pj = (await fetchJson(p)) as { ok?: boolean; plans?: Plan[] };
+          if (pj?.ok !== false && Array.isArray(pj.plans)) {
+            setPlans(pj.plans);
+            gotPlans = true;
+            break;
+          }
+        } catch {
+          // continue
+        }
+      }
+      if (!gotPlans) setPlans([]);
     } catch {
-      // Billing unavailable — show empty state
+      // Billing unavailable — show empty state, keep plans empty
+      setPlans([]);
     } finally {
       setBillingLoading(false);
+      setPlansLoading(false);
     }
-  }, [client]);
+  }, [client, user]);
 
   useEffect(() => {
     if (tab === 'security') void loadSessions();
@@ -237,9 +358,7 @@ export function UserProfile({
       setConfirmPassword('');
       setTimeout(() => setPwSaved(false), 3000);
     } catch (err) {
-      setPwError(
-        err instanceof Error ? err.message : 'Failed to change password'
-      );
+      setPwError(err instanceof Error ? err.message : 'Failed to change password');
     } finally {
       setPwBusy(false);
     }
@@ -273,11 +392,42 @@ export function UserProfile({
       await client.auth.signOut().catch(() => undefined);
       onDeleted?.();
     } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : 'Failed to delete account'
-      );
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete account');
     } finally {
       setDeleteBusy(false);
+    }
+  }
+
+  async function handleCheckout(planId: string) {
+    setCheckoutId(planId);
+    try {
+      const rawApiUrl =
+        (client as unknown as { apiUrl: string }).apiUrl ?? 'https://auth.slyxup.online';
+      const billingUrl = rawApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+      const token = (client as unknown as { _token?: string; getToken?: () => string | undefined })?._token
+        ?? (client as unknown as { getToken?: () => string | undefined })?.getToken?.();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const pubKey = (client as unknown as { publishableKey?: string })?.publishableKey;
+      if (pubKey && pubKey !== 'pk_test_missing') headers['X-Publishable-Key'] = pubKey;
+
+      const res = await fetch(`${billingUrl}/v1/billing/checkout`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ planId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (res.ok && typeof data.checkoutUrl === 'string' && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl as string;
+        return;
+      }
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : `Checkout failed (${res.status})`);
+    } catch (err) {
+      // Fallback: if billing checkout isn't configured, just log. Parent can handle via window redirect.
+      console.error('[SlyxUp] checkout failed', err);
+    } finally {
+      setCheckoutId(null);
     }
   }
 
@@ -285,21 +435,26 @@ export function UserProfile({
   if (!user) return null;
 
   const emailVerified = user.emailVerified;
+  const name = displayName(user as { firstName: string | null; lastName: string | null; email: string });
 
-  const body = (
-    <div
-      // biome-ignore lint/a11y/useSemanticElements: rendered inside a popover, not a top-level dialog
-      role="dialog"
-      aria-modal={modal || undefined}
-      aria-label="Account settings"
-    >
+  // Resolve current plan name via plans lookup if subscription has planId but no planName
+  const currentPlan = subscription
+    ? plans.find((p) => p.id === subscription.planId) ?? null
+    : null;
+  const resolvedPlanName = subscription?.planName ?? currentPlan?.name ?? null;
+
+  const bodyInner = (
+    <>
       <div className="slx-profile-head">
         <h2 className="slx-profile-title">Account settings</h2>
         {modal && (
           <button
             type="button"
             className="slx-profile-close"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose?.();
+            }}
             aria-label="Close account settings"
           >
             ✕
@@ -342,27 +497,20 @@ export function UserProfile({
               <section className="slx-profile-sec">
                 <div className="slx-avatar-row">
                   <div className="slx-avatar-lg" aria-hidden="true">
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="" />
-                    ) : (
-                      initials(user)
-                    )}
+                    {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials(user as { firstName: string | null; lastName: string | null; email: string })}
                   </div>
-                  <div>
-                    <p className="slx-row-value" style={{ margin: 0 }}>
-                      {user.firstName
-                        ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
-                        : user.email}
+                  <div style={{ minWidth: 0 }}>
+                    <p className="slx-row-value" style={{ margin: 0, wordBreak: 'break-word' }}>
+                      {name}
                     </p>
-                    <p className="slx-row-label">{user.email}</p>
+                    <p className="slx-row-label" style={{ wordBreak: 'break-all' }}>
+                      {user.email}
+                    </p>
                   </div>
                 </div>
 
                 {saved && (
-                  <p
-                    className="slx-error-text"
-                    style={{ color: 'var(--slx-success)' }}
-                  >
+                  <p className="slx-error-text" style={{ color: 'var(--slx-success)' }}>
                     Profile saved.
                   </p>
                 )}
@@ -376,6 +524,7 @@ export function UserProfile({
                       id="slx-up-first"
                       className="slx-input"
                       type="text"
+                      autoComplete="given-name"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                     />
@@ -388,6 +537,7 @@ export function UserProfile({
                       id="slx-up-last"
                       className="slx-input"
                       type="text"
+                      autoComplete="family-name"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                     />
@@ -404,9 +554,7 @@ export function UserProfile({
                       value={avatarUrl}
                       onChange={(e) => setAvatarUrl(e.target.value)}
                     />
-                    <p className="slx-hint">
-                      Paste a public image URL for your avatar.
-                    </p>
+                    <p className="slx-hint">Paste a public image URL for your avatar.</p>
                   </div>
                   <button className="slx-btn" type="submit" disabled={busy}>
                     {busy ? 'Saving…' : 'Save changes'}
@@ -416,9 +564,11 @@ export function UserProfile({
 
               <section className="slx-profile-sec">
                 <h3 className="slx-sec-title">Email</h3>
-                <div className="slx-row">
-                  <div>
-                    <p className="slx-row-value">{user.email}</p>
+                <div className="slx-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p className="slx-row-value" style={{ wordBreak: 'break-all' }}>
+                      {user.email}
+                    </p>
                     <p className="slx-row-label">Primary email</p>
                   </div>
                   {emailVerified ? (
@@ -429,11 +579,10 @@ export function UserProfile({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 8,
+                        flexWrap: 'wrap',
                       }}
                     >
-                      <span className="slx-badge slx-badge-warn">
-                        Unverified
-                      </span>
+                      <span className="slx-badge slx-badge-warn">Unverified</span>
                       <button
                         type="button"
                         className="slx-link"
@@ -455,10 +604,7 @@ export function UserProfile({
               <section className="slx-profile-sec">
                 <h3 className="slx-sec-title">Change password</h3>
                 {pwSaved && (
-                  <p
-                    className="slx-error-text"
-                    style={{ color: 'var(--slx-success)' }}
-                  >
+                  <p className="slx-error-text" style={{ color: 'var(--slx-success)' }}>
                     Password updated.
                   </p>
                 )}
@@ -527,18 +673,10 @@ export function UserProfile({
                         <div className="slx-session-meta">
                           <p className="slx-session-device">
                             {deviceLabel(s.userAgent)}
-                            {s.isCurrent && (
-                              <span className="slx-badge slx-badge-accent">
-                                This device
-                              </span>
-                            )}
+                            {s.isCurrent && <span className="slx-badge slx-badge-accent">This device</span>}
                           </p>
                           <p className="slx-session-sub">
-                            {[
-                              s.ipAddress,
-                              `created ${formatDate(s.createdAt)}`,
-                              `expires ${formatDate(s.expiresAt)}`,
-                            ]
+                            {[s.ipAddress, `created ${formatDate(s.createdAt)}`, `expires ${formatDate(s.expiresAt)}`]
                               .filter(Boolean)
                               .join(' · ')}
                           </p>
@@ -563,9 +701,7 @@ export function UserProfile({
                         onClick={onRevokeOthers}
                         disabled={othersRevoking}
                       >
-                        {othersRevoking
-                          ? 'Signing out…'
-                          : 'Sign out other devices'}
+                        {othersRevoking ? 'Signing out…' : 'Sign out other devices'}
                       </button>
                     )}
                   </>
@@ -575,9 +711,8 @@ export function UserProfile({
               <section className="slx-danger-zone">
                 <p className="slx-danger-title">Danger zone</p>
                 <p className="slx-danger-desc">
-                  Permanently deletes your account and all associated data.
-                  Active sessions are revoked immediately. This cannot be
-                  undone.
+                  Permanently deletes your account and all associated data. Active sessions are revoked immediately. This
+                  cannot be undone.
                 </p>
                 {deleteError && <p className="slx-error-text">{deleteError}</p>}
                 <div className="slx-field">
@@ -616,16 +751,83 @@ export function UserProfile({
                 <p className="slx-hint">Loading billing information…</p>
               </section>
             ) : !subscription ? (
-              <section className="slx-profile-sec">
-                <h3 className="slx-sec-title">Subscription</h3>
-                <div className="slx-billing-card">
-                  <p className="slx-billing-plan">No active subscription</p>
-                  <p className="slx-billing-detail">
-                    You don&apos;t have a subscription yet. Choose a plan to get
-                    started.
-                  </p>
-                </div>
-              </section>
+              <>
+                <section className="slx-profile-sec">
+                  <h3 className="slx-sec-title">Subscription</h3>
+                  <div className="slx-billing-card">
+                    <p className="slx-billing-plan">No active subscription</p>
+                    <p className="slx-billing-detail">You don&apos;t have a subscription yet. Choose a plan to get started.</p>
+                  </div>
+                </section>
+
+                <section className="slx-profile-sec">
+                  <h3 className="slx-sec-title">Available plans</h3>
+                  {plansLoading ? (
+                    <p className="slx-hint">Loading plans…</p>
+                  ) : plans.length === 0 ? (
+                    <div className="slx-billing-card" style={{ textAlign: 'center' }}>
+                      <p className="slx-billing-detail">No plans configured for this project yet.</p>
+                      <p className="slx-hint" style={{ marginTop: 6 }}>
+                        Ask your admin to create a plan in billing.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="slx-billing-plans">
+                      {plans.map((plan) => (
+                        <div key={plan.id} className={`slx-plan-card${plan.isPopular ? ' popular' : ''}`}>
+                          {plan.isPopular && <span className="slx-plan-badge">POPULAR</span>}
+                          <p className="slx-plan-name">{plan.name}</p>
+                          <p style={{ margin: '2px 0 0' }}>
+                            <span className="slx-plan-price">{formatCurrency(plan.amount, plan.currency)}</span>
+                            <span className="slx-plan-interval">/{plan.interval}</span>
+                          </p>
+                          {plan.trialDays ? (
+                            <p className="slx-billing-detail" style={{ color: 'var(--slx-accent)', marginTop: 4 }}>
+                              {plan.trialDays} day free trial
+                            </p>
+                          ) : (
+                            <p className="slx-billing-detail" style={{ visibility: 'hidden', marginTop: 4 }}>
+                              &nbsp;
+                            </p>
+                          )}
+                          <ul className="slx-plan-features">
+                            {(plan.features ?? []).map((f) => (
+                              <li key={f}>{f}</li>
+                            ))}
+                          </ul>
+                          <button
+                            type="button"
+                            className="slx-btn slx-plan-cta"
+                            onClick={() => handleCheckout(plan.id)}
+                            disabled={checkoutId === plan.id}
+                          >
+                            {checkoutId === plan.id ? 'Redirecting…' : 'Choose plan'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {invoices.length > 0 && (
+                  <section className="slx-profile-sec">
+                    <h3 className="slx-sec-title">Invoices</h3>
+                    {invoices.map((inv) => (
+                      <div key={inv.id} className="slx-invoice-row">
+                        <span className="slx-invoice-date">{inv.billedAt ? formatDate(inv.billedAt) : '—'}</span>
+                        <span className="slx-invoice-amount">{formatCurrency(inv.amount, inv.currency)}</span>
+                        <span
+                          className={`slx-badge ${
+                            inv.status === 'paid' ? 'slx-badge-ok' : inv.status === 'overdue' ? 'slx-badge-warn' : 'slx-badge-accent'
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </div>
+                    ))}
+                  </section>
+                )}
+              </>
             ) : (
               <>
                 <section className="slx-profile-sec">
@@ -636,17 +838,15 @@ export function UserProfile({
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-start',
+                        gap: 12,
+                        flexWrap: 'wrap',
                       }}
                     >
-                      <div>
-                        <p className="slx-billing-plan">
-                          {subscription.planName ?? 'Subscription'}
-                        </p>
+                      <div style={{ minWidth: 0 }}>
+                        <p className="slx-billing-plan">{resolvedPlanName ?? 'Subscription'}</p>
                         <p className="slx-billing-detail">
                           Status:{' '}
-                          <span
-                            className={`slx-billing-status slx-billing-status-${subscription.status}`}
-                          >
+                          <span className={`slx-billing-status slx-billing-status-${subscription.status}`}>
                             {subscription.status}
                           </span>
                         </p>
@@ -657,29 +857,112 @@ export function UserProfile({
                               : `Renews ${formatDate(subscription.currentPeriodEnd)}`}
                           </p>
                         )}
+                        {subscription.cancelAtPeriodEnd && (
+                          <p className="slx-billing-detail" style={{ color: 'var(--slx-danger)', fontWeight: 600 }}>
+                            Scheduled to cancel at period end
+                          </p>
+                        )}
                       </div>
+                      {currentPlan && (
+                        <span className="slx-badge slx-badge-accent" style={{ flexShrink: 0 }}>
+                          {formatCurrency(currentPlan.amount, currentPlan.currency)}/{currentPlan.interval}
+                        </span>
+                      )}
+                    </div>
+                    {currentPlan?.features && currentPlan.features.length > 0 && (
+                      <ul className="slx-plan-features" style={{ margin: '12px 0 0' }}>
+                        {currentPlan.features.map((f) => (
+                          <li key={f}>{f}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="slx-billing-actions">
+                      <button type="button" className="slx-btn-secondary" onClick={() => void loadBilling()}>
+                        Refresh
+                      </button>
                     </div>
                   </div>
                 </section>
+
+                {/* Upgrade / Downgrade plans */}
+                {plansLoading ? (
+                  <section className="slx-profile-sec">
+                    <p className="slx-hint">Loading available plans…</p>
+                  </section>
+                ) : plans.length > 0 ? (
+                  <section className="slx-profile-sec">
+                    <h3 className="slx-sec-title">Available plans</h3>
+                    <p className="slx-hint" style={{ marginBottom: 8 }}>
+                      Switch plans anytime. Changes apply at the next billing cycle.
+                    </p>
+                    <div className="slx-billing-plans">
+                      {plans.map((plan) => {
+                        const isCurrent = subscription.planId
+                          ? subscription.planId === plan.id
+                          : resolvedPlanName === plan.name;
+                        const currentAmount = currentPlan?.amount ?? 0;
+                        const isUpgrade = plan.amount > currentAmount;
+                        const isDowngrade = plan.amount < currentAmount && !isCurrent;
+                        return (
+                          <div
+                            key={plan.id}
+                            className={`slx-plan-card${plan.isPopular ? ' popular' : ''}`}
+                            style={isCurrent ? { opacity: 0.92 } : undefined}
+                          >
+                            {plan.isPopular && !isCurrent && <span className="slx-plan-badge">POPULAR</span>}
+                            {isCurrent && <span className="slx-plan-badge" style={{ background: 'var(--slx-success)' }}>CURRENT</span>}
+                            <p className="slx-plan-name">{plan.name}</p>
+                            <p style={{ margin: '2px 0 0' }}>
+                              <span className="slx-plan-price">{formatCurrency(plan.amount, plan.currency)}</span>
+                              <span className="slx-plan-interval">/{plan.interval}</span>
+                            </p>
+                            {plan.trialDays ? (
+                              <p className="slx-billing-detail" style={{ color: 'var(--slx-accent)', marginTop: 4 }}>
+                                {plan.trialDays} day trial
+                              </p>
+                            ) : (
+                              <p className="slx-billing-detail" style={{ visibility: 'hidden', marginTop: 4 }}>
+                                &nbsp;
+                              </p>
+                            )}
+                            <ul className="slx-plan-features">
+                              {(plan.features ?? []).map((f) => (
+                                <li key={f}>{f}</li>
+                              ))}
+                            </ul>
+                            <button
+                              type="button"
+                              className={isCurrent ? 'slx-btn-secondary slx-plan-cta' : 'slx-btn slx-plan-cta'}
+                              disabled={isCurrent || checkoutId === plan.id}
+                              onClick={() => handleCheckout(plan.id)}
+                            >
+                              {isCurrent
+                                ? 'Current plan'
+                                : checkoutId === plan.id
+                                  ? 'Redirecting…'
+                                  : isUpgrade
+                                    ? 'Upgrade'
+                                    : isDowngrade
+                                      ? 'Downgrade'
+                                      : 'Switch plan'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
 
                 {invoices.length > 0 && (
                   <section className="slx-profile-sec">
                     <h3 className="slx-sec-title">Invoices</h3>
                     {invoices.map((inv) => (
                       <div key={inv.id} className="slx-invoice-row">
-                        <span className="slx-invoice-date">
-                          {inv.billedAt ? formatDate(inv.billedAt) : '—'}
-                        </span>
-                        <span className="slx-invoice-amount">
-                          {formatCurrency(inv.amount, inv.currency)}
-                        </span>
+                        <span className="slx-invoice-date">{inv.billedAt ? formatDate(inv.billedAt) : '—'}</span>
+                        <span className="slx-invoice-amount">{formatCurrency(inv.amount, inv.currency)}</span>
                         <span
                           className={`slx-badge ${
-                            inv.status === 'paid'
-                              ? 'slx-badge-ok'
-                              : inv.status === 'overdue'
-                                ? 'slx-badge-warn'
-                                : 'slx-badge-accent'
+                            inv.status === 'paid' ? 'slx-badge-ok' : inv.status === 'overdue' ? 'slx-badge-warn' : 'slx-badge-accent'
                           }`}
                         >
                           {inv.status}
@@ -692,19 +975,40 @@ export function UserProfile({
             ))}
         </div>
       </div>
-    </div>
+    </>
   );
 
-  if (!modal) return body;
+  if (!modal) {
+    return (
+      <div className="slx-profile-modal" style={{ maxHeight: 'none' }}>
+        {bodyInner}
+      </div>
+    );
+  }
 
+  // Modal overlay — click on backdrop closes, click inside modal does not.
+  // Use onMouseDown + onClick for desktop + mobile reliability; close button also works via stopPropagation.
   return (
     <div
       className="slx-overlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+      role="presentation"
     >
-      {body}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Account settings"
+        className="slx-profile-modal"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {bodyInner}
+      </div>
     </div>
   );
 }

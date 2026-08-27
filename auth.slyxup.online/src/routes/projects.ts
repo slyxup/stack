@@ -17,12 +17,13 @@ const projects = new Hono<{
 }>();
 
 // SECURITY: developer auth = verified user session (no static tokens).
-// Bearer token is a DB-backed 7-day session from /v1/auth/sign-in.
+// Accepts both Authorization Bearer and HttpOnly cookie (via getSessionToken)
+// so dashboard (SlyxUpProvider with credentials: include) works after refresh.
 projects.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer '))
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, auth.slice(7).trim());
+  const { getSessionToken } = await import('../lib/cookies');
+  const token = getSessionToken(c);
+  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const user = await userFromSession(c.env, token);
   if (!user)
     return c.json(
       {

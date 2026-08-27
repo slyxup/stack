@@ -202,14 +202,31 @@ export async function getSession(env: { DB: D1Database }, token: string) {
     .where(eq(sessions.token, token))
     .get();
   if (!session) return null;
-  if (session.expiresAt < new Date()) return null;
+  if (session.expiresAt < new Date()) {
+    // Cleanup expired session
+    await db.delete(sessions).where(eq(sessions.token, token)).catch(() => undefined);
+    return null;
+  }
   const user = await db
     .select()
     .from(users)
     .where(eq(users.id, session.userId))
     .get();
-  if (!user) return null;
+  if (!user) {
+    // User deleted — cleanup orphaned session
+    await db.delete(sessions).where(eq(sessions.token, token)).catch(() => undefined);
+    return null;
+  }
   if (!user.emailVerified) return null;
+  if (user.blocked) {
+    // Blocked user — revoke session immediately
+    await db.delete(sessions).where(eq(sessions.token, token)).catch(() => undefined);
+    return null;
+  }
+  if (user.deletedAt) {
+    await db.delete(sessions).where(eq(sessions.token, token)).catch(() => undefined);
+    return null;
+  }
   return { session, user };
 }
 

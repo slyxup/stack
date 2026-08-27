@@ -9,12 +9,12 @@ const keys = new Hono<{
   Variables: { developerId?: string };
 }>();
 
-// SECURITY: verified-user session Bearer only (see routes/developers.ts)
+// SECURITY: verified-user session (Bearer or HttpOnly cookie) — dashboard uses cookies
 keys.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer '))
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, auth.slice(7).trim());
+  const { getSessionToken } = await import('../lib/cookies');
+  const token = getSessionToken(c);
+  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const user = await userFromSession(c.env, token);
   if (!user)
     return c.json(
       {

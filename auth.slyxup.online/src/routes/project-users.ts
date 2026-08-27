@@ -17,10 +17,10 @@ const app = new Hono<{
 }>();
 
 app.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer '))
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, auth.slice(7).trim());
+  const { getSessionToken } = await import('../lib/cookies');
+  const token = getSessionToken(c);
+  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const user = await userFromSession(c.env, token);
   if (!user)
     return c.json(
       { ok: false, error: 'Sign in with a verified SlyxUp account.' },
