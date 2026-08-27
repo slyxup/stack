@@ -13,7 +13,11 @@
   "dependencies": {
     "next": "15.0.0",
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^18.3.0",
+    "@slyxup/core": "workspace:*",
+    "@slyxup/react": "workspace:*",
+    "@slyxup/ui": "workspace:*",
+    "@slyxup/nextjs": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240605.0",

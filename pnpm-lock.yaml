@@ -265,6 +265,18 @@ importers:
 
   stack.slyxup.online:
     dependencies:
+      '@slyxup/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@slyxup/nextjs':
+        specifier: workspace:*
+        version: link:../packages/nextjs
+      '@slyxup/react':
+        specifier: workspace:*
+        version: link:../packages/react
+      '@slyxup/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
       next:
         specifier: 15.0.0
         version: 15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
