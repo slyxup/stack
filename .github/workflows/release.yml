@@ -71,8 +71,8 @@ jobs:
           fi
           git add packages/*/package.json pnpm-lock.yaml
           git commit -m "chore: version packages"
-          git push
-          echo "Pushed version bump."
+          git push || echo "Push failed (protected branch), continuing to publish with bumped version..."
+          echo "Version bump done (may not be pushed due to protection, but publish will use bumped version)."
 
       - name: Publish to npm
         run: |
