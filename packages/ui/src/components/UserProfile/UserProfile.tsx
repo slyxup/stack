@@ -150,6 +150,7 @@ export function UserProfile({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
+  const [checkoutDone, setCheckoutDone] = useState(false);
 
   // ── Danger zone state ──
   const [confirmText, setConfirmText] = useState('');
@@ -493,7 +494,13 @@ export function UserProfile({
         unknown
       >;
       if (res.ok && typeof data.checkoutUrl === 'string' && data.checkoutUrl) {
-        window.location.href = data.checkoutUrl as string;
+        // Skip redirect on localhost (no SSL) — Paddle webhook handles subscription
+        const isLocalhost = /^https?:\/\/localhost/.test(billingUrl);
+        if (!isLocalhost) {
+          window.location.href = data.checkoutUrl as string;
+        } else {
+          setCheckoutDone(true);
+        }
         return;
       }
       if (!res.ok)
@@ -875,6 +882,15 @@ export function UserProfile({
               <>
                 <section className="slx-profile-sec">
                   <h3 className="slx-sec-title">Subscription</h3>
+                  {checkoutDone && (
+                    <p
+                      className="slx-error-text"
+                      style={{ color: 'var(--slx-success)', marginBottom: 8 }}
+                    >
+                      Checkout completed. Your subscription will appear shortly
+                      once the payment is confirmed.
+                    </p>
+                  )}
                   <div className="slx-billing-card">
                     <p className="slx-billing-plan">No active subscription</p>
                     <p className="slx-billing-detail">
