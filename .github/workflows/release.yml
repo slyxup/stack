@@ -53,14 +53,19 @@ jobs:
 
             # Get the current latest version from npm (may not exist yet)
             npm_latest=$(npm view "$pkg_name" version 2>/dev/null || echo "")
+            local_ver=$(node -p "require('./$pkg/package.json').version")
             if [ -n "$npm_latest" ]; then
-              echo "  npm latest: $npm_latest"
+              echo "  npm latest: $npm_latest, local: $local_ver"
+              # Skip if local already matches npm (version sync commit, no publish needed)
+              if [ "$local_ver" = "$npm_latest" ]; then
+                echo "  local matches npm, skipping."
+                continue
+              fi
               # Bump patch from npm latest (not from local package.json)
               IFS='.' read -r major minor patch <<< "$npm_latest"
               new_version="${major}.${minor}.$((patch + 1))"
             else
               # Package not on npm yet — use local version as-is
-              local_ver=$(node -p "require('./$pkg/package.json').version")
               echo "  not on npm yet, using local version: $local_ver"
               new_version="$local_ver"
             fi
