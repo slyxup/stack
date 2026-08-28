@@ -55,10 +55,31 @@ export async function createPaddleCustomer(
   email: string,
   name?: string
 ): Promise<PaddleCustomer> {
-  return paddleFetch<PaddleCustomer>(config, 'POST', '/customers', {
-    email,
-    name,
-  });
+  try {
+    return await paddleFetch<PaddleCustomer>(config, 'POST', '/customers', {
+      email,
+      name,
+    });
+  } catch (err) {
+    // If customer already exists in Paddle (e.g. previous sandbox run with same email but different local DB),
+    // fetch the existing Paddle customer by email and reuse it
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('customer_already_exists') || msg.includes('409')) {
+      const list = await paddleFetch<{ data: PaddleCustomer[] }>(
+        config,
+        'GET',
+        `/customers?email=${encodeURIComponent(email)}`
+      );
+      const found = (list as unknown as { data: PaddleCustomer[] })?.data?.[0] ?? (Array.isArray(list) ? (list as unknown as PaddleCustomer[])[0] : null);
+      if (found) return found;
+      // Fallback: try to get the conflicting customer ID from the error detail and fetch it
+      const match = msg.match(/customer of id (ctm_[a-z0-9]+)/);
+      if (match) {
+        return paddleFetch<PaddleCustomer>(config, 'GET', `/customers/${match[1]}`);
+      }
+    }
+    throw err;
+  }
 }
 
 // ── Checkout ──

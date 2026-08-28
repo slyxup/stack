@@ -4,7 +4,7 @@
   "description": "SlyxUp Billing Worker — Hono + D1 + Paddle (https://billing.slyxup.online) — CF Workers",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 8788",
     "deploy": "wrangler deploy",
     "typegen": "wrangler types",
     "typecheck": "tsc --noEmit",

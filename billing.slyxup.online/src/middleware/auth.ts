@@ -38,29 +38,55 @@ interface SessionRow {
 }
 
 /**
- * Validates the auth.slyxup.online session directly against the slyxup_auth
- * database (AUTH_DB binding) — no cross-service HTTP hop. Sessions are the
- * single source of truth in auth; billing only reads them.
+ * Validates the auth session by calling auth.slyxup.online /v1/session
+ * (works for both local and prod without duplicating auth tables into billing D1).
+ * Falls back to direct AUTH_DB read for performance when available.
  */
 export const requireUser = createMiddleware<Env>(async (c, next) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const row = await c.env.AUTH_DB.prepare(
-    `SELECT s.user_id, u.email, u.blocked
-     FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token = ? AND s.expires_at > ? LIMIT 1`
-  )
-    .bind(token, nowSec)
-    .first<SessionRow>();
+  // Try direct AUTH_DB read first (fast path for prod where tables exist)
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const row = await c.env.AUTH_DB.prepare(
+      `SELECT s.user_id, u.email, u.blocked
+       FROM sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.token = ? AND s.expires_at > ? LIMIT 1`
+    )
+      .bind(token, nowSec)
+      .first<SessionRow>();
+    if (row) {
+      if (row.blocked) return c.json({ ok: false, error: 'Blocked' }, 403);
+      c.set('userId', row.user_id);
+      c.set('userEmail', row.email);
+      await next();
+      return;
+    }
+  } catch {
+    // AUTH_DB may not have auth tables in local dev (different Miniflare instance) — fall through to HTTP
+  }
 
-  if (!row) return c.json({ ok: false, error: 'Invalid session' }, 401);
-  if (row.blocked) return c.json({ ok: false, error: 'Blocked' }, 403);
-
-  c.set('userId', row.user_id);
-  c.set('userEmail', row.email);
-  await next();
+  // Fallback: call auth service via HTTP (no duplication, works for local dev with different D1 instances)
+  try {
+    const authUrl = c.env.AUTH_URL ?? 'https://auth.slyxup.online';
+    const res = await fetch(`${authUrl}/v1/session`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      user?: { id: string; email: string };
+    };
+    if (!res.ok || !data.ok || !data.user) {
+      return c.json({ ok: false, error: 'Invalid session' }, 401);
+    }
+    c.set('userId', data.user.id);
+    c.set('userEmail', data.user.email);
+    await next();
+    return;
+  } catch {
+    return c.json({ ok: false, error: 'Invalid session' }, 401);
+  }
 });
 
 /** Bearer BILLING_ADMIN_SECRET guard for plan management (CLI / curl / dashboard-less ops)
@@ -73,20 +99,37 @@ export const requireAdmin = createMiddleware<Env>(async (c, next) => {
     await next();
     return;
   }
-  // Fallback: allow project owner via session (dashboard UX)
+  // Fallback: allow project owner via session (dashboard UX) — try AUTH_DB first, then HTTP
   const token = getSessionToken(c);
   if (token) {
-    const nowSec = Math.floor(Date.now() / 1000);
-    const row = await c.env.AUTH_DB.prepare(
-      'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1'
-    )
-      .bind(token, nowSec)
-      .first<{ user_id: string }>();
-    if (row) {
-      c.set('userId', row.user_id);
-      await next();
-      return;
-    }
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const row = await c.env.AUTH_DB.prepare(
+        'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1'
+      )
+        .bind(token, nowSec)
+        .first<{ user_id: string }>();
+      if (row) {
+        c.set('userId', row.user_id);
+        await next();
+        return;
+      }
+    } catch {}
+    try {
+      const authUrl = c.env.AUTH_URL ?? 'https://auth.slyxup.online';
+      const res = await fetch(`${authUrl}/v1/session`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        user?: { id: string };
+      };
+      if (res.ok && data.ok && data.user) {
+        c.set('userId', data.user.id);
+        await next();
+        return;
+      }
+    } catch {}
   }
   return c.json({ ok: false, error: 'Unauthorized' }, 401);
 });
