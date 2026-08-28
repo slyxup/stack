@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/react",
-  "version": "0.2.7",
+  "version": "1.0.0",
   "description": "@slyxup/react — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -34,7 +34,7 @@
     "react": "^18 || ^19"
   },
   "dependencies": {
-    "@slyxup/core": "workspace:*",
-    "@slyxup/billing": "workspace:*"
+    "@slyxup/core": "1.0.0",
+    "@slyxup/billing": "1.0.0"
   }
 }

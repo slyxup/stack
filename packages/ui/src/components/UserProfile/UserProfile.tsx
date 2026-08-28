@@ -261,14 +261,13 @@ export function UserProfile({
       })();
       const token =
         (
+          client as unknown as { getToken?: () => string | undefined }
+        ).getToken?.() ??
+        (
           client as unknown as {
             _token?: string;
-            getToken?: () => string | undefined;
           }
-        )?._token ??
-        (
-          client as unknown as { getToken?: () => string | undefined }
-        )?.getToken?.();
+        )?._token;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };

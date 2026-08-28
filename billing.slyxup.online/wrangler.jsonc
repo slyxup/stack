@@ -8,7 +8,7 @@
     "API_URL": "https://billing.slyxup.online",
     "AUTH_URL": "https://auth.slyxup.online",
     "APP_URL": "https://stack.slyxup.online",
-    "CORS_ORIGINS": "https://stack.slyxup.online,https://auth.slyxup.online,https://example-nextjs.pages.dev,https://example-react-3j8.pages.dev,http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:8787,http://localhost:8788",
+    "CORS_ORIGINS": "*",
     "PADDLE_ENVIRONMENT": "sandbox"
   },
   "d1_databases": [

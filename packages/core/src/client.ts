@@ -235,18 +235,15 @@ export class SlyxupClient {
           return res as TwoFactorRequiredResponse;
         }
         if (!('user' in res))
-          throw new SlyxupError(
-            (res as { error?: string }).error ?? 'Sign in failed',
-            401,
-            'api_error'
+          throw new UnauthorizedError(
+            (res as { error?: string }).error ?? 'Sign in failed'
           );
         if (res.sessionToken) persistToken(res.sessionToken);
         return res;
       },
       completeSignIn: async (input) => {
         const res = await post<AuthResponse>('/v1/auth/sign-in/2fa', input);
-        if (!('user' in res))
-          throw new SlyxupError(res.error, 401, 'api_error');
+        if (!('user' in res)) throw new UnauthorizedError(res.error);
         if (res.sessionToken) persistToken(res.sessionToken);
         return res;
       },

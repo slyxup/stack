@@ -43,6 +43,9 @@ app.use('*', async (c, next) => {
       isTestRequest)
   ) {
     allow = true;
+  } else if (origin?.startsWith('https://') && allowed.includes('*')) {
+    // Wildcard CORS — allow any HTTPS origin
+    allow = true;
   } else if (origin?.startsWith('https://')) {
     // Check project custom domains (like auth does) — cache for 60s
     try {

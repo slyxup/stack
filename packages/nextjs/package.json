@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/nextjs",
-  "version": "0.2.2",
+  "version": "1.0.0",
   "description": "@slyxup/nextjs — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -28,7 +28,7 @@
     "next": "^14 || ^15"
   },
   "dependencies": {
-    "@slyxup/core": "workspace:*"
+    "@slyxup/core": "1.0.0"
   },
   "devDependencies": {
     "next": "^15.0.0",
