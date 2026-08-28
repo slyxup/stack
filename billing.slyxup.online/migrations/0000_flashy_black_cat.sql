@@ -65,6 +65,7 @@ CREATE TABLE `webhook_events` (
 	`occurred_at` integer,
 	`payload` text,
 	`processed_at` integer,
+	`status` text DEFAULT 'pending' NOT NULL,
 	`created_at` integer NOT NULL
 );
 --> statement-breakpoint

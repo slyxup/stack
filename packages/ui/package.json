@@ -28,8 +28,8 @@
     "react": "^18 || ^19"
   },
   "dependencies": {
-    "@slyxup/core": "1.0.0",
-    "@slyxup/react": "1.0.0"
+    "@slyxup/core": "workspace:*",
+    "@slyxup/react": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

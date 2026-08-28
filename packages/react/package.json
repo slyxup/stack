@@ -34,7 +34,7 @@
     "react": "^18 || ^19"
   },
   "dependencies": {
-    "@slyxup/core": "1.0.0",
-    "@slyxup/billing": "1.0.0"
+    "@slyxup/core": "workspace:*",
+    "@slyxup/billing": "workspace:*"
   }
 }
