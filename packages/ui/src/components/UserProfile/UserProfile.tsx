@@ -325,19 +325,13 @@ export function UserProfile({
       if (projectId) {
         planPaths.push(`${billingUrl}/v1/billing/plans?projectId=${projectId}`);
       } else if (pubKey && pubKey !== 'pk_test_missing') {
-        // For example apps where user.projectId is null but publishableKey is for the example project,
-        // let the server resolve the project from the publishable key (via X-Publishable-Key header)
-        // We still need to pass a projectId for the current billing API, so try the publishable key's project
-        // For now, just not push the empty projectId path — the billing worker will handle X-Publishable-Key
-        // and return empty list in test, which is better than 400
+        // No projectId but have publishableKey — let billing resolve project via X-Publishable-Key header.
+        // Billing plans route returns [] in test/localhost when projectId is missing, which is fine.
+        planPaths.push(`${billingUrl}/v1/billing/plans`);
       } else {
         // No projectId and no publishableKey — don't make the request, just show empty
         setPlans([]);
         gotPlans = true;
-      }
-      // Legacy fallback (will 404 on current billing worker, but we keep for backward compat)
-      if (!gotPlans && planPaths.length === 0) {
-        planPaths.push(`${billingUrl}/v1/plans`);
       }
       for (const p of planPaths) {
         try {

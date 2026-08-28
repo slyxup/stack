@@ -4,13 +4,48 @@ import { getDb } from '../lib/db';
 import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
 
+// ── Resolve publishable key → projectId via AUTH_DB ──
+async function resolveProjectFromKey(
+  authDb: D1Database,
+  publishableKey: string
+): Promise<string | null> {
+  try {
+    const enc = new TextEncoder();
+    const keyData = enc.encode(publishableKey);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+    const hashedKey = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const row = await authDb
+      .prepare(
+        'SELECT project_id FROM api_keys WHERE hashed_key = ? AND type = ? LIMIT 1'
+      )
+      .bind(hashedKey, 'publishable')
+      .first<{ project_id: string }>();
+    return row?.project_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Public: list active plans for a project (no auth required).
 // Plans are public-facing product info; requiring auth here would break
 // pre-login plan selection in the SDK checkout flow. ──
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
 
 app.get('/', async (c) => {
-  const projectId = c.req.query('projectId');
+  let projectId = c.req.query('projectId');
+
+  // If no projectId, try to resolve from X-Publishable-Key header
+  if (!projectId || projectId.trim() === '') {
+    const pubKey = c.req.header('X-Publishable-Key');
+    if (pubKey) {
+      projectId =
+        (await resolveProjectFromKey(c.env.AUTH_DB, pubKey)) ?? undefined;
+    }
+  }
+
   if (!projectId || projectId.trim() === '') {
     // In test/local (localhost or X-Environment: test), return empty list instead of 400
     // so the UI doesn't show an error when projectId is not yet available (e.g. during loading)
