@@ -10,31 +10,19 @@ import type { Env } from '../middleware/auth';
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
 
 app.get('/', async (c) => {
-  let projectId = c.req.query('projectId');
+  const projectId = c.req.query('projectId');
   if (!projectId || projectId.trim() === '') {
     // In test/local (localhost or X-Environment: test), return empty list instead of 400
     // so the UI doesn't show an error when projectId is not yet available (e.g. during loading)
     const origin = c.req.header('Origin') ?? '';
-    const isTest = c.req.header('X-Environment') === 'test' || origin.includes('localhost') || origin.includes('127.0.0.1');
+    const isTest =
+      c.req.header('X-Environment') === 'test' ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1');
     if (isTest) {
       return c.json({ ok: true, plans: [] });
     }
-    // For prod, check if we have a publishable key to resolve
-    const pk = c.req.header('X-Publishable-Key') ?? c.req.header('x-publishable-key');
-    if (pk) {
-      // Try to be permissive in test - already handled above, so this is for prod without projectId
-      return c.json({ ok: false, error: 'projectId required' }, 400);
-    }
     return c.json({ ok: false, error: 'projectId required' }, 400);
-  }
-          return c.json({ ok: false, error: 'projectId required' }, 400);
-        }
-      } catch {
-        return c.json({ ok: false, error: 'projectId required' }, 400);
-      }
-    } else {
-      return c.json({ ok: false, error: 'projectId required' }, 400);
-    }
   }
 
   const db = getDb(c.env);

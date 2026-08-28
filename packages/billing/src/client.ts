@@ -66,11 +66,17 @@ export class BillingClient {
   readonly publishableKey?: string;
 
   constructor(options: BillingClientOptions = {}) {
-    this.apiUrl = (
+    const raw = (
       options.apiUrl ??
       getEnvApiUrl() ??
       'https://billing.slyxup.online'
     ).replace(/\/$/, '');
+    // Localhost: if apiUrl points to auth port (8787), swap to billing port (8788)
+    if (/^https?:\/\/localhost:\d+$/.test(raw) && raw.includes(':8787')) {
+      this.apiUrl = raw.replace(/:8787$/, ':8788');
+    } else {
+      this.apiUrl = raw;
+    }
     this.publishableKey = options.publishableKey;
   }
 

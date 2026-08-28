@@ -89,8 +89,21 @@ app.post(
       const { createPaddleCustomer } = await import(
         '../services/paddle.service'
       );
-      const customer = await createPaddleCustomer(config, userEmail);
-      paddleCustomerId = customer.id;
+      try {
+        const customer = await createPaddleCustomer(config, userEmail);
+        paddleCustomerId = customer.id;
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'createPaddleCustomer failed',
+            userId,
+            email: userEmail,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        );
+        throw err;
+      }
     }
 
     // B3: Set updatedAt on conflict
@@ -113,13 +126,28 @@ app.post(
     // Only send successUrl if provided — unapproved domains (e.g. localhost) make
     // Paddle reject the transaction; without it Paddle uses the default payment link.
     const { createCheckout } = await import('../services/paddle.service');
-    const checkout = await createCheckout(
-      config,
-      plan.paddlePriceId,
-      paddleCustomerId,
-      successUrl,
-      { userId, projectId: plan.projectId, planId: plan.id }
-    );
+    let checkout: { checkoutUrl: string; transactionId: string };
+    try {
+      checkout = await createCheckout(
+        config,
+        plan.paddlePriceId,
+        paddleCustomerId,
+        successUrl,
+        { userId, projectId: plan.projectId, planId: plan.id }
+      );
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'createCheckout failed',
+          planId: plan.id,
+          paddlePriceId: plan.paddlePriceId,
+          paddleCustomerId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      );
+      throw err;
+    }
 
     // Subscription row is created by the `subscription.created` webhook (source of truth).
     return c.json({ ok: true, checkoutUrl: checkout.checkoutUrl });

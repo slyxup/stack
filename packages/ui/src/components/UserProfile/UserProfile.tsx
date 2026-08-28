@@ -193,10 +193,13 @@ export function UserProfile({
       const rawApiUrl =
         (client as unknown as { apiUrl: string }).apiUrl ??
         'https://auth.slyxup.online';
-      const billingUrl = rawApiUrl.replace(
-        'auth.slyxup.online',
-        'billing.slyxup.online'
-      );
+      const billingUrl = (() => {
+        // Localhost: swap port 8787 → 8788 (auth → billing)
+        if (/^https?:\/\/localhost(:\d+)?$/.test(rawApiUrl)) {
+          return rawApiUrl.replace(/:(\d+)$/, ':8788');
+        }
+        return rawApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+      })();
       const token =
         (
           client as unknown as {
@@ -219,11 +222,8 @@ export function UserProfile({
 
       // Derive projectId for plans: prefer user.projectId, then try to resolve from publishableKey's project (for examples)
       // For the example apps, the publishableKey is for the example project, not the user's projectId
-      let projectId: string | null =
+      const projectId: string | null =
         (user as unknown as { projectId?: string | null })?.projectId ?? null;
-      // If no projectId from user, try to get it from the subscription (if we have one) or from the publishable key's project
-      // For now, if still null, we will try to fetch plans without projectId and let the server handle it via X-Publishable-Key
-      const pubKey = (client as unknown as { publishableKey?: string })?.publishableKey;
 
       // Fetch subscription + invoices (new /v1/billing/* with fallback to legacy /v1/*)
       async function fetchJson(url: string) {
@@ -320,6 +320,7 @@ export function UserProfile({
       }
 
       // Plans (needs projectId — if missing, try with publishableKey header instead of empty projectId)
+      let gotPlans = false;
       const planPaths: string[] = [];
       if (projectId) {
         planPaths.push(`${billingUrl}/v1/billing/plans?projectId=${projectId}`);
@@ -338,8 +339,6 @@ export function UserProfile({
       if (!gotPlans && planPaths.length === 0) {
         planPaths.push(`${billingUrl}/v1/plans`);
       }
-
-      let gotPlans = false;
       for (const p of planPaths) {
         try {
           const pj = (await fetchJson(p)) as { ok?: boolean; plans?: Plan[] };
@@ -464,10 +463,12 @@ export function UserProfile({
       const rawApiUrl =
         (client as unknown as { apiUrl: string }).apiUrl ??
         'https://auth.slyxup.online';
-      const billingUrl = rawApiUrl.replace(
-        'auth.slyxup.online',
-        'billing.slyxup.online'
-      );
+      const billingUrl = (() => {
+        if (/^https?:\/\/localhost(:\d+)?$/.test(rawApiUrl)) {
+          return rawApiUrl.replace(/:(\d+)$/, ':8788');
+        }
+        return rawApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+      })();
       const token =
         (
           client as unknown as {
