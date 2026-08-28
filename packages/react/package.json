@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/react",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "@slyxup/react — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
