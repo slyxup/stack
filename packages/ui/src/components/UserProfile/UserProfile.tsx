@@ -10,10 +10,6 @@ export interface UserProfileProps {
   onClose?: () => void;
   /** Called after the account is deleted — redirect or reset app state here. */
   onDeleted?: () => void;
-  /** Paddle.js client-side token for overlay checkout (sandbox or production). */
-  paddleClientToken?: string;
-  /** Paddle environment: 'sandbox' (default) or 'production'. */
-  paddleEnvironment?: 'sandbox' | 'production';
 }
 
 type Tab = 'profile' | 'security' | 'billing';
@@ -117,8 +113,6 @@ export function UserProfile({
   modal = true,
   onClose,
   onDeleted,
-  paddleClientToken,
-  paddleEnvironment = 'sandbox',
 }: UserProfileProps) {
   injectStyles();
   const { isLoaded, user, reload } = useUser();
@@ -490,61 +484,37 @@ export function UserProfile({
   async function handleCheckout(plan: Plan) {
     setCheckoutId(plan.id);
     try {
-      if (paddleClientToken) {
-        await initPaddle(paddleClientToken, paddleEnvironment);
-        openPaddleCheckout(plan.paddlePriceId, user?.email);
-        return;
-      }
-      // Fallback: server-side Paddle transaction (legacy)
+      // Always use Paddle.js overlay checkout
+      // authApiUrl is available via client apiUrl
       const rawApiUrl =
         (client as unknown as { apiUrl: string }).apiUrl ??
         'https://auth.slyxup.online';
-      const billingUrl = (() => {
-        if (/^https?:\/\/localhost(:\d+)?$/.test(rawApiUrl)) {
-          return rawApiUrl.replace(/:(\d+)$/, ':8788');
-        }
-        return rawApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
-      })();
-      const token =
-        (
-          client as unknown as {
-            _token?: string;
-            getToken?: () => string | undefined;
-          }
-        )?._token ??
-        (
-          client as unknown as { getToken?: () => string | undefined }
-        )?.getToken?.();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const pubKey = (client as unknown as { publishableKey?: string })
-        ?.publishableKey;
-      if (pubKey && pubKey !== 'pk_test_missing')
-        headers['X-Publishable-Key'] = pubKey;
+      await initPaddle(rawApiUrl);
+      openPaddleCheckout(plan.paddlePriceId, user?.email);
+      setCheckoutDone(true);
 
-      const res = await fetch(`${billingUrl}/v1/billing/checkout`, {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({ planId: plan.id }),
-      });
-      const data = (await res.json().catch(() => ({}))) as Record<
-        string,
-        unknown
-      >;
-      if (res.ok && typeof data.checkoutUrl === 'string' && data.checkoutUrl) {
-        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
-        setCheckoutDone(true);
-        return;
-      }
-      if (!res.ok)
-        throw new Error(
-          typeof data.error === 'string'
-            ? data.error
-            : `Checkout failed (${res.status})`
-        );
+      // Poll for subscription updates after checkout (webhook may take a few seconds)
+      let attempts = 0;
+      const maxAttempts = 10;
+      const pollInterval = 3000; // 3 seconds
+      const poll = async () => {
+        attempts++;
+        try {
+          await loadBilling();
+          if (subscription && attempts < maxAttempts) {
+            // Found subscription, stop polling
+            return;
+          }
+        } catch {
+          // Ignore polling errors
+        }
+        if (attempts < maxAttempts) {
+          setTimeout(poll, pollInterval);
+        }
+      };
+      // Start polling after a short delay to allow webhook to process
+      setTimeout(poll, 2000);
+      return;
     } catch (err) {
       console.error('[SlyxUp] checkout failed', err);
     } finally {
@@ -953,7 +923,7 @@ export function UserProfile({
                       className="slx-error-text"
                       style={{ color: 'var(--slx-success)', marginBottom: 8 }}
                     >
-                      Checkout opened in a new tab. Complete your payment there.
+                      Checkout opened — complete your payment in the overlay.
                     </p>
                   )}
                   <div className="slx-billing-card">

@@ -39,22 +39,61 @@ function loadScript(src: string): Promise<void> {
 }
 
 /**
- * Load Paddle.js and initialize with a client-side token.
+ * Derive billing URL from auth API URL.
+ * localhost:8787 → localhost:8788, auth.slyxup.online → billing.slyxup.online
+ */
+function deriveBillingUrl(authApiUrl: string): string {
+  if (/^https?:\/\/localhost(:\d+)?$/.test(authApiUrl)) {
+    return authApiUrl.replace(/:(\d+)$/, ':8788');
+  }
+  return authApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+}
+
+interface BillingConfig {
+  environment: 'sandbox' | 'production';
+  clientToken: string;
+}
+
+let cachedConfig: BillingConfig | null = null;
+
+/**
+ * Fetch Paddle config from billing Worker's /v1/billing/config endpoint.
+ * Cached after first fetch.
+ */
+async function fetchBillingConfig(billingUrl: string): Promise<BillingConfig> {
+  if (cachedConfig) return cachedConfig;
+  const res = await fetch(`${billingUrl}/v1/billing/config`);
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    environment?: string;
+    clientToken?: string;
+  };
+  if (!res.ok || !data.ok || !data.clientToken) {
+    throw new Error('Failed to fetch billing config');
+  }
+  cachedConfig = {
+    environment: (data.environment as 'sandbox' | 'production') ?? 'sandbox',
+    clientToken: data.clientToken,
+  };
+  return cachedConfig;
+}
+
+/**
+ * Load Paddle.js and initialize with config from billing Worker.
  * Safe to call multiple times — only loads the script once.
  */
-export async function initPaddle(
-  clientToken: string,
-  environment: 'sandbox' | 'production' = 'sandbox'
-): Promise<void> {
+export async function initPaddle(authApiUrl: string): Promise<void> {
   if (paddleLoaded && window.Paddle) return;
 
   if (!paddleInitPromise) {
     paddleInitPromise = (async () => {
+      const billingUrl = deriveBillingUrl(authApiUrl);
+      const config = await fetchBillingConfig(billingUrl);
       await loadScript(PADDLE_JS_URL);
       if (!window.Paddle) throw new Error('Paddle.js failed to load');
-      window.Paddle.Environment.set(environment);
+      window.Paddle.Environment.set(config.environment);
       window.Paddle.Initialize({
-        token: clientToken,
+        token: config.clientToken,
         eventCallback: (data) => {
           if (data.name === 'checkout.completed') {
             // Subscription created via webhook — UI will refresh on next load

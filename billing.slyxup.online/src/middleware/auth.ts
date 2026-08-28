@@ -12,6 +12,7 @@ export type Env = {
     PADDLE_ENVIRONMENT?: string;
     PADDLE_API_KEY?: string;
     PADDLE_WEBHOOK_SECRET?: string;
+    PADDLE_CLIENT_TOKEN?: string;
     BILLING_ADMIN_SECRET?: string;
   };
   Variables: { userId: string; userEmail: string };

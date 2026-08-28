@@ -107,6 +107,17 @@ app.route('/v1/billing/subscription', subscriptionRoute);
 app.route('/v1/billing/invoices', invoicesRoute);
 app.route('/v1/webhooks', webhookRoute);
 
+// Public: Paddle config for client-side Paddle.js overlay checkout.
+// Returns environment + client-side token — safe to expose (limited-scope token).
+app.get('/v1/billing/config', (c) =>
+  c.json({
+    ok: true,
+    environment: (c.env.PADDLE_ENVIRONMENT ?? 'sandbox') as string,
+    clientToken:
+      c.env.PADDLE_CLIENT_TOKEN ?? 'test_c979e5a90959dd513104abf00e8',
+  })
+);
+
 app.notFound((c) => c.json({ ok: false, error: 'Not Found' }, 404));
 
 app.onError((err, c) => {

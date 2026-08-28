@@ -6,9 +6,10 @@ import {
   setSessionCookie,
 } from '../lib/cookies';
 import { sanitizeUser } from '../lib/sanitize';
-import { signInSchema, signUpSchema } from '../schemas/auth';
+import { signIn2FASchema, signInSchema, signUpSchema } from '../schemas/auth';
 import * as AuthService from '../services/auth.service';
 import { verifyApiKey } from '../services/project.service';
+import { dispatchWebhooks } from '../services/webhook.service';
 
 type Bindings = {
   DB: D1Database;
@@ -89,11 +90,27 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
   }
   const projectId = resolved ?? input.projectId;
   try {
-    const { user, sessionToken, expiresAt } = await AuthService.signIn(c.env, {
+    const result = await AuthService.signIn(c.env, {
       ...input,
       projectId,
     });
+    if (result.requires2FA) {
+      return c.json(
+        {
+          ok: false,
+          code: '2FA_REQUIRED',
+          error: 'Two-factor authentication required',
+          challengeToken: result.challengeToken,
+        },
+        403
+      );
+    }
+    const { user, sessionToken, expiresAt } = result;
     setSessionCookie(c, sessionToken, expiresAt);
+    void dispatchWebhooks(c.env, user.projectId, 'user.signed_in', {
+      id: user.id,
+      email: user.email,
+    });
     return c.json({
       ok: true,
       user: {
@@ -125,6 +142,43 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
         403
       );
     return c.json({ ok: false, error: msg }, 401);
+  }
+});
+
+// Complete a 2FA-enabled sign-in with a TOTP code or recovery code.
+auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
+  const { challengeToken, code, recoveryCode } = c.req.valid('json');
+  try {
+    const result = await AuthService.complete2FASignIn(
+      c.env,
+      challengeToken,
+      code,
+      recoveryCode
+    );
+    setSessionCookie(c, result.sessionToken, result.expiresAt);
+    void dispatchWebhooks(c.env, result.user.projectId, 'user.signed_in', {
+      id: result.user.id,
+      email: result.user.email,
+    });
+    return c.json({
+      ok: true,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        role: result.user.role,
+        emailVerified: result.user.emailVerified,
+      },
+      sessionToken: result.sessionToken,
+      expiresAt: result.expiresAt.toISOString(),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed';
+    if (msg === 'INVALID_2FA_CODE')
+      return c.json(
+        { ok: false, code: 'INVALID_2FA_CODE', error: 'Invalid code' },
+        401
+      );
+    return c.json({ ok: false, error: msg }, 400);
   }
 });
 

@@ -157,9 +157,17 @@ export const users = sqliteTable(
       .notNull()
       .default(false),
     passwordHash: text('password_hash'),
+    /** Optional unique handle per project (sign-in identifier alongside email). */
+    username: text('username'),
     firstName: text('first_name'),
     lastName: text('last_name'),
     avatarUrl: text('avatar_url'),
+    /** Two-factor authentication (TOTP authenticator app) enabled flag. */
+    twoFactorEnabled: integer('two_factor_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    /** Base32-encoded TOTP secret (plaintext; keep project/system encrypted at rest if hardened). */
+    totpSecret: text('totp_secret'),
     role: text('role', { enum: ['user', 'admin'] })
       .notNull()
       .default('user'),
@@ -181,6 +189,10 @@ export const users = sqliteTable(
   },
   (t) => ({
     emailIdx: uniqueIndex('users_email_project_idx').on(t.email, t.projectId),
+    usernameIdx: uniqueIndex('users_username_project_idx').on(
+      t.username,
+      t.projectId
+    ),
     projectIdx: index('users_project_idx').on(t.projectId),
     // For paginated project user lists (scalable for millions)
     projectCreatedIdx: index('users_project_created_idx').on(
@@ -218,6 +230,30 @@ export const userProfiles = sqliteTable(
   },
   (t) => ({
     userIdx: uniqueIndex('user_profiles_user_idx').on(t.userId),
+  })
+);
+
+// ── 2FA Recovery Codes (single-use backups to regain access if authenticator lost) ──
+export const recoveryCodes = sqliteTable(
+  'recovery_codes',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Hashed code (SHA-256 hex). Never store plaintext — same policy as api_keys.
+    codeHash: text('code_hash').notNull(),
+    // Single-use: true once redeemed.
+    used: integer('used', { mode: 'boolean' }).notNull().default(false),
+    usedAt: integer('used_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    userUsedIdx: index('recovery_codes_user_used_idx').on(t.userId, t.used),
   })
 );
 
@@ -423,6 +459,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   sessions: many(sessions),
   oauthAccounts: many(oauthAccounts),
+  recoveryCodes: many(recoveryCodes),
 }));
 
 export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
@@ -439,6 +476,10 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 
 export const oauthAccountsRelations = relations(oauthAccounts, ({ one }) => ({
   user: one(users, { fields: [oauthAccounts.userId], references: [users.id] }),
+}));
+
+export const recoveryCodesRelations = relations(recoveryCodes, ({ one }) => ({
+  user: one(users, { fields: [recoveryCodes.userId], references: [users.id] }),
 }));
 
 // ── Type exports ──
@@ -460,6 +501,8 @@ export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+export type RecoveryCode = typeof recoveryCodes.$inferSelect;
+export type NewRecoveryCode = typeof recoveryCodes.$inferInsert;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
 

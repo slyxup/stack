@@ -1,10 +1,19 @@
-import { and, desc, count as drizzleCount, eq, gt, ne } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  count as drizzleCount,
+  eq,
+  gt,
+  isNull,
+  ne,
+} from 'drizzle-orm';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
 import {
   auditLogs,
   oauthAccounts,
   passwordResetTokens,
+  recoveryCodes,
   sessions,
   userProfiles,
   users,
@@ -18,6 +27,7 @@ export async function updateUser(
     firstName?: string;
     lastName?: string;
     avatarUrl?: string;
+    username?: string | null;
     preferences?: Record<string, unknown>;
   }
 ) {
@@ -26,7 +36,41 @@ export async function updateUser(
   if (input.firstName !== undefined) patch.firstName = input.firstName;
   if (input.lastName !== undefined) patch.lastName = input.lastName;
   if (input.avatarUrl !== undefined) patch.avatarUrl = input.avatarUrl || null;
+  if (input.username !== undefined) patch.username = input.username || null;
   if (input.preferences !== undefined) patch.preferences = input.preferences;
+  if ('username' in input && input.username) {
+    const me = await db
+      .select({ projectId: users.projectId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .get();
+    const scope = me?.projectId ?? null;
+    const taken =
+      scope === null
+        ? await db
+            .select()
+            .from(users)
+            .where(
+              and(
+                eq(users.username, input.username),
+                ne(users.id, userId),
+                isNull(users.projectId)
+              )
+            )
+            .get()
+        : await db
+            .select()
+            .from(users)
+            .where(
+              and(
+                eq(users.username, input.username),
+                ne(users.id, userId),
+                eq(users.projectId, scope)
+              )
+            )
+            .get();
+    if (taken) throw new Error('Username already taken');
+  }
   await db.update(users).set(patch).where(eq(users.id, userId));
   return db.select().from(users).where(eq(users.id, userId)).get();
 }
@@ -44,6 +88,7 @@ export async function deleteUser(env: { DB: D1Database }, userId: string) {
   await db
     .delete(passwordResetTokens)
     .where(eq(passwordResetTokens.userId, userId));
+  await db.delete(recoveryCodes).where(eq(recoveryCodes.userId, userId));
   await db.delete(userProfiles).where(eq(userProfiles.userId, userId));
   // Keep audit logs (userId -> SET NULL) for compliance, then remove user
   await db.delete(users).where(eq(users.id, userId));
