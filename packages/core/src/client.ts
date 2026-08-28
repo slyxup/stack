@@ -89,7 +89,23 @@ export class SlyxupClient {
 
   constructor(options: SlyxupClientOptions = {}) {
     const jar = createCookieJar();
+    // Persist token in localStorage so refresh keeps session for cross-origin (auth -> billing) and for dashboard project APIs
+    const STORAGE_KEY = 'slyxup_session_token';
     let storedToken: string | undefined;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        storedToken = window.localStorage.getItem(STORAGE_KEY) ?? undefined;
+      }
+    } catch {}
+    const persistToken = (t: string | undefined) => {
+      storedToken = t;
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          if (t) window.localStorage.setItem(STORAGE_KEY, t);
+          else window.localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch {}
+    };
     this.publishableKey = options.publishableKey;
     this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
     this._getToken = () => storedToken;
@@ -162,19 +178,19 @@ export class SlyxupClient {
         const res = await post<AuthResponse>('/v1/auth/sign-up', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 400, 'api_error');
-        if (res.sessionToken) storedToken = res.sessionToken;
+        if (res.sessionToken) persistToken(res.sessionToken);
         return res;
       },
       signIn: async (input) => {
         const res = await post<AuthResponse>('/v1/auth/sign-in', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 401, 'api_error');
-        if (res.sessionToken) storedToken = res.sessionToken;
+        if (res.sessionToken) persistToken(res.sessionToken);
         return res;
       },
       signOut: async () => {
         const res = await post<{ ok: true }>('/v1/auth/sign-out');
-        storedToken = undefined;
+        persistToken(undefined);
         jar.clear();
         return res as { ok: true };
       },
