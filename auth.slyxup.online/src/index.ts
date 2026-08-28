@@ -16,6 +16,7 @@ import sessionsRoute from './routes/sessions';
 import usersRoute from './routes/users';
 import verificationRoute from './routes/verification';
 import { getSession } from './services/auth.service';
+import * as ProjectService from './services/project.service';
 
 // SlyxUp Auth Worker — CF Workers + D1 + KV
 // Deploy: https://auth.slyxup.online (wrangler deploy)
@@ -187,6 +188,17 @@ app.route('/v1/oauth', oauthRoute);
 app.route('/v1/sessions', sessionsRoute);
 app.route('/v1/admin', adminRoute);
 app.route('/v1/audit', auditRoute);
+
+// Public: resolve publishable key → projectId (used by billing Worker in local dev
+// where AUTH_DB is a separate D1 instance without api_keys data).
+app.get('/v1/key/resolve', async (c) => {
+  const key = c.req.query('key');
+  if (!key) return c.json({ ok: false, error: 'key required' }, 400);
+  const info = await ProjectService.verifyApiKey(c.env, key);
+  if (!info || info.type !== 'publishable')
+    return c.json({ ok: false, error: 'Invalid key' }, 404);
+  return c.json({ ok: true, projectId: info.projectId });
+});
 
 // Legacy SDK path — mount only the session endpoint at /v1/session (not the
 // full auth router, which would bypass /v1/auth/* rate limiting).

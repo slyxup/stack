@@ -4,10 +4,11 @@ import { getDb } from '../lib/db';
 import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
 
-// ── Resolve publishable key → projectId via AUTH_DB ──
+// ── Resolve publishable key → projectId via AUTH_DB, with HTTP fallback ──
 async function resolveProjectFromKey(
   authDb: D1Database,
-  publishableKey: string
+  publishableKey: string,
+  authUrl?: string
 ): Promise<string | null> {
   try {
     const enc = new TextEncoder();
@@ -23,10 +24,27 @@ async function resolveProjectFromKey(
       )
       .bind(hashedKey, 'publishable')
       .first<{ project_id: string }>();
-    return row?.project_id ?? null;
+    if (row?.project_id) return row.project_id;
   } catch {
-    return null;
+    // AUTH_DB may not have auth tables in local dev — fall through to HTTP
   }
+
+  // Fallback: query auth Worker over HTTP (works for local dev with separate D1 instances)
+  if (authUrl) {
+    try {
+      const res = await fetch(
+        `${authUrl}/v1/key/resolve?key=${encodeURIComponent(publishableKey)}`
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        projectId?: string;
+      };
+      if (res.ok && data.ok && data.projectId) return data.projectId;
+    } catch {
+      // auth Worker not reachable
+    }
+  }
+  return null;
 }
 
 // ── Public: list active plans for a project (no auth required).
@@ -42,7 +60,8 @@ app.get('/', async (c) => {
     const pubKey = c.req.header('X-Publishable-Key');
     if (pubKey) {
       projectId =
-        (await resolveProjectFromKey(c.env.AUTH_DB, pubKey)) ?? undefined;
+        (await resolveProjectFromKey(c.env.AUTH_DB, pubKey, c.env.AUTH_URL)) ??
+        undefined;
     }
   }
 
