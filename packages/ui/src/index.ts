@@ -35,6 +35,7 @@ export {
   PricingTable,
   type PricingTableProps,
 } from './components/PricingTable/PricingTable';
+export { initPaddle, openPaddleCheckout } from './lib/paddle';
 
 import { useEffect } from 'react';
 import { injectStyles } from './styles';

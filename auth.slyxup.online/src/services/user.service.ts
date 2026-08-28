@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, ne } from 'drizzle-orm';
+import { and, desc, count as drizzleCount, eq, gt, ne } from 'drizzle-orm';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
 import {
@@ -105,9 +105,12 @@ export interface SessionListItem {
 export async function listSessions(
   env: { DB: D1Database },
   userId: string,
-  currentToken: string
+  currentToken: string,
+  opts?: { limit?: number; offset?: number }
 ): Promise<SessionListItem[]> {
   const db = getDb(env);
+  const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100);
+  const offset = Math.max(opts?.offset ?? 0, 0);
   const rows = await db
     .select({
       id: sessions.id,
@@ -120,11 +123,27 @@ export async function listSessions(
     .from(sessions)
     .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, new Date())))
     .orderBy(desc(sessions.updatedAt))
+    .limit(limit)
+    .offset(offset)
     .all();
   return rows.map(({ token, ...rest }) => ({
     ...rest,
     isCurrent: token === currentToken,
   }));
+}
+
+/** Count active (non-expired) sessions for a user. */
+export async function countActiveSessions(
+  env: { DB: D1Database },
+  userId: string
+): Promise<number> {
+  const db = getDb(env);
+  const row = await db
+    .select({ total: drizzleCount() })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, new Date())))
+    .get();
+  return row?.total ?? 0;
 }
 
 /** Revoke one session — ownership enforced via userId match. */

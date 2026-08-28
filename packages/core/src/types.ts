@@ -61,6 +61,9 @@ export interface SlyxupSessionInfo {
 export interface SessionsResponse {
   ok: true;
   sessions: SlyxupSessionInfo[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface RevokeSessionsResponse {

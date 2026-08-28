@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireSession } from '../middleware/auth';
 import {
+  countActiveSessions,
   listSessions,
   revokeOtherSessions,
   revokeSession,
@@ -15,13 +16,17 @@ const sessionsRoute = new Hono<Env>();
 
 sessionsRoute.use('*', requireSession);
 
-/** List the current user's active sessions (current one flagged). */
+/** List the current user's active sessions (current one flagged), with pagination. */
 sessionsRoute.get('/', async (c) => {
-  const items = await listSessions(
-    c.env,
-    c.get('userId'),
-    c.get('sessionToken')
-  );
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20), 1), 100);
+  const offset = Math.max(Number(c.req.query('offset') ?? 0), 0);
+  const [items, total] = await Promise.all([
+    listSessions(c.env, c.get('userId'), c.get('sessionToken'), {
+      limit,
+      offset,
+    }),
+    countActiveSessions(c.env, c.get('userId')),
+  ]);
   return c.json({
     ok: true,
     sessions: items.map((s) => ({
@@ -32,6 +37,9 @@ sessionsRoute.get('/', async (c) => {
       createdAt: s.createdAt,
       isCurrent: s.isCurrent,
     })),
+    total,
+    limit,
+    offset,
   });
 });
 

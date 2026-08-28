@@ -1,6 +1,7 @@
 import type { SlyxupSessionInfo } from '@slyxup/core';
 import { useAuth, useUser } from '@slyxup/react';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { initPaddle, openPaddleCheckout } from '../../lib/paddle';
 import { injectStyles } from '../../styles';
 
 export interface UserProfileProps {
@@ -9,6 +10,10 @@ export interface UserProfileProps {
   onClose?: () => void;
   /** Called after the account is deleted — redirect or reset app state here. */
   onDeleted?: () => void;
+  /** Paddle.js client-side token for overlay checkout (sandbox or production). */
+  paddleClientToken?: string;
+  /** Paddle environment: 'sandbox' (default) or 'production'. */
+  paddleEnvironment?: 'sandbox' | 'production';
 }
 
 type Tab = 'profile' | 'security' | 'billing';
@@ -44,20 +49,33 @@ function deviceLabel(ua: string | null): string {
       ? 'macOS'
       : /Android/i.test(ua)
         ? 'Android'
-        : /iPhone|iPad|iOS/i.test(ua)
+        : /iPhone|iPad|iPod/i.test(ua)
           ? 'iOS'
-          : /Linux/i.test(ua)
-            ? 'Linux'
-            : 'Unknown OS';
+          : /CrOS/i.test(ua)
+            ? 'Chrome OS'
+            : /Linux/i.test(ua)
+              ? 'Linux'
+              : 'Unknown OS';
+  // Order matters: check Edge before Chrome (Edg/ appears in Chrome UA)
   const browser = /Edg\//i.test(ua)
     ? 'Edge'
-    : /Chrome\//i.test(ua)
-      ? 'Chrome'
-      : /Safari\//i.test(ua)
-        ? 'Safari'
-        : /Firefox\//i.test(ua)
-          ? 'Firefox'
-          : 'Browser';
+    : /OPR|Opera/i.test(ua)
+      ? 'Opera'
+      : /Vivaldi/i.test(ua)
+        ? 'Vivaldi'
+        : /Brave/i.test(ua)
+          ? 'Brave'
+          : /Chrome\//i.test(ua) && !/CriOS/i.test(ua)
+            ? 'Chrome'
+            : /Safari\//i.test(ua) && !/Chrome\//i.test(ua)
+              ? 'Safari'
+              : /Firefox\//i.test(ua) || /FxiOS/i.test(ua)
+                ? 'Firefox'
+                : /SamsungBrowser/i.test(ua)
+                  ? 'Samsung Browser'
+                  : /Mobile/i.test(ua) || /Android/i.test(ua)
+                    ? 'Mobile Browser'
+                    : 'Browser';
   return `${browser} · ${os}`;
 }
 
@@ -86,6 +104,7 @@ function formatCurrency(amount: number, currency: string): string {
 interface Plan {
   id: string;
   name: string;
+  paddlePriceId: string;
   amount: number;
   currency: string;
   interval: string;
@@ -98,6 +117,8 @@ export function UserProfile({
   modal = true,
   onClose,
   onDeleted,
+  paddleClientToken,
+  paddleEnvironment = 'sandbox',
 }: UserProfileProps) {
   injectStyles();
   const { isLoaded, user, reload } = useUser();
@@ -127,6 +148,9 @@ export function UserProfile({
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [othersRevoking, setOthersRevoking] = useState(false);
+  const [sessionsTotal, setSessionsTotal] = useState(0);
+  const [sessionsPage, setSessionsPage] = useState(0);
+  const SESSIONS_PER_PAGE = 10;
 
   // ── Billing state ──
   const [billingLoading, setBillingLoading] = useState(true);
@@ -157,15 +181,17 @@ export function UserProfile({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Sync form fields when user loads/updates (ensures firstName/lastName show correctly
-  // after SlyxUpProvider fetches client.users.me()). Guard against stale overwrites.
+  // Sync form fields when user loads/updates. Use individual primitives as
+  // deps so the effect fires even when the user object reference stays the
+  // same (e.g. after a silent reload that returns identical data).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — see comment above
   useEffect(() => {
     if (user) {
       setFirstName(user.firstName ?? '');
       setLastName(user.lastName ?? '');
       setAvatarUrl(user.avatarUrl ?? '');
     }
-  }, [user]);
+  }, [user?.firstName, user?.lastName, user?.avatarUrl, user?.id]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -175,17 +201,26 @@ export function UserProfile({
     return () => document.removeEventListener('keydown', onKey);
   }, [modal, onClose]);
 
-  const loadSessions = useCallback(async () => {
-    setSessionsLoading(true);
-    try {
-      const res = await client.sessions.list();
-      setSessions(res.sessions);
-    } catch {
-      setSessions([]);
-    } finally {
-      setSessionsLoading(false);
-    }
-  }, [client]);
+  const loadSessions = useCallback(
+    async (page = 0) => {
+      setSessionsLoading(true);
+      try {
+        const res = await client.sessions.list({
+          limit: SESSIONS_PER_PAGE,
+          offset: page * SESSIONS_PER_PAGE,
+        });
+        setSessions(res.sessions);
+        setSessionsTotal(res.total);
+        setSessionsPage(page);
+      } catch {
+        setSessions([]);
+        setSessionsTotal(0);
+      } finally {
+        setSessionsLoading(false);
+      }
+    },
+    [client]
+  );
 
   const loadBilling = useCallback(async () => {
     setBillingLoading(true);
@@ -357,7 +392,7 @@ export function UserProfile({
   }, [client, user]);
 
   useEffect(() => {
-    if (tab === 'security') void loadSessions();
+    if (tab === 'security') void loadSessions(0);
     if (tab === 'billing') void loadBilling();
   }, [tab, loadSessions, loadBilling]);
 
@@ -420,7 +455,7 @@ export function UserProfile({
     setRevokingId(id);
     try {
       await client.sessions.revoke(id);
-      await loadSessions();
+      await loadSessions(sessionsPage);
     } finally {
       setRevokingId(null);
     }
@@ -430,7 +465,7 @@ export function UserProfile({
     setOthersRevoking(true);
     try {
       await client.sessions.revokeOthers();
-      await loadSessions();
+      await loadSessions(0);
     } finally {
       setOthersRevoking(false);
     }
@@ -452,9 +487,15 @@ export function UserProfile({
     }
   }
 
-  async function handleCheckout(planId: string) {
-    setCheckoutId(planId);
+  async function handleCheckout(plan: Plan) {
+    setCheckoutId(plan.id);
     try {
+      if (paddleClientToken) {
+        await initPaddle(paddleClientToken, paddleEnvironment);
+        openPaddleCheckout(plan.paddlePriceId, user?.email);
+        return;
+      }
+      // Fallback: server-side Paddle transaction (legacy)
       const rawApiUrl =
         (client as unknown as { apiUrl: string }).apiUrl ??
         'https://auth.slyxup.online';
@@ -487,7 +528,7 @@ export function UserProfile({
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId: plan.id }),
       });
       const data = (await res.json().catch(() => ({}))) as Record<
         string,
@@ -505,7 +546,6 @@ export function UserProfile({
             : `Checkout failed (${res.status})`
         );
     } catch (err) {
-      // Fallback: if billing checkout isn't configured, just log. Parent can handle via window redirect.
       console.error('[SlyxUp] checkout failed', err);
     } finally {
       setCheckoutId(null);
@@ -826,6 +866,37 @@ export function UserProfile({
                           : 'Sign out other devices'}
                       </button>
                     )}
+                    {sessionsTotal > SESSIONS_PER_PAGE && (
+                      <div className="slx-pagination">
+                        <button
+                          type="button"
+                          className="slx-btn-secondary"
+                          disabled={sessionsPage === 0 || sessionsLoading}
+                          onClick={() => void loadSessions(sessionsPage - 1)}
+                        >
+                          Previous
+                        </button>
+                        <span className="slx-pagination-info">
+                          {sessionsPage * SESSIONS_PER_PAGE + 1}–
+                          {Math.min(
+                            (sessionsPage + 1) * SESSIONS_PER_PAGE,
+                            sessionsTotal
+                          )}{' '}
+                          of {sessionsTotal}
+                        </span>
+                        <button
+                          type="button"
+                          className="slx-btn-secondary"
+                          disabled={
+                            (sessionsPage + 1) * SESSIONS_PER_PAGE >=
+                              sessionsTotal || sessionsLoading
+                          }
+                          onClick={() => void loadSessions(sessionsPage + 1)}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </section>
@@ -955,7 +1026,7 @@ export function UserProfile({
                           <button
                             type="button"
                             className="slx-btn slx-plan-cta"
-                            onClick={() => handleCheckout(plan.id)}
+                            onClick={() => handleCheckout(plan)}
                             disabled={checkoutId === plan.id}
                           >
                             {checkoutId === plan.id
@@ -1154,7 +1225,7 @@ export function UserProfile({
                                   : 'slx-btn slx-plan-cta'
                               }
                               disabled={isCurrent || checkoutId === plan.id}
-                              onClick={() => handleCheckout(plan.id)}
+                              onClick={() => handleCheckout(plan)}
                             >
                               {isCurrent
                                 ? 'Current plan'

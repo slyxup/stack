@@ -4,6 +4,7 @@ import type { SlyxupClient } from '@slyxup/core';
 export interface Plan {
   id: string;
   name: string;
+  paddlePriceId: string;
   amount: number;
   currency: string;
   interval: 'month' | 'year';
@@ -116,7 +117,7 @@ export class BillingClient {
     return res.subscription;
   }
 
-  /** Create checkout URL and redirect (requires session cookie) */
+  /** Create checkout URL and open in new tab (requires session cookie) */
   async checkout(planId: string, successUrl?: string): Promise<void> {
     const res = await this.req<{ ok: true; checkoutUrl?: string }>(
       '/v1/billing/checkout',
@@ -125,7 +126,8 @@ export class BillingClient {
         body: JSON.stringify({ planId, ...(successUrl ? { successUrl } : {}) }),
       }
     );
-    if (res.checkoutUrl) window.location.href = res.checkoutUrl;
+    if (res.checkoutUrl)
+      window.open(res.checkoutUrl, '_blank', 'noopener,noreferrer');
   }
 
   /** Cancel subscription at end of period */

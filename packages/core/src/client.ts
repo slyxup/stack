@@ -62,7 +62,10 @@ export class SlyxupClient {
 
   readonly sessions: {
     get: () => Promise<SessionResponse>;
-    list: () => Promise<SessionsResponse>;
+    list: (opts?: {
+      limit?: number;
+      offset?: number;
+    }) => Promise<SessionsResponse>;
     revoke: (sessionId: string) => Promise<{ ok: true }>;
     revokeOthers: () => Promise<RevokeSessionsResponse>;
   };
@@ -209,8 +212,15 @@ export class SlyxupClient {
         if (!('session' in res)) throw new UnauthorizedError(res.error);
         return res;
       },
-      list: async () => {
-        const res = await requestInner<SessionsResponse>('/v1/sessions');
+      list: async (opts?: { limit?: number; offset?: number }) => {
+        const params = new URLSearchParams();
+        if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
+        if (opts?.offset !== undefined)
+          params.set('offset', String(opts.offset));
+        const qs = params.toString();
+        const res = await requestInner<SessionsResponse>(
+          `/v1/sessions${qs ? `?${qs}` : ''}`
+        );
         if (!('sessions' in res))
           throw new SlyxupError(res.error, 400, 'api_error');
         return res;

@@ -443,6 +443,14 @@ export const CSS = `
 .slx-session-device { font-size: 13.5px; font-weight: 550; color: var(--slx-ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .slx-session-sub { font-size: 12px; color: var(--slx-muted); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ── Pagination ── */
+.slx-pagination {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 14px; padding-top: 14px;
+  border-top: 1px solid var(--slx-border);
+}
+.slx-pagination-info { font-size: 12.5px; color: var(--slx-muted); white-space: nowrap; }
+
 /* ── Danger zone ── */
 .slx-danger-zone {
   border: 1px solid color-mix(in srgb, var(--slx-danger) 30%, transparent);
@@ -570,6 +578,8 @@ export const CSS = `
   .slx-billing-plans { grid-template-columns: 1fr; }
   .slx-session { flex-direction: column; align-items: flex-start; gap: 10px; }
   .slx-session .slx-btn-danger-outline { align-self: stretch; text-align: center; justify-content: center; }
+  .slx-pagination { flex-wrap: wrap; gap: 6px; }
+  .slx-pagination .slx-btn-secondary { font-size: 12px; padding: 4px 10px; }
   .slx-invoice-row { flex-wrap: wrap; gap: 6px; }
 }
 @media (max-width: 380px) {

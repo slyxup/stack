@@ -92,6 +92,7 @@ app.get('/', async (c) => {
     plans: list.map((p) => ({
       id: p.id,
       name: p.name,
+      paddlePriceId: p.paddlePriceId,
       amount: p.amount,
       currency: p.currency,
       interval: p.interval,
