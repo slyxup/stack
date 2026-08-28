@@ -494,13 +494,8 @@ export function UserProfile({
         unknown
       >;
       if (res.ok && typeof data.checkoutUrl === 'string' && data.checkoutUrl) {
-        // Skip redirect on localhost (no SSL) — Paddle webhook handles subscription
-        const isLocalhost = /^https?:\/\/localhost/.test(billingUrl);
-        if (!isLocalhost) {
-          window.location.href = data.checkoutUrl as string;
-        } else {
-          setCheckoutDone(true);
-        }
+        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
+        setCheckoutDone(true);
         return;
       }
       if (!res.ok)
@@ -887,8 +882,7 @@ export function UserProfile({
                       className="slx-error-text"
                       style={{ color: 'var(--slx-success)', marginBottom: 8 }}
                     >
-                      Checkout completed. Your subscription will appear shortly
-                      once the payment is confirmed.
+                      Checkout opened in a new tab. Complete your payment there.
                     </p>
                   )}
                   <div className="slx-billing-card">
