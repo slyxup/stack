@@ -270,3 +270,4 @@ export class SlyxupClient {
 export * from './types.js';
 export * from './errors.js';
 // test publish after fix
+// final verification 2026-08-28T04:21:05Z
