@@ -217,9 +217,13 @@ export function UserProfile({
       if (pubKey && pubKey !== 'pk_test_missing')
         headers['X-Publishable-Key'] = pubKey;
 
-      // Derive projectId for plans: prefer user.projectId, then try subscription's projectId, fallback none
-      const projectId =
+      // Derive projectId for plans: prefer user.projectId, then try to resolve from publishableKey's project (for examples)
+      // For the example apps, the publishableKey is for the example project, not the user's projectId
+      let projectId: string | null =
         (user as unknown as { projectId?: string | null })?.projectId ?? null;
+      // If no projectId from user, try to get it from the subscription (if we have one) or from the publishable key's project
+      // For now, if still null, we will try to fetch plans without projectId and let the server handle it via X-Publishable-Key
+      const pubKey = (client as unknown as { publishableKey?: string })?.publishableKey;
 
       // Fetch subscription + invoices (new /v1/billing/* with fallback to legacy /v1/*)
       async function fetchJson(url: string) {
@@ -315,15 +319,25 @@ export function UserProfile({
         }
       }
 
-      // Plans (needs projectId — if missing, try without and degrade gracefully)
+      // Plans (needs projectId — if missing, try with publishableKey header instead of empty projectId)
       const planPaths: string[] = [];
-      if (projectId)
+      if (projectId) {
         planPaths.push(`${billingUrl}/v1/billing/plans?projectId=${projectId}`);
-      // Also try without projectId as last resort (will 400 but we catch)
-      planPaths.push(
-        `${billingUrl}/v1/billing/plans?projectId=${projectId ?? ''}`
-      );
-      planPaths.push(`${billingUrl}/v1/plans`);
+      } else if (pubKey && pubKey !== 'pk_test_missing') {
+        // For example apps where user.projectId is null but publishableKey is for the example project,
+        // let the server resolve the project from the publishable key (via X-Publishable-Key header)
+        // We still need to pass a projectId for the current billing API, so try the publishable key's project
+        // For now, just not push the empty projectId path — the billing worker will handle X-Publishable-Key
+        // and return empty list in test, which is better than 400
+      } else {
+        // No projectId and no publishableKey — don't make the request, just show empty
+        setPlans([]);
+        gotPlans = true;
+      }
+      // Legacy fallback (will 404 on current billing worker, but we keep for backward compat)
+      if (!gotPlans && planPaths.length === 0) {
+        planPaths.push(`${billingUrl}/v1/plans`);
+      }
 
       let gotPlans = false;
       for (const p of planPaths) {
