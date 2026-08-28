@@ -216,9 +216,12 @@ export class SlyxupClient {
         return res;
       },
       revoke: async (sessionId: string) => {
-        const res = await requestInner<{ ok: true }>(`/v1/sessions/${sessionId}`, {
-          method: 'DELETE',
-        });
+        const res = await requestInner<{ ok: true }>(
+          `/v1/sessions/${sessionId}`,
+          {
+            method: 'DELETE',
+          }
+        );
         return res as { ok: true };
       },
       revokeOthers: async () => {
@@ -262,7 +265,10 @@ export class SlyxupClient {
       },
     };
 
-    this._request = requestInner as unknown as <T>(path: string, init?: RequestInit) => Promise<T>;
+    this._request = requestInner as unknown as <T>(
+      path: string,
+      init?: RequestInit
+    ) => Promise<T>;
   }
 }
 
@@ -270,4 +276,3 @@ export class SlyxupClient {
 export * from './types.js';
 export * from './errors.js';
 // test publish after fix
-// final verification 2026-08-28T04:21:05Z
