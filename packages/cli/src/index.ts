@@ -95,7 +95,11 @@ program
   .option('--new', 'Create a new account first (requires email verification)')
   .option('-e, --email <email>')
   .option('-p, --password <password>')
-  .option('--api-url <url>', `API base (default ${DEFAULT_API_URL})`)
+  .option(
+    '-c, --code <code>',
+    'TOTP code (required when the account has 2FA enabled)'
+  )
+  .option('--api-url <url>', DEFAULT_API_URL)
   .option('--json', 'JSON output')
   .action(async (opts) => {
     const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
@@ -949,9 +953,28 @@ authCmd
     }
     const client = new SlyxupClient({ apiUrl });
     try {
-      const res = await client.auth.signIn({ email, password });
-      if (json) return jsonOut({ ok: true, user: res.user });
-      console.log(style.green(`✓ Signed in: ${res.user.email}`));
+      const signedIn = await client.auth.signIn({ email, password });
+      let user: { id: string; email: string };
+      if ('challengeToken' in signedIn) {
+        let code: string = opts.code;
+        if (!code && json) {
+          jsonOut({ ok: false, error: '2FA required: pass --code' });
+          process.exit(1);
+        }
+        if (!code) {
+          process.stdout.write('Authenticator code: ');
+          code = (await readLine())?.trim() ?? '';
+        }
+        const completed = await client.auth.completeSignIn({
+          challengeToken: signedIn.challengeToken,
+          code,
+        });
+        user = completed.user;
+      } else {
+        user = signedIn.user;
+      }
+      if (json) return jsonOut({ ok: true, user });
+      console.log(style.green(`✓ Signed in: ${user.email}`));
       try {
         const sess = await client.sessions.get();
         console.log(

@@ -5,9 +5,11 @@ export interface SlyxupUser {
   projectId: string | null;
   email: string;
   emailVerified: boolean;
+  username: string | null;
   firstName: string | null;
   lastName: string | null;
   avatarUrl: string | null;
+  twoFactorEnabled: boolean;
   preferences: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -20,20 +22,23 @@ export interface SlyxupSession {
 }
 
 export interface SignInInput {
-  email: string;
+  email?: string;
+  username?: string;
   password: string;
   projectId?: string;
 }
 
-export interface SignUpInput extends SignInInput {
+export interface SignUpInput extends Omit<SignInInput, 'username'> {
   firstName?: string;
   lastName?: string;
+  username?: string;
 }
 
 export interface UpdateUserInput {
   firstName?: string;
   lastName?: string;
   avatarUrl?: string;
+  username?: string | null;
   preferences?: Record<string, unknown>;
 }
 
@@ -81,6 +86,52 @@ export interface AuthResponse {
   user: Pick<SlyxupUser, 'id' | 'email'>;
   sessionToken?: string;
   expiresAt?: string;
+}
+
+/** Returned by signIn when the account has 2FA enabled. */
+export interface TwoFactorRequiredResponse {
+  ok: false;
+  code: '2FA_REQUIRED';
+  challengeToken: string;
+}
+
+/** Union returned by client.auth.signIn. */
+export type SignInResponse = AuthResponse | TwoFactorRequiredResponse;
+
+export interface TOTPSetupResponse {
+  ok: true;
+  secret: string;
+  provisioningUri: string;
+  accountName: string;
+}
+
+export interface EnableTOTPResponse {
+  ok: true;
+  recoveryCodes: string[];
+}
+
+export interface TwoFactorStatusResponse {
+  ok: boolean;
+  enabled: boolean;
+}
+
+export interface ConnectedAccount {
+  id: string;
+  provider: 'google' | 'github';
+  providerAccountId: string;
+  createdAt: string;
+}
+
+export interface ConnectedAccountsResponse {
+  ok: true;
+  accounts: ConnectedAccount[];
+}
+
+/** Input for completing a 2FA sign-in challenge. */
+export interface CompleteSignInInput {
+  challengeToken: string;
+  code?: string;
+  recoveryCode?: string;
 }
 
 export interface ErrorResponse {

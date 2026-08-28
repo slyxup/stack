@@ -18,7 +18,11 @@ export interface SlyxUpProviderProps {
 
 function resolveEnvKey(): string | undefined {
   try {
-    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })?.process?.env;
+    const env = (
+      globalThis as unknown as {
+        process?: { env?: Record<string, string | undefined> };
+      }
+    )?.process?.env;
     if (env) {
       return (
         env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY ??
@@ -36,7 +40,11 @@ function resolveEnvKey(): string | undefined {
 
 function resolveEnvApiUrl(): string | undefined {
   try {
-    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })?.process?.env;
+    const env = (
+      globalThis as unknown as {
+        process?: { env?: Record<string, string | undefined> };
+      }
+    )?.process?.env;
     if (env) {
       return (
         env.NEXT_PUBLIC_SLYXUP_API_URL ??
@@ -96,9 +104,11 @@ export function SlyxUpProvider({
           projectId: null,
           email: res.user.email,
           emailVerified: false,
+          username: null,
           firstName: null,
           lastName: null,
           avatarUrl: null,
+          twoFactorEnabled: false,
           preferences: null,
           createdAt: '',
           updatedAt: '',

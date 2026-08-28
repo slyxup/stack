@@ -123,6 +123,7 @@ export function UserProfile({
   // ── Profile form state ──
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -175,6 +176,27 @@ export function UserProfile({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // ── Two-factor (TOTP) state ──
+  const [tfaStage, setTfaStage] = useState<'idle' | 'setup' | 'codes'>('idle');
+  const [tfaSetup, setTfaSetup] = useState<{
+    secret: string;
+    provisioningUri: string;
+    accountName: string;
+  } | null>(null);
+  const [tfaCode, setTfaCode] = useState('');
+  const [tfaRecoveryCodes, setTfaRecoveryCodes] = useState<string[]>([]);
+  const [tfaBusy, setTfaBusy] = useState(false);
+  const [tfaError, setTfaError] = useState<string | null>(null);
+  const [tfaVerifyCode, setTfaVerifyCode] = useState('');
+
+  // ── Connected accounts state ──
+  const [accounts, setAccounts] = useState<
+    { id: string; provider: 'google' | 'github'; createdAt: string }[]
+  >([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
   // Sync form fields when user loads/updates. Use individual primitives as
   // deps so the effect fires even when the user object reference stays the
   // same (e.g. after a silent reload that returns identical data).
@@ -183,9 +205,16 @@ export function UserProfile({
     if (user) {
       setFirstName(user.firstName ?? '');
       setLastName(user.lastName ?? '');
+      setUsername(user.username ?? '');
       setAvatarUrl(user.avatarUrl ?? '');
     }
-  }, [user?.firstName, user?.lastName, user?.avatarUrl, user?.id]);
+  }, [
+    user?.firstName,
+    user?.lastName,
+    user?.username,
+    user?.avatarUrl,
+    user?.id,
+  ]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -395,7 +424,7 @@ export function UserProfile({
     setBusy(true);
     setSaved(false);
     try {
-      await client.users.update({ firstName, lastName, avatarUrl });
+      await client.users.update({ firstName, lastName, username, avatarUrl });
       await reload();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -413,6 +442,98 @@ export function UserProfile({
       setTimeout(() => setResent(false), 4000);
     } finally {
       setResending(false);
+    }
+  }
+
+  const loadAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError(null);
+    try {
+      const res = await client.accounts.list();
+      setAccounts(res.accounts);
+    } catch {
+      setAccounts([]);
+      setAccountsError('Could not load connected accounts.');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [client]);
+
+  useEffect(() => {
+    if (tab === 'security') void loadAccounts();
+  }, [tab, loadAccounts]);
+
+  async function startTfaSetup() {
+    setTfaError(null);
+    setTfaBusy(true);
+    try {
+      const res = await client.twoFactor.setup();
+      setTfaSetup(res);
+      setTfaStage('setup');
+      setTfaCode('');
+    } catch (err) {
+      setTfaError(err instanceof Error ? err.message : 'Failed to start setup');
+    } finally {
+      setTfaBusy(false);
+    }
+  }
+
+  async function submitTfa(e: FormEvent) {
+    e.preventDefault();
+    if (!tfaSetup) return;
+    setTfaError(null);
+    setTfaBusy(true);
+    try {
+      const res = await client.twoFactor.enable(
+        tfaSetup.secret,
+        tfaCode.trim()
+      );
+      setTfaRecoveryCodes(res.recoveryCodes);
+      setTfaStage('codes');
+      await reload();
+    } catch (err) {
+      setTfaError(
+        err instanceof Error ? err.message : 'Invalid code — try again.'
+      );
+    } finally {
+      setTfaBusy(false);
+    }
+  }
+
+  async function submitTfaDisable(e: FormEvent) {
+    e.preventDefault();
+    setTfaError(null);
+    setTfaBusy(true);
+    try {
+      await client.twoFactor.disable(tfaVerifyCode.trim());
+      setTfaVerifyCode('');
+      setTfaStage('idle');
+      setTfaSetup(null);
+      setTfaRecoveryCodes([]);
+      await reload();
+    } catch (err) {
+      setTfaError(
+        err instanceof Error
+          ? err.message
+          : 'Invalid code — could not disable 2FA.'
+      );
+    } finally {
+      setTfaBusy(false);
+    }
+  }
+
+  async function onUnlink(accountId: string, provider: 'google' | 'github') {
+    setUnlinkingId(accountId);
+    setAccountsError(null);
+    try {
+      await client.accounts.unlink(accountId, provider);
+      setAccounts((prev) => prev.filter((a) => a.id !== accountId));
+    } catch (err) {
+      setAccountsError(
+        err instanceof Error ? err.message : 'Could not unlink account.'
+      );
+    } finally {
+      setUnlinkingId(null);
     }
   }
 
@@ -670,6 +791,24 @@ export function UserProfile({
                       Paste a public image URL for your avatar.
                     </p>
                   </div>
+                  <div className="slx-field">
+                    <label className="slx-label" htmlFor="slx-up-username">
+                      Username
+                    </label>
+                    <input
+                      id="slx-up-username"
+                      className="slx-input"
+                      type="text"
+                      autoComplete="username"
+                      placeholder="yourname"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                    />
+                    <p className="slx-hint">
+                      Used for password sign-in as an alternative to email. Must
+                      be unique within your project.
+                    </p>
+                  </div>
                   <button className="slx-btn" type="submit" disabled={busy}>
                     {busy ? 'Saving…' : 'Save changes'}
                   </button>
@@ -867,6 +1006,253 @@ export function UserProfile({
                         </button>
                       </div>
                     )}
+                  </>
+                )}
+              </section>
+
+              {/* ── Two-factor authentication ── */}
+              <section className="slx-profile-sec">
+                <h3 className="slx-sec-title">Two-factor authentication</h3>
+                {tfaError && <p className="slx-error-text">{tfaError}</p>}
+
+                {!user.twoFactorEnabled && tfaStage === 'idle' && (
+                  <>
+                    <p className="slx-hint">
+                      Add an authenticator app (Google Authenticator, Authy,
+                      1Password, etc.) to protect your account with a time-based
+                      one-time password.
+                    </p>
+                    <button
+                      type="button"
+                      className="slx-btn"
+                      onClick={() => void startTfaSetup()}
+                      disabled={tfaBusy}
+                    >
+                      {tfaBusy ? 'Starting…' : 'Set up 2FA'}
+                    </button>
+                  </>
+                )}
+
+                {!user.twoFactorEnabled && tfaStage === 'setup' && (
+                  <form onSubmit={submitTfa}>
+                    {tfaSetup && (
+                      <>
+                        <p className="slx-hint">
+                          Scan this QR code with your authenticator app:
+                        </p>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 14,
+                            margin: '8px 0',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=132x132&data=${encodeURIComponent(tfaSetup.provisioningUri)}`}
+                            alt="QR code to scan with your authenticator app"
+                            width={132}
+                            height={132}
+                            style={{ borderRadius: 6 }}
+                          />
+                          <div style={{ minWidth: 0 }}>
+                            <p className="slx-row-label">
+                              Or enter this code manually:
+                            </p>
+                            <p
+                              className="slx-row-value"
+                              style={{
+                                userSelect: 'all',
+                                letterSpacing: 2,
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              {tfaSetup.secret.replace(/(.{4})/g, '$1 ').trim()}
+                            </p>
+                            <p className="slx-hint">
+                              Account: {tfaSetup.accountName}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <div className="slx-field">
+                      <label className="slx-label" htmlFor="slx-tfa-code">
+                        Enter the 6-digit code
+                      </label>
+                      <input
+                        id="slx-tfa-code"
+                        className="slx-input"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        pattern="[0-9]*"
+                        placeholder="000000"
+                        value={tfaCode}
+                        onChange={(e) =>
+                          setTfaCode(e.target.value.replace(/\D/g, ''))
+                        }
+                        required
+                      />
+                    </div>
+                    <button
+                      className="slx-btn"
+                      type="submit"
+                      disabled={tfaBusy}
+                    >
+                      {tfaBusy ? 'Verifying…' : 'Enable 2FA'}
+                    </button>
+                  </form>
+                )}
+
+                {!user.twoFactorEnabled && tfaStage === 'codes' && (
+                  <>
+                    <div
+                      className="slx-billing-card"
+                      style={{ margin: '4px 0 8px' }}
+                    >
+                      <p className="slx-billing-plan">
+                        2FA enabled — save recovery codes
+                      </p>
+                      <p className="slx-billing-detail">
+                        Each code can be used once to sign in if you lose access
+                        to your authenticator. Store them somewhere safe.
+                      </p>
+                      <ul
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(2, auto)',
+                          gap: '4px 24px',
+                          justifyContent: 'start',
+                          margin: '10px 0',
+                          paddingLeft: 0,
+                          listStyle: 'none',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {tfaRecoveryCodes.map((c) => (
+                          <li key={c}>{c}</li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className="slx-btn-secondary"
+                        onClick={() =>
+                          void navigator.clipboard
+                            ?.writeText(tfaRecoveryCodes.join('\n'))
+                            .catch(() => undefined)
+                        }
+                      >
+                        Copy codes
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="slx-btn-secondary"
+                      onClick={() => void reload()}
+                    >
+                      Done
+                    </button>
+                  </>
+                )}
+
+                {user.twoFactorEnabled && (
+                  <>
+                    <p className="slx-hint">2FA is enabled for this account.</p>
+                    <form
+                      onSubmit={submitTfaDisable}
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'flex-end',
+                        flexWrap: 'wrap',
+                        marginTop: 8,
+                      }}
+                    >
+                      <div className="slx-field" style={{ flex: '1 1 160px' }}>
+                        <label className="slx-label" htmlFor="slx-tfa-disable">
+                          Authenticator code
+                        </label>
+                        <input
+                          id="slx-tfa-disable"
+                          className="slx-input"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          pattern="[0-9]*"
+                          placeholder="000000"
+                          value={tfaVerifyCode}
+                          onChange={(e) =>
+                            setTfaVerifyCode(e.target.value.replace(/\D/g, ''))
+                          }
+                          required
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="slx-btn-danger-outline"
+                        disabled={tfaBusy}
+                      >
+                        {tfaBusy ? 'Disabling…' : 'Disable 2FA'}
+                      </button>
+                    </form>
+                  </>
+                )}
+              </section>
+
+              {/* ── Connected accounts ── */}
+              <section className="slx-profile-sec">
+                <h3 className="slx-sec-title">Connected accounts</h3>
+                {accountsError && (
+                  <p className="slx-error-text">{accountsError}</p>
+                )}
+                {accountsLoading ? (
+                  <p className="slx-hint">Loading…</p>
+                ) : accounts.length === 0 ? (
+                  <>
+                    <p className="slx-hint">
+                      No social accounts connected. You can sign in with Google
+                      or GitHub and link them here later.
+                    </p>
+                    <button
+                      type="button"
+                      className="slx-btn-secondary"
+                      onClick={() => void loadAccounts()}
+                    >
+                      Refresh
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {accounts.map((acc) => (
+                        <li
+                          key={acc.id}
+                          className="slx-session"
+                          style={{ alignItems: 'center' }}
+                        >
+                          <div className="slx-session-meta">
+                            <p className="slx-session-device">
+                              {acc.provider === 'google' ? 'Google' : 'GitHub'}
+                            </p>
+                            <p className="slx-session-sub">
+                              Connected {formatDate(acc.createdAt)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="slx-btn-danger-outline"
+                            onClick={() => void onUnlink(acc.id, acc.provider)}
+                            disabled={unlinkingId === acc.id}
+                          >
+                            {unlinkingId === acc.id ? '…' : 'Unlink'}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </>
                 )}
               </section>

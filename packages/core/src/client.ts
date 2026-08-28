@@ -7,14 +7,21 @@ import {
 import type {
   AuthResponse,
   ChangePasswordInput,
+  CompleteSignInInput,
+  ConnectedAccountsResponse,
+  EnableTOTPResponse,
   ErrorResponse,
   Result,
   RevokeSessionsResponse,
   SessionResponse,
   SessionsResponse,
   SignInInput,
+  SignInResponse,
   SignUpInput,
   SlyxupClientOptions,
+  TOTPSetupResponse,
+  TwoFactorRequiredResponse,
+  TwoFactorStatusResponse,
   UpdateUserInput,
   UserResponse,
 } from './types.js';
@@ -55,9 +62,17 @@ export class SlyxupClient {
 
   readonly auth: {
     signUp: (input: SignUpInput) => Promise<AuthResponse>;
-    signIn: (input: SignInInput) => Promise<AuthResponse>;
+    signIn: (input: SignInInput) => Promise<SignInResponse>;
     signOut: () => Promise<{ ok: true }>;
     resendVerification: (email: string) => Promise<{ ok: true }>;
+    forgotPassword: (
+      email: string,
+      projectId?: string
+    ) => Promise<{ ok: true }>;
+    resetPassword: (token: string, password: string) => Promise<{ ok: true }>;
+    verifyEmail: (token: string) => Promise<{ ok: true }>;
+    /** Complete a 2FA challenge returned by signIn. */
+    completeSignIn: (input: CompleteSignInInput) => Promise<AuthResponse>;
   };
 
   readonly sessions: {
@@ -72,6 +87,22 @@ export class SlyxupClient {
 
   readonly password: {
     change: (input: ChangePasswordInput) => Promise<{ ok: true }>;
+  };
+
+  readonly twoFactor: {
+    setup: () => Promise<TOTPSetupResponse>;
+    status: () => Promise<TwoFactorStatusResponse>;
+    enable: (secret: string, code: string) => Promise<EnableTOTPResponse>;
+    verify: (code: string) => Promise<{ ok: boolean; valid: boolean }>;
+    disable: (code: string) => Promise<{ ok: true }>;
+  };
+
+  readonly accounts: {
+    list: () => Promise<ConnectedAccountsResponse>;
+    unlink: (
+      accountId: string,
+      provider: 'google' | 'github'
+    ) => Promise<{ ok: true }>;
   };
 
   readonly users: {
@@ -116,7 +147,8 @@ export class SlyxupClient {
 
     const requestInner = async <T>(
       path: string,
-      init: RequestInit & { body?: string } = {}
+      init: RequestInit & { body?: string } = {},
+      opts?: { captureError?: boolean }
     ): Promise<Result<T>> => {
       let res: Response;
       try {
@@ -153,6 +185,7 @@ export class SlyxupClient {
         .catch(() => ({ ok: false, error: 'Invalid response' }))) as object;
 
       if (!res.ok) {
+        if (opts?.captureError) return data as Result<T>;
         if (res.status === 401)
           throw new UnauthorizedError(
             'error' in data ? String(data.error) : undefined
@@ -170,11 +203,19 @@ export class SlyxupClient {
       return data as Result<T>;
     };
 
-    const post = <T>(path: string, body?: unknown) =>
-      requestInner<T>(path, {
-        method: 'POST',
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
+    const post = <T>(
+      path: string,
+      body?: unknown,
+      opts?: { captureError?: boolean }
+    ) =>
+      requestInner<T>(
+        path,
+        {
+          method: 'POST',
+          body: body === undefined ? undefined : JSON.stringify(body),
+        },
+        opts
+      );
 
     this.auth = {
       signUp: async (input) => {
@@ -185,7 +226,25 @@ export class SlyxupClient {
         return res;
       },
       signIn: async (input) => {
-        const res = await post<AuthResponse>('/v1/auth/sign-in', input);
+        // The server may answer 403 with code 2FA_REQUIRED — we must surface
+        // the challenge back to the caller instead of throwing a generic error.
+        const res = await post<SignInResponse>('/v1/auth/sign-in', input, {
+          captureError: true,
+        });
+        if ('challengeToken' in res) {
+          return res as TwoFactorRequiredResponse;
+        }
+        if (!('user' in res))
+          throw new SlyxupError(
+            (res as { error?: string }).error ?? 'Sign in failed',
+            401,
+            'api_error'
+          );
+        if (res.sessionToken) persistToken(res.sessionToken);
+        return res;
+      },
+      completeSignIn: async (input) => {
+        const res = await post<AuthResponse>('/v1/auth/sign-in/2fa', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 401, 'api_error');
         if (res.sessionToken) persistToken(res.sessionToken);
@@ -200,6 +259,35 @@ export class SlyxupClient {
       resendVerification: async (email: string) => {
         const res = await post<{ ok: true }>('/v1/verification/resend', {
           email,
+        });
+        if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
+      },
+      forgotPassword: async (email: string, projectId?: string) => {
+        const res = await post<{ ok: true }>(
+          '/v1/verification/password/forgot',
+          {
+            email,
+            projectId,
+          }
+        );
+        if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
+      },
+      resetPassword: async (token: string, password: string) => {
+        const res = await post<{ ok: true }>(
+          '/v1/verification/password/reset',
+          {
+            token,
+            password,
+          }
+        );
+        if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
+      },
+      verifyEmail: async (token: string) => {
+        const res = await post<{ ok: true }>('/v1/verification/verify', {
+          token,
         });
         if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
         return res as { ok: true };
@@ -248,6 +336,65 @@ export class SlyxupClient {
       change: async (input) => {
         const res = await post<{ ok: true }>('/v1/user/password', input);
         if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
+      },
+    };
+
+    this.twoFactor = {
+      setup: async () => {
+        const res = await requestInner<TOTPSetupResponse>('/v1/user/2fa/setup');
+        if (!('secret' in res))
+          throw new SlyxupError(res.error, 400, 'api_error');
+        return res;
+      },
+      status: async () => {
+        const res = await requestInner<TwoFactorStatusResponse>(
+          '/v1/user/2fa/status'
+        );
+        return res as TwoFactorStatusResponse;
+      },
+      enable: async (secret, code) => {
+        const res = await post<EnableTOTPResponse>(
+          '/v1/user/2fa/enable',
+          { secret, code },
+          { captureError: true }
+        );
+        if (!('recoveryCodes' in res))
+          throw new SlyxupError(res.error, 400, 'api_error');
+        return res;
+      },
+      verify: async (code) => {
+        const res = await post<{ ok: boolean; valid: boolean }>(
+          '/v1/user/2fa/verify',
+          { code },
+          { captureError: true }
+        );
+        if (!('valid' in res))
+          throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: boolean; valid: boolean };
+      },
+      disable: async (code) => {
+        const res = await post<{ ok: true }>('/v1/user/2fa/disable', { code });
+        if (!res.ok) throw new SlyxupError(res.error, 400, 'api_error');
+        return res as { ok: true };
+      },
+    };
+
+    this.accounts = {
+      list: async () => {
+        const res =
+          await requestInner<ConnectedAccountsResponse>('/v1/user/accounts');
+        if (!('accounts' in res))
+          throw new SlyxupError(res.error, 400, 'api_error');
+        return res;
+      },
+      unlink: async (accountId, provider) => {
+        const res = await requestInner<{ ok: true }>(
+          `/v1/user/accounts/${accountId}?provider=${encodeURIComponent(provider)}`,
+          {
+            method: 'DELETE',
+          }
+        );
         return res as { ok: true };
       },
     };

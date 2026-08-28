@@ -10,6 +10,8 @@ export {
 export { useAuth } from './hooks/useAuth';
 export { useUser } from './hooks/useUser';
 export { useSession } from './hooks/useSession';
+export { useTwoFactor } from './hooks/useTwoFactor';
+export { useConnectedAccounts } from './hooks/useConnectedAccounts';
 export {
   useBilling,
   usePlans,

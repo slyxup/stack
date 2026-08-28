@@ -23,14 +23,17 @@ export function SignIn({
   onForgotPasswordClick,
 }: SignInProps) {
   injectStyles();
-  const { signIn, client } = useAuth() as unknown as {
+  const { signIn, completeSignIn, client } = useAuth() as unknown as {
     signIn: ReturnType<typeof useAuth>['signIn'];
+    completeSignIn: ReturnType<typeof useAuth>['completeSignIn'];
     client: { publishableKey?: string; apiUrl: string };
   };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [tfaCode, setTfaCode] = useState('');
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,13 +48,34 @@ export function SignIn({
     setBusy(true);
     setError(null);
     try {
-      await signIn({ email, password });
+      const res = await signIn({ email, password });
+      if (res && 'challengeToken' in res) {
+        setChallengeToken(res.challengeToken);
+        return;
+      }
       onSuccess?.();
     } catch (err) {
       setError(
         err instanceof SlyxupError
           ? err.message
           : 'Something went wrong. Try again.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSubmit2FA(e: FormEvent) {
+    e.preventDefault();
+    if (!challengeToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completeSignIn({ challengeToken, code: tfaCode.trim() });
+      onSuccess?.();
+    } catch (err) {
+      setError(
+        err instanceof SlyxupError ? err.message : 'Invalid code. Try again.'
       );
     } finally {
       setBusy(false);
@@ -113,53 +137,94 @@ export function SignIn({
         </p>
       )}
 
-      <form onSubmit={onSubmit} noValidate={false}>
-        <div className="slx-field">
-          <label className="slx-label" htmlFor="slx-signin-email">
-            Email
-          </label>
-          <input
-            id="slx-signin-email"
-            className="slx-input"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div className="slx-field">
-          <div className="slx-row">
-            <label className="slx-label" htmlFor="slx-signin-password">
-              Password
+      {challengeToken ? (
+        <form onSubmit={onSubmit2FA} noValidate={false}>
+          <div className="slx-field">
+            <label className="slx-label" htmlFor="slx-signin-2fa">
+              Authenticator code
             </label>
-            {onForgotPasswordClick && (
-              <button
-                type="button"
-                className="slx-link slx-forgot"
-                onClick={onForgotPasswordClick}
-              >
-                Forgot password?
-              </button>
-            )}
+            <input
+              id="slx-signin-2fa"
+              className="slx-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              pattern="[0-9]*"
+              placeholder="000000"
+              value={tfaCode}
+              onChange={(e) => setTfaCode(e.target.value.replace(/\D/g, ''))}
+              required
+            />
+            <p className="slx-hint">
+              Enter the 6-digit code from your authenticator app.
+            </p>
           </div>
-          <input
-            id="slx-signin-password"
-            className="slx-input"
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        <button className="slx-btn" type="submit" disabled={busy}>
-          {busy && <span className="slx-spinner" aria-hidden="true" />}
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
+          <button className="slx-btn" type="submit" disabled={busy}>
+            {busy && <span className="slx-spinner" aria-hidden="true" />}
+            {busy ? 'Verifying…' : 'Verify code'}
+          </button>
+          <button
+            type="button"
+            className="slx-link"
+            style={{ marginTop: 8 }}
+            onClick={() => {
+              setChallengeToken(null);
+              setTfaCode('');
+            }}
+          >
+            ← Back to sign in
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={onSubmit} noValidate={false}>
+          <div className="slx-field">
+            <label className="slx-label" htmlFor="slx-signin-email">
+              Email <span className="slx-hint">or username</span>
+            </label>
+            <input
+              id="slx-signin-email"
+              className="slx-input"
+              type="text"
+              autoComplete="username"
+              placeholder="you@example.com or yourname"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="slx-field">
+            <div className="slx-row">
+              <label className="slx-label" htmlFor="slx-signin-password">
+                Password
+              </label>
+              {onForgotPasswordClick && (
+                <button
+                  type="button"
+                  className="slx-link slx-forgot"
+                  onClick={onForgotPasswordClick}
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+            <input
+              id="slx-signin-password"
+              className="slx-input"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button className="slx-btn" type="submit" disabled={busy}>
+            {busy && <span className="slx-spinner" aria-hidden="true" />}
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      )}
 
       {onSignUpClick && (
         <p className="slx-footer">

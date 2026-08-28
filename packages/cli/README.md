@@ -85,6 +85,8 @@ slyxup domains go-live --project-id <id> --json        # verify DNS + activate c
 ```bash
 slyxup auth signup -e ada@acme.com -p secret123 --json   # sends verification email
 slyxup auth signin -e ada@acme.com -p secret123 --json   # prints session id + expiry
+# When the account has 2FA enabled, pass the authenticator code:
+slyxup auth signin -e ada@acme.com -p secret123 -c 123456 --json
 slyxup auth verify --token <token-from-email> --json     # verify email address
 slyxup auth resend -e ada@acme.com --json                  # resend verification
 slyxup auth oauth --provider google --json               # prints OAuth URL (or opens browser)

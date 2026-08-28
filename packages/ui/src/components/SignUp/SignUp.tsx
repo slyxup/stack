@@ -22,6 +22,7 @@ export function SignUp({
     client: { publishableKey?: string; apiUrl: string };
   };
   const [firstName, setFirstName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,7 +41,12 @@ export function SignUp({
     setBusy(true);
     setError(null);
     try {
-      await signUp({ email, password, firstName: firstName || undefined });
+      await signUp({
+        email,
+        password,
+        firstName: firstName || undefined,
+        username: username || undefined,
+      });
       onSuccess?.();
     } catch (err) {
       setError(
@@ -120,6 +126,23 @@ export function SignUp({
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
           />
+        </div>
+        <div className="slx-field">
+          <label className="slx-label" htmlFor="slx-signup-username">
+            Username
+          </label>
+          <input
+            id="slx-signup-username"
+            className="slx-input"
+            type="text"
+            autoComplete="username"
+            placeholder="ada"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <p className="slx-hint">
+            Optional — lets you sign in with a username instead of your email.
+          </p>
         </div>
         <div className="slx-field">
           <label className="slx-label" htmlFor="slx-signup-email">

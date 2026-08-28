@@ -133,6 +133,19 @@ export async function signUp(
   };
 }
 
+export type SignInResult =
+  | {
+      user: typeof users.$inferSelect;
+      sessionToken: string;
+      expiresAt: Date;
+      requires2FA: false;
+    }
+  | {
+      user: typeof users.$inferSelect;
+      challengeToken: string;
+      requires2FA: true;
+    };
+
 export async function signIn(
   env: { DB: D1Database },
   input: {
@@ -141,7 +154,7 @@ export async function signIn(
     password: string;
     projectId?: string;
   }
-) {
+): Promise<SignInResult> {
   const db = getDb(env);
   let user: typeof users.$inferSelect | undefined;
   if (input.username) {

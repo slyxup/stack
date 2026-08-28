@@ -43,6 +43,11 @@ import { SignIn, SignUp } from '@slyxup/ui';
 <SignUp onSignInClick={() => setMode('sign-in')} />
 ```
 
+Notes:
+- `SignIn` accepts **either an email or a username** in the identifier field.
+- When the account has 2FA enabled, `SignIn` auto-detects the `2FA_REQUIRED` response and swaps to an authenticator-code step, then completes the sign-in with `completeSignIn`.
+- `SignUp` includes an optional **username** field (used for password sign-in as an alternative to email).
+
 ### `<UserButton />` — avatar + dropdown
 
 ```tsx
@@ -74,9 +79,9 @@ const [open, setOpen] = useState(false);
 )}
 ```
 
-**Profile tab** — avatar preview from URL, first/last name editing with save confirmation, email row with a verified/unverified badge and one-click resend verification.
+**Profile tab** — avatar preview from URL, first/last name editing plus an optional **username** field (unique per project, usable for password sign-in), all with save confirmation, and an email row with a verified/unverified badge and one-click resend verification.
 
-**Security tab** — change password (validates current password server-side, min 8 chars, confirm-match check), active sessions list parsed into `Browser · OS` device labels showing IP, created and expiry dates, per-session revoke buttons, "sign out other devices", and a type-`DELETE`-to-confirm danger zone for permanent account deletion.
+**Security tab** — change password (validates current password server-side, min 8 chars, confirm-match check), **two-factor authentication (TOTP)** setup flow (QR + manual secret, verify-before-enable, one-time recovery codes shown once on enable, and disable via current code), **connected OAuth accounts** list with per-account unlink, active sessions list parsed into `Browser · OS` device labels showing IP, created and expiry dates with **pagination**, per-session revoke buttons, "sign out other devices", and a type-`DELETE`-to-confirm danger zone for permanent account deletion.
 
 | Prop | Required | Default | Purpose |
 |---|---|---|---|
@@ -84,7 +89,7 @@ const [open, setOpen] = useState(false);
 | `onClose` | no | — | Modal close callback |
 | `onDeleted` | no | — | Fired after the account is deleted |
 
-Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GET/DELETE /v1/sessions`) and `@slyxup/react >= auth hooks`.
+Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GET/DELETE /v1/sessions`, `GET/POST /v1/user/2fa/*`, `GET/DELETE /v1/user/accounts`) and `@slyxup/react >= auth hooks`.
 
 ### Password flows
 

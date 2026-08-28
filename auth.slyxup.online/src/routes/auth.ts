@@ -61,6 +61,10 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
       ...input,
       projectId,
     });
+    void dispatchWebhooks(c.env, projectId ?? null, 'user.created', {
+      id: user.id,
+      email: user.email,
+    });
     setSessionCookie(c, sessionToken, expiresAt);
     return c.json({ ok: true, user, sessionToken }, 201);
   } catch (e) {

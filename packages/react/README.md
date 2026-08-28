@@ -38,15 +38,37 @@ const { isLoaded, isSignedIn, userId, client, signIn, signUp, signOut } = useAut
 if (!isLoaded) return <Spinner />;
 if (!isSignedIn) return <button onClick={() => signIn({ email, password })}>Sign in</button>;
 
-await signUp({ email, password, firstName });  // auto signs in + refreshes state
-await signOut();                              // clears session, updates state
+await signUp({ email, password, firstName, username });  // auto signs in + refreshes state
+await signOut();                                       // clears session, updates state
+```
+
+Password/auth helpers are also exposed directly:
+
+```tsx
+const { forgotPassword, resetPassword, verifyEmail, resendVerification } = useAuth();
+await forgotPassword(email);                 // sends reset email
+await resetPassword(token, newPassword);     // sets new password using emailed token
+await verifyEmail(token);                    // confirm email from verification link
+```
+
+### `useAuth()` — two-factor sign-in
+
+`signIn` returns `{ code: '2FA_REQUIRED', challengeToken }` when the account has TOTP
+enabled. Capture it and pass it to `completeSignIn`:
+
+```tsx
+const res = await signIn({ email, password });
+if (res.code === '2FA_REQUIRED') {
+  await completeSignIn({ challengeToken: res.challengeToken, code: '123456' });
+  // or pass a recoveryCode instead of code
+}
 ```
 
 ### `useUser()` — full profile
 
 ```tsx
 const { user, isSignedIn, isSignedOut, isLoaded, reload } = useUser();
-// user: { id, email, firstName, lastName, avatarUrl, emailVerified, ... }
+// user: { id, email, username, firstName, lastName, avatarUrl, emailVerified, twoFactorEnabled, ... }
 // isSignedOut: true when loaded and not signed in (convenience boolean)
 <p>{user?.firstName}</p>
 ```
@@ -56,6 +78,24 @@ const { user, isSignedIn, isSignedOut, isLoaded, reload } = useUser();
 ```tsx
 const { session, isLoaded } = useSession();
 // session: { id, expiresAt }
+```
+
+### `useTwoFactor()` — TOTP setup / enable / disable
+
+```tsx
+const { setup, enable, verify, disable, status } = useTwoFactor();
+const { secret, provisioningUri } = await setup();      // show QR / secret to user
+const { recoveryCodes } = await enable(secret, code);   // save these recovery codes!
+await verify(code);                                     // { valid: true }
+await disable(code);                                    // turns 2FA off
+```
+
+### `useConnectedAccounts()` — OAuth account management
+
+```tsx
+const { list, unlink } = useConnectedAccounts();
+const { accounts } = await list();        // [{ id, provider: 'google' | 'github', ... }]
+await unlink(accountId, 'google');
 ```
 
 State **auto-refreshes** every 5 minutes and after every auth action.

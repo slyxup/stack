@@ -12,8 +12,10 @@ export const DOCS_SIDEBAR = [
     items: [
       { title: 'Email & Password', slug: '/docs/auth/email', desc: 'Sign up, sign in, sessions' },
       { title: 'OAuth (Google & GitHub)', slug: '/docs/auth/oauth', desc: 'Social sign-in flows' },
+      { title: 'Security', slug: '/docs/auth/security', desc: 'Username, 2FA, connected accounts' },
       { title: 'Sessions', slug: '/docs/auth/sessions', desc: 'Cookie management, revocation' },
       { title: 'User Management', slug: '/docs/auth/users', desc: 'Profiles, blocking, roles' },
+      { title: 'Webhooks', slug: '/docs/auth/webhooks', desc: 'Auth event delivery' },
     ],
   },
   {

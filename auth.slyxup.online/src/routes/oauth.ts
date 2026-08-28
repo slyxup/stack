@@ -10,6 +10,7 @@ import {
   verificationTokens,
 } from '../lib/schema';
 import { buildAuthUrl, newState } from '../services/oauth.service';
+import { dispatchWebhooks } from '../services/webhook.service';
 
 type Bindings = {
   DB: D1Database;
@@ -302,6 +303,10 @@ oauth.get('/callback/:provider', async (c) => {
         scope: null,
         createdAt: now,
         updatedAt: now,
+      });
+      void dispatchWebhooks(c.env, user.projectId, 'oauth.linked', {
+        id: user.id,
+        provider,
       });
     }
 
