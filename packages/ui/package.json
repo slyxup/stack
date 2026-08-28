@@ -1,7 +1,7 @@
 {
   "name": "@slyxup/ui",
   "version": "1.0.0",
-  "description": "@slyxup/ui — SlyxUp SDK",
+  "description": "SlyxUp UI components — auth, billing, Paddle checkout",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
