@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/nextjs",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "@slyxup/nextjs — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
