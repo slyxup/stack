@@ -1,6 +1,12 @@
 import type { SlyxupSessionInfo } from '@slyxup/core';
 import { useAuth, useUser } from '@slyxup/react';
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { initPaddle, openPaddleCheckout } from '../../lib/paddle';
 import { injectStyles } from '../../styles';
 
@@ -168,8 +174,17 @@ export function UserProfile({
   >([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
+  // Project whose plans/subscription are shown — used to attribute checkout customData.
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [checkoutDone, setCheckoutDone] = useState(false);
+  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
+  // Keep the latest subscription available to the async polling loop (avoids
+  // stale-closure reads of state inside setTimeout callbacks).
+  const subscriptionRef = useRef(subscription);
+  useEffect(() => {
+    subscriptionRef.current = subscription;
+  }, [subscription]);
 
   // ── Danger zone state ──
   const [confirmText, setConfirmText] = useState('');
@@ -282,6 +297,7 @@ export function UserProfile({
       // For the example apps, the publishableKey is for the example project, not the user's projectId
       const projectId: string | null =
         (user as unknown as { projectId?: string | null })?.projectId ?? null;
+      setProjectId(projectId);
 
       // Fetch subscription + invoices (new /v1/billing/* with fallback to legacy /v1/*)
       async function fetchJson(url: string) {
@@ -417,6 +433,22 @@ export function UserProfile({
     if (tab === 'security') void loadSessions(0);
     if (tab === 'billing') void loadBilling();
   }, [tab, loadSessions, loadBilling]);
+
+  // React to a completed Paddle checkout: reload billing immediately and show
+  // a success confirmation (fallback for when the webhook is fast / polling lags).
+  useEffect(() => {
+    function onCheckoutCompleted() {
+      setCheckoutSuccess(true);
+      void loadBilling();
+      setTimeout(() => setCheckoutSuccess(false), 6000);
+    }
+    window.addEventListener('slyxup:checkout-completed', onCheckoutCompleted);
+    return () =>
+      window.removeEventListener(
+        'slyxup:checkout-completed',
+        onCheckoutCompleted
+      );
+  }, [loadBilling]);
 
   async function onProfileSubmit(e: FormEvent) {
     e.preventDefault();
@@ -603,6 +635,7 @@ export function UserProfile({
 
   async function handleCheckout(plan: Plan) {
     setCheckoutId(plan.id);
+    setCheckoutDone(false);
     try {
       // Always use Paddle.js overlay checkout
       // authApiUrl is available via client apiUrl
@@ -610,7 +643,15 @@ export function UserProfile({
         (client as unknown as { apiUrl: string }).apiUrl ??
         'https://auth.slyxup.online';
       await initPaddle(rawApiUrl);
-      openPaddleCheckout(plan.paddlePriceId, user?.email);
+      // Pass custom data so the billing webhook can attribute the created
+      // subscription to this user + project + plan (Paddle copies custom_data
+      // from the transaction to the subscription for recurring items).
+      const customData: Record<string, string> = {
+        userId: user?.id ?? '',
+        planId: plan.id,
+      };
+      if (projectId) customData.projectId = projectId;
+      openPaddleCheckout(plan.paddlePriceId, user?.email, customData);
       setCheckoutDone(true);
 
       // Poll for subscription updates after checkout (webhook may take a few seconds)
@@ -621,7 +662,7 @@ export function UserProfile({
         attempts++;
         try {
           await loadBilling();
-          if (subscription && attempts < maxAttempts) {
+          if (subscriptionRef.current && attempts < maxAttempts) {
             // Found subscription, stop polling
             return;
           }
@@ -1309,6 +1350,14 @@ export function UserProfile({
                       style={{ color: 'var(--slx-success)', marginBottom: 8 }}
                     >
                       Checkout opened — complete your payment in the overlay.
+                    </p>
+                  )}
+                  {checkoutSuccess && (
+                    <p
+                      className="slx-error-text"
+                      style={{ color: 'var(--slx-success)', marginBottom: 8 }}
+                    >
+                      Payment successful — your subscription is being set up.
                     </p>
                   )}
                   <div className="slx-billing-card">

@@ -14,6 +14,7 @@ declare global {
           items: Array<{ priceId: string; quantity: number }>;
           customer?: { email?: string };
           settings?: Record<string, unknown>;
+          customData?: Record<string, unknown>;
         }) => void;
       };
     };
@@ -95,8 +96,10 @@ export async function initPaddle(authApiUrl: string): Promise<void> {
       window.Paddle.Initialize({
         token: config.clientToken,
         eventCallback: (data) => {
-          if (data.name === 'checkout.completed') {
-            // Subscription created via webhook — UI will refresh on next load
+          if (data && data.name === 'checkout.completed') {
+            // Subscription is created via webhook. Notify the host app so it can
+            // refresh billing state and show a success confirmation.
+            window.dispatchEvent(new CustomEvent('slyxup:checkout-completed'));
           }
         },
       });
@@ -108,10 +111,14 @@ export async function initPaddle(authApiUrl: string): Promise<void> {
 
 /**
  * Open Paddle overlay checkout for a given price ID.
+ * `customData` is copied to the created transaction (and, for recurring
+ * items, to the related subscription) — the billing webhook uses it to
+ * attribute the subscription to a SlyxUp user + project + plan.
  */
 export function openPaddleCheckout(
   priceId: string,
-  customerEmail?: string
+  customerEmail?: string,
+  customData?: Record<string, unknown>
 ): void {
   if (!window.Paddle) {
     throw new Error('Paddle.js not initialized — call initPaddle() first');
@@ -119,5 +126,6 @@ export function openPaddleCheckout(
   window.Paddle.Checkout.open({
     items: [{ priceId, quantity: 1 }],
     ...(customerEmail ? { customer: { email: customerEmail } } : {}),
+    ...(customData ? { customData } : {}),
   });
 }

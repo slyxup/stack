@@ -27,6 +27,7 @@ export function SignUp({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successEmail, setSuccessEmail] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function SignUp({
         firstName: firstName || undefined,
         username: username || undefined,
       });
+      setSuccessEmail(email);
       onSuccess?.();
     } catch (err) {
       setError(
@@ -109,6 +111,18 @@ export function SignUp({
       {error && (
         <p className="slx-error-text" role="alert">
           {error}
+        </p>
+      )}
+
+      {successEmail && (
+        <p
+          className="slx-success-text"
+          aria-live="polite"
+          style={{ color: 'var(--slx-success)' }}
+        >
+          Account created! We sent a verification link to{' '}
+          <strong>{successEmail}</strong>. Check your inbox to verify and sign
+          in.
         </p>
       )}
 

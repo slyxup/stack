@@ -130,6 +130,21 @@ const { checkout } = useCheckout();
 
 Clean pricing grid with a "popular" badge driven by `plan.isPopular`.
 
+You can also drive checkout directly without React hooks:
+
+```ts
+import { initPaddle, openPaddleCheckout } from '@slyxup/ui';
+
+initPaddle({ environment: 'sandbox', token: 'test_...' });
+
+// `customData` (userId/planId/projectId) is copied onto the created
+// Paddle transaction and subscription so the billing webhook can attribute
+// the payment to the right user/project/plan and mark the subscription active.
+openPaddleCheckout(priceId, customerEmail?, { userId, planId, projectId });
+```
+
+`initPaddle` also dispatches a `window` `CustomEvent('slyxup:checkout-completed')` when Paddle's checkout finishes, so your UI can refresh the subscription.
+
 ### `<BillingPortal />` — current plan + invoices
 
 ```tsx
