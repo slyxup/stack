@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "cf8b7f70-1586-4b8c-a2ad-30d03bc82192",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "24026699-f139-4da0-bb25-938f9ed4da42",
+  "prevId": "cf8b7f70-1586-4b8c-a2ad-30d03bc82192",
   "tables": {
     "customers": {
       "name": "customers",
@@ -554,6 +554,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
         },
         "created_at": {
           "name": "created_at",

@@ -1,0 +1,1 @@
+ALTER TABLE `webhook_events` ADD `status` text DEFAULT 'pending' NOT NULL;
