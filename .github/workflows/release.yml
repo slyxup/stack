@@ -22,79 +22,88 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
-      - name: Auto version packages if changed
+      - name: Version & publish changed packages
         run: |
           git config user.name "slyxup-bot"
           git config user.email "bot@users.noreply.github.com"
-          if git log -1 --pretty=%B | grep -q "chore: version packages"; then
-            echo "Version commit, skipping auto-version."
-            exit 0
-          fi
-          # Also skip if no package files changed in this push
-          if ! git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^packages/"; then
-            echo "No packages/ changes in this push, skipping version bump."
-            exit 0
-          fi
-          changed=""
-          for pkg in packages/*; do
-            if [ ! -d "$pkg" ]; then continue; fi
-            name=$(basename "$pkg")
-            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^$pkg/"; then
-              echo "Detected changes in $pkg"
-              changed="$changed $pkg"
-              cur=$(node -p "require('./$pkg/package.json').version")
-              echo "Current $name version: $cur"
-              # Bump patch via node (avoid npm version which doesn't understand workspace:*)
-              node -e "
-                const fs=require('fs');
-                const p='./$pkg/package.json';
-                const j=JSON.parse(fs.readFileSync(p,'utf8'));
-                const v=j.version.split('.');
-                v[2]=String(parseInt(v[2])+1);
-                j.version=v.join('.');
-                fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
-                console.log(j.version);
-              " > /tmp/newver
-              new=$(cat /tmp/newver)
-              echo "$name: $cur -> $new"
-            fi
-          done
-          if [ -z "$changed" ]; then
-            echo "No package changes to version."
-            exit 0
-          fi
-          # Update lockfile after version bumps
-          pnpm install --no-frozen-lockfile 2>&1 | tail -5
-          if git diff --quiet; then
-            echo "No version changes to commit."
-            exit 0
-          fi
-          git add packages/*/package.json pnpm-lock.yaml
-          git commit -m "chore: version packages"
-          git push || echo "Push failed (protected branch), continuing to publish with bumped version..."
-          echo "Version bump done (may not be pushed due to protection, but publish will use bumped version)."
 
-      - name: Publish to npm
-        run: |
-          # Only publish if the last commit was a version bump or packages changed
-          # Check if current HEAD contains version bump or if packages were changed recently
-          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "packages/.*package.json"; then
-            echo "Publishing changed packages..."
-            # Publish each changed package that has a version bump
-            for pkg in packages/*; do
-              if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q "^$pkg/package.json"; then
-                echo "Publishing $pkg..."
-                (cd "$pkg" && npm publish --access public --provenance) || echo "Publish failed for $pkg (maybe already published)"
-              fi
-            done
-          else
-            echo "No package.json version changes, trying pnpm publish filter..."
-            # Fallback: try publishing any unpublished versions
-            pnpm -r publish --access public --provenance --no-git-checks || echo "No packages to publish or publish failed (may be already published)"
+          # Skip if this is already a version commit
+          if git log -1 --pretty=%B | grep -q "chore: version packages"; then
+            echo "Version commit, skipping."
+            exit 0
           fi
+
+          # Find which packages changed in this push
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -oP '^packages/\K[^/]+' | sort -u)
+          if [ -z "$CHANGED" ]; then
+            echo "No package changes, skipping."
+            exit 0
+          fi
+
+          echo "Changed packages: $CHANGED"
+
+          # For each changed package: get latest from npm, bump patch, publish
+          for name in $CHANGED; do
+            pkg="packages/$name"
+            [ ! -d "$pkg" ] && continue
+
+            pkg_name=$(node -p "require('./$pkg/package.json').name")
+            echo ""
+            echo "=== $pkg_name ==="
+
+            # Get the current latest version from npm (may not exist yet)
+            npm_latest=$(npm view "$pkg_name" version 2>/dev/null || echo "")
+            if [ -n "$npm_latest" ]; then
+              echo "  npm latest: $npm_latest"
+              # Bump patch from npm latest (not from local package.json)
+              IFS='.' read -r major minor patch <<< "$npm_latest"
+              new_version="${major}.${minor}.$((patch + 1))"
+            else
+              # Package not on npm yet — use local version as-is
+              local_ver=$(node -p "require('./$pkg/package.json').version")
+              echo "  not on npm yet, using local version: $local_ver"
+              new_version="$local_ver"
+            fi
+
+            echo "  publishing: $new_version"
+
+            # Update local package.json version
+            node -e "
+              const fs=require('fs');
+              const p='./$pkg/package.json';
+              const j=JSON.parse(fs.readFileSync(p,'utf8'));
+              j.version='$new_version';
+              fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
+            "
+
+            # Check if this exact version already exists (race condition guard)
+            exists=$(npm view "$pkg_name@$new_version" version 2>/dev/null || echo "")
+            if [ -n "$exists" ]; then
+              echo "  $pkg_name@$new_version already exists on npm, skipping."
+              # Revert version in package.json
+              git checkout -- "$pkg/package.json"
+              continue
+            fi
+
+            # Publish with pnpm — auto-rewrites workspace:* → real versions
+            (cd "$pkg" && pnpm publish --access public --no-git-checks --provenance) \
+              && echo "  ✅ Published $pkg_name@$new_version" \
+              || echo "  ❌ Publish failed for $pkg_name"
+          done
+
+          # Commit version bumps
+          if ! git diff --quiet packages/*/package.json; then
+            git add packages/*/package.json pnpm-lock.yaml
+            git commit -m "chore: version packages" || true
+            git push || echo "Push failed (protected branch), continuing..."
+          fi
+
+          echo ""
+          echo "=== Published versions ==="
+          for name in $CHANGED; do
+            pkg_name=$(node -p "require('./packages/$name/package.json').name")
+            echo "$pkg_name: $(npm view "$pkg_name" version 2>/dev/null || echo 'N/A')"
+          done
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Sync local main after version commit
-        run: git pull --rebase origin main || true
