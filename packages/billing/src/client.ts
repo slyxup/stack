@@ -39,7 +39,7 @@ export interface BillingClientOptions {
 }
 
 function getEnvApiUrl(): string | undefined {
-  // Check for billing-specific env var first, then fall back to auth URL for localhost
+  // 1. Explicit billing URL takes priority
   try {
     // @ts-ignore — process may not exist in browser
     if (
@@ -48,31 +48,42 @@ function getEnvApiUrl(): string | undefined {
     )
       return process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL;
   } catch {}
+
+  // 2. Derive billing URL from auth URL (auth → billing domain swap)
+  let authUrl: string | undefined;
   try {
-    // @ts-ignore — process may not exist in browser
+    // @ts-ignore
     if (
       typeof process !== 'undefined' &&
       process.env?.NEXT_PUBLIC_SLYXUP_API_URL
-    ) {
-      const authUrl = process.env.NEXT_PUBLIC_SLYXUP_API_URL;
-      // For localhost dev, derive billing URL from auth URL (swap port)
-      if (/^https?:\/\/localhost:\d+$/.test(authUrl)) return authUrl;
-      // For production, billing is always on a separate domain — don't leak auth URL
-      return undefined;
-    }
+    )
+      authUrl = process.env.NEXT_PUBLIC_SLYXUP_API_URL;
   } catch {}
   try {
-    // @ts-ignore — import.meta may not exist in Node
+    // @ts-ignore
     if (
+      !authUrl &&
       typeof import.meta !== 'undefined' &&
       (import.meta as unknown as { env?: Record<string, string> }).env
         ?.VITE_SLYXUP_API_URL
-    ) {
-      const authUrl = (
-        import.meta as unknown as { env: Record<string, string> }
-      ).env.VITE_SLYXUP_API_URL;
-      if (/^https?:\/\/localhost:\d+$/.test(authUrl)) return authUrl;
-      return undefined;
+    )
+      authUrl = (import.meta as unknown as { env: Record<string, string> }).env
+        .VITE_SLYXUP_API_URL;
+  } catch {}
+
+  if (!authUrl) return undefined;
+
+  // Localhost: return as-is (constructor handles port swap)
+  if (/^https?:\/\/localhost(:\d+)?$/.test(authUrl)) return authUrl;
+
+  // Production: derive billing domain from auth domain
+  return authUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+}
+
+function getStoredToken(): string | undefined {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem('slyxup_session_token') ?? undefined;
     }
   } catch {}
   return undefined;
@@ -98,9 +109,19 @@ export class BillingClient {
   }
 
   private async req<T>(path: string, init?: RequestInit): Promise<T> {
+    const token = getStoredToken();
+    const authHeaders: Record<string, string> = {};
+    if (token) authHeaders.Authorization = `Bearer ${token}`;
+    if (this.publishableKey && this.publishableKey !== 'pk_test_missing')
+      authHeaders['X-Publishable-Key'] = this.publishableKey;
+
     const res = await fetch(`${this.apiUrl}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...init?.headers,
+      },
       credentials: 'include',
     });
     if (!res.ok) {
