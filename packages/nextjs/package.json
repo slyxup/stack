@@ -5,6 +5,24 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./middleware": {
+      "import": "./dist/middleware.js",
+      "types": "./dist/middleware.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server/auth.js",
+      "types": "./dist/server/auth.d.ts"
+    },
+    "./cookies": {
+      "import": "./dist/cookies.js",
+      "types": "./dist/cookies.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
