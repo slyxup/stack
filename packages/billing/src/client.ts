@@ -39,14 +39,27 @@ export interface BillingClientOptions {
 }
 
 function getEnvApiUrl(): string | undefined {
-  // Next.js (process.env) + Vite (import.meta.env) + generic window check
+  // Check for billing-specific env var first, then fall back to auth URL for localhost
+  try {
+    // @ts-ignore — process may not exist in browser
+    if (
+      typeof process !== 'undefined' &&
+      process.env?.NEXT_PUBLIC_SLYXUP_BILLING_URL
+    )
+      return process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL;
+  } catch {}
   try {
     // @ts-ignore — process may not exist in browser
     if (
       typeof process !== 'undefined' &&
       process.env?.NEXT_PUBLIC_SLYXUP_API_URL
-    )
-      return process.env.NEXT_PUBLIC_SLYXUP_API_URL;
+    ) {
+      const authUrl = process.env.NEXT_PUBLIC_SLYXUP_API_URL;
+      // For localhost dev, derive billing URL from auth URL (swap port)
+      if (/^https?:\/\/localhost:\d+$/.test(authUrl)) return authUrl;
+      // For production, billing is always on a separate domain — don't leak auth URL
+      return undefined;
+    }
   } catch {}
   try {
     // @ts-ignore — import.meta may not exist in Node
@@ -55,8 +68,11 @@ function getEnvApiUrl(): string | undefined {
       (import.meta as unknown as { env?: Record<string, string> }).env
         ?.VITE_SLYXUP_API_URL
     ) {
-      return (import.meta as unknown as { env: Record<string, string> }).env
-        .VITE_SLYXUP_API_URL;
+      const authUrl = (
+        import.meta as unknown as { env: Record<string, string> }
+      ).env.VITE_SLYXUP_API_URL;
+      if (/^https?:\/\/localhost:\d+$/.test(authUrl)) return authUrl;
+      return undefined;
     }
   } catch {}
   return undefined;
