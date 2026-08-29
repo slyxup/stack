@@ -102,12 +102,12 @@ export default function KeysPage() {
             This is shown only once.
           </p>
           <code className="mono" style={{ display: 'block', wordBreak: 'break-all', color: 'var(--success)' }}>
-            {freshKey.prefix}_{freshKey.key}
+            {freshKey.key}
           </code>
           <button
             className="btn-secondary c-btn"
             style={{ marginTop: 10 }}
-            onClick={() => void navigator.clipboard.writeText(`${freshKey.prefix}_${freshKey.key}`)}
+            onClick={() => void navigator.clipboard.writeText(freshKey.key)}
           >
             Copy
           </button>
