@@ -24,25 +24,15 @@ const developersRoute = new Hono<{
   Variables: { userId?: string; developerId?: string };
 }>();
 
-/** Resolve session Bearer → verified user (shared helper). */
+/** Resolve session Bearer → verified user (shared helper). Deduplicated via auth.service getSession. */
 export async function userFromSession(
   env: { DB: D1Database },
   token: string
 ): Promise<{ id: string; email: string } | null> {
-  const db = getDb(env);
-  const session = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.token, token))
-    .get();
-  if (!session || session.expiresAt < new Date()) return null;
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .get();
-  if (!user || !user.emailVerified || user.blocked) return null;
-  return { id: user.id, email: user.email };
+  const { getSession } = await import('../services/auth.service');
+  const data = await getSession(env, token);
+  if (!data) return null;
+  return { id: data.user.id, email: data.user.email };
 }
 
 /** Ensure a developer row exists for this user; return it. */
@@ -95,12 +85,12 @@ export async function ensureDeveloper(
   );
 }
 
-/** Middleware — session Bearer required; auto-provisions developer row. */
+/** Middleware — session Bearer or HttpOnly cookie required; auto-provisions developer row. */
 developersRoute.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer '))
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, auth.slice(7).trim());
+  const { getSessionToken } = await import('../lib/cookies');
+  const token = getSessionToken(c);
+  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const user = await userFromSession(c.env, token);
   if (!user)
     return c.json(
       {

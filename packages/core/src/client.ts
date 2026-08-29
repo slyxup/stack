@@ -56,6 +56,7 @@ function createCookieJar() {
  */
 export class SlyxupClient {
   readonly publishableKey?: string;
+  readonly secretKey?: string;
   readonly apiUrl: string;
   private _getToken?: () => string | undefined;
   private _request?: <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -111,6 +112,78 @@ export class SlyxupClient {
     delete: () => Promise<{ ok: true }>;
   };
 
+  readonly admin: {
+    /** Get current project details */
+    getProject: () => Promise<{
+      ok: true;
+      project: { id: string; name: string; createdAt: string };
+    }>;
+    /** List users in the project */
+    listUsers: (opts?: { limit?: number; offset?: number }) => Promise<{
+      ok: true;
+      users: Array<{
+        id: string;
+        email: string;
+        firstName: string | null;
+        lastName: string | null;
+        emailVerified: boolean;
+        blocked: boolean;
+        createdAt: string;
+      }>;
+      total: number;
+    }>;
+    /** Get a single user by ID */
+    getUser: (
+      userId: string
+    ) => Promise<{
+      ok: true;
+      user: {
+        id: string;
+        email: string;
+        firstName: string | null;
+        lastName: string | null;
+        emailVerified: boolean;
+        blocked: boolean;
+        createdAt: string;
+        updatedAt: string;
+      };
+    }>;
+    /** List active sessions */
+    listSessions: () => Promise<{
+      ok: true;
+      sessions: Array<{
+        id: string;
+        userId: string;
+        ipAddress: string | null;
+        userAgent: string | null;
+        expiresAt: string;
+        isExpired: boolean;
+        createdAt: string;
+      }>;
+    }>;
+    /** List API keys */
+    listKeys: () => Promise<{
+      ok: true;
+      keys: Array<{
+        id: string;
+        name: string;
+        prefix: string;
+        environment: string;
+        type: string;
+        lastUsedAt: string | null;
+        createdAt: string;
+      }>;
+    }>;
+    /** Create an API key (full key returned only once) */
+    createKey: (input: {
+      name: string;
+      type: 'publishable' | 'secret';
+      environment: 'test' | 'live';
+    }) => Promise<{ ok: true; id: string; key: string; prefix: string }>;
+    /** Revoke an API key */
+    revokeKey: (keyId: string) => Promise<{ ok: true }>;
+  };
+
   /** Get current session token (for custom project APIs that need Bearer) */
   getToken(): string | undefined {
     return this._getToken?.();
@@ -141,6 +214,7 @@ export class SlyxupClient {
       } catch {}
     };
     this.publishableKey = options.publishableKey;
+    this.secretKey = options.secretKey;
     this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
     this._getToken = () => storedToken;
     // _request will be assigned after `request` is defined below
@@ -415,6 +489,134 @@ export class SlyxupClient {
         const res = await requestInner<{ ok: true }>('/v1/user', {
           method: 'DELETE',
         });
+        return res as { ok: true };
+      },
+    };
+
+    // ── Admin API (requires secretKey) ──
+    const sk = options.secretKey;
+    const adminRequest = async <T>(
+      path: string,
+      init: RequestInit = {}
+    ): Promise<T> => {
+      if (!sk)
+        throw new SlyxupError(
+          'Secret key required for admin API',
+          400,
+          'api_error'
+        );
+      const res = await fetch(`${this.apiUrl}${path}`, {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sk}`,
+          ...init.headers,
+        },
+      });
+      const data = (await res
+        .json()
+        .catch(() => ({ ok: false, error: 'Invalid response' }))) as object;
+      if (!res.ok) {
+        throw new SlyxupError(
+          'error' in data
+            ? String((data as { error: unknown }).error)
+            : `Request failed (${res.status})`,
+          res.status,
+          'api_error'
+        );
+      }
+      return data as T;
+    };
+
+    this.admin = {
+      getProject: async () => {
+        const res = await adminRequest<{
+          ok: true;
+          project: { id: string; name: string; createdAt: string };
+        }>('/v1/admin/project');
+        return res;
+      },
+      listUsers: async (opts) => {
+        const params = new URLSearchParams();
+        if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
+        if (opts?.offset !== undefined)
+          params.set('offset', String(opts.offset));
+        const qs = params.toString();
+        const res = await adminRequest<{
+          ok: true;
+          users: Array<{
+            id: string;
+            email: string;
+            firstName: string | null;
+            lastName: string | null;
+            emailVerified: boolean;
+            blocked: boolean;
+            createdAt: string;
+          }>;
+          total: number;
+        }>(`/v1/admin/users${qs ? `?${qs}` : ''}`);
+        return res;
+      },
+      getUser: async (userId) => {
+        const res = await adminRequest<{
+          ok: true;
+          user: {
+            id: string;
+            email: string;
+            firstName: string | null;
+            lastName: string | null;
+            emailVerified: boolean;
+            blocked: boolean;
+            createdAt: string;
+            updatedAt: string;
+          };
+        }>(`/v1/admin/users/${encodeURIComponent(userId)}`);
+        return res;
+      },
+      listSessions: async () => {
+        const res = await adminRequest<{
+          ok: true;
+          sessions: Array<{
+            id: string;
+            userId: string;
+            ipAddress: string | null;
+            userAgent: string | null;
+            expiresAt: string;
+            isExpired: boolean;
+            createdAt: string;
+          }>;
+        }>('/v1/admin/sessions');
+        return res;
+      },
+      listKeys: async () => {
+        const res = await adminRequest<{
+          ok: true;
+          keys: Array<{
+            id: string;
+            name: string;
+            prefix: string;
+            environment: string;
+            type: string;
+            lastUsedAt: string | null;
+            createdAt: string;
+          }>;
+        }>('/v1/admin/keys');
+        return res;
+      },
+      createKey: async (input) => {
+        const res = await adminRequest<{
+          ok: true;
+          id: string;
+          key: string;
+          prefix: string;
+        }>('/v1/admin/keys', { method: 'POST', body: JSON.stringify(input) });
+        return res;
+      },
+      revokeKey: async (keyId) => {
+        const res = await adminRequest<{ ok: true }>(
+          `/v1/admin/keys/${encodeURIComponent(keyId)}`,
+          { method: 'DELETE' }
+        );
         return res as { ok: true };
       },
     };

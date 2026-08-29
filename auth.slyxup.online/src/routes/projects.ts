@@ -7,43 +7,17 @@ import {
   projectDomains,
   projects as projectsTable,
 } from '../lib/schema';
-import { addMemberSchema, createProjectSchema } from '../schemas/projects';
+import { requireDeveloper } from '../middleware/developer';
+import { createProjectSchema } from '../schemas/projects';
 import * as ProjectService from '../services/project.service';
-import { ensureDeveloper, userFromSession } from './developers';
 
 const projects = new Hono<{
   Bindings: { DB: D1Database; KV: KVNamespace };
-  Variables: { developerId?: string };
+  Variables: { developerId?: string; userId?: string };
 }>();
 
-// SECURITY: developer auth = verified user session (no static tokens).
-// Accepts both Authorization Bearer and HttpOnly cookie (via getSessionToken)
-// so dashboard (SlyxUpProvider with credentials: include) works after refresh.
-projects.use('*', async (c, next) => {
-  const { getSessionToken } = await import('../lib/cookies');
-  const token = getSessionToken(c);
-  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, token);
-  if (!user)
-    return c.json(
-      {
-        ok: false,
-        error:
-          'Sign in with a verified SlyxUp account (POST /v1/auth/sign-in).',
-      },
-      401
-    );
-  try {
-    const dev = await ensureDeveloper(c.env, user);
-    c.set('developerId', dev.id);
-  } catch (e) {
-    return c.json(
-      { ok: false, error: e instanceof Error ? e.message : 'Forbidden' },
-      403
-    );
-  }
-  await next();
-});
+// Deduplicated developer auth — see middleware/developer.ts
+projects.use('*', requireDeveloper);
 
 projects.post('/', zValidator('json', createProjectSchema), async (c) => {
   const developerId = c.get('developerId');

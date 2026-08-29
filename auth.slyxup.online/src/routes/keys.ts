@@ -1,40 +1,16 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { requireDeveloper } from '../middleware/developer';
 import { createKeySchema } from '../schemas/keys';
 import * as ProjectService from '../services/project.service';
-import { ensureDeveloper, userFromSession } from './developers';
 
 const keys = new Hono<{
   Bindings: { DB: D1Database };
-  Variables: { developerId?: string };
+  Variables: { developerId?: string; userId?: string };
 }>();
 
-// SECURITY: verified-user session (Bearer or HttpOnly cookie) — dashboard uses cookies
-keys.use('*', async (c, next) => {
-  const { getSessionToken } = await import('../lib/cookies');
-  const token = getSessionToken(c);
-  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, token);
-  if (!user)
-    return c.json(
-      {
-        ok: false,
-        error:
-          'Sign in with a verified SlyxUp account (POST /v1/auth/sign-in).',
-      },
-      401
-    );
-  try {
-    const dev = await ensureDeveloper(c.env, user);
-    c.set('developerId', dev.id);
-  } catch (e) {
-    return c.json(
-      { ok: false, error: e instanceof Error ? e.message : 'Forbidden' },
-      403
-    );
-  }
-  await next();
-});
+// Deduplicated: shared developer auth (session → verified user → developer)
+keys.use('*', requireDeveloper);
 
 keys.post('/', zValidator('json', createKeySchema), async (c) => {
   const input = c.req.valid('json');

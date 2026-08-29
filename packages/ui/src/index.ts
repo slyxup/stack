@@ -35,6 +35,10 @@ export {
   PricingTable,
   type PricingTableProps,
 } from './components/PricingTable/PricingTable';
+export {
+  AdminPanel,
+  type AdminPanelProps,
+} from './components/AdminPanel/AdminPanel';
 export { initPaddle, openPaddleCheckout } from './lib/paddle';
 
 import { useEffect } from 'react';

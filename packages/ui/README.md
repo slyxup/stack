@@ -163,6 +163,36 @@ const { invoices } = useInvoices();
 
 Shows current plan, status, renewal date, invoice history, and an optional cancel action.
 
+### `<AdminPanel />` — admin dashboard with sk key
+
+A full-featured, responsive admin panel for managing users, sessions, and API keys using a **secret key** (`sk_test_xxx` / `sk_live_xxx`).
+
+```tsx
+import { AdminPanel } from '@slyxup/ui';
+
+// Full-page admin dashboard
+<AdminPanel
+  secretKey="sk_test_xxx"
+  apiUrl="https://auth.slyxup.online"   // optional; defaults to production
+/>
+
+// Inline (card-style, no full-page wrapper)
+<AdminPanel
+  secretKey="sk_test_xxx"
+  fullPage={false}
+/>
+```
+
+**Features:**
+- **Overview tab** — user count, active sessions, API keys, verified/blocked stats
+- **Users tab** — list all users with avatar, name, email, verification/block status, join date
+- **Sessions tab** — active sessions with user agent, expiry, IP address
+- **API Keys tab** — create (pk/sk, test/live), revoke, view key history
+- **Responsive** — works on desktop and mobile
+- **Self-contained** — uses SlyxUp design tokens, no external CSS needed
+
+> Requires `@slyxup/core` as a peer dependency. The component creates its own `SlyxupClient` internally.
+
 ## Theming
 
 Override CSS variables on any wrapper — light/dark is automatic via `prefers-color-scheme`, force dark with `slyxup-dark`, force light with `slyxup-light`.

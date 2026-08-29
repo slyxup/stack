@@ -1,4 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm';
+import { sha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { recoveryCodes, users } from '../lib/schema';
 import {
@@ -134,9 +135,5 @@ function generateRecoveryCode(): string {
 }
 
 async function hashCode(code: string): Promise<string> {
-  const data = new TextEncoder().encode(code);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest), (b) =>
-    b.toString(16).padStart(2, '0')
-  ).join('');
+  return sha256Hex(code);
 }

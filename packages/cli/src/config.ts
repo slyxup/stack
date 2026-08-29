@@ -36,7 +36,14 @@ export function loadCredentials(): Credentials | null {
 
 export function saveCredentials(creds: Credentials): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CREDENTIALS_PATH, `${JSON.stringify(creds, null, 2)}\n`);
+  writeFileSync(CREDENTIALS_PATH, `${JSON.stringify(creds, null, 2)}\n`, {
+    mode: 0o600,
+  });
+  // Ensure restrictive permissions even if file existed with looser perms
+  try {
+    const { chmodSync } = require('node:fs');
+    chmodSync(CREDENTIALS_PATH, 0o600);
+  } catch {}
 }
 
 export function clearCredentials(): boolean {

@@ -168,17 +168,17 @@ importers:
   examples/url-shortner:
     dependencies:
       '@slyxup/core':
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: workspace:*
+        version: link:../../packages/core
       '@slyxup/nextjs':
-        specifier: ^1.0.4
-        version: 1.0.4(next@15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+        specifier: workspace:*
+        version: link:../../packages/nextjs
       '@slyxup/react':
-        specifier: ^1.0.4
-        version: 1.0.4(react@18.3.1)
+        specifier: workspace:*
+        version: link:../../packages/react
       '@slyxup/ui':
-        specifier: ^0.2.13
-        version: 0.2.13(react@18.3.1)
+        specifier: workspace:*
+        version: link:../../packages/ui
       next:
         specifier: 15.0.0
         version: 15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2112,27 +2112,6 @@ packages:
     resolution: {integrity: sha512-/gDJaRs4gl0NPIwqCz+6PkpmhhjRAD2j6P4rSNHBzUkO3naEx2mIU0pRle1vUNRQ7mE/+8OOeXLTv/J56FKiQg==}
     cpu: [x64]
     os: [win32]
-
-  '@slyxup/billing@1.0.0':
-    resolution: {integrity: sha512-zT8Q78jRKKcR12jGDlcjs1lcvVOjRil/pTFSPzsYuZ+p9jRDFRfKnlIL7J4SEPodcFZ4DmD0+YXeQVyxijavOA==}
-
-  '@slyxup/core@1.0.0':
-    resolution: {integrity: sha512-gooXZEQ2VVjUfpxqE65cNktNQIW4RdU+g5JkG+Rdjimc0DABMDXsKAVsTA+z5Ynuy+PiYQq4SJsh648E+N0PUg==}
-
-  '@slyxup/nextjs@1.0.4':
-    resolution: {integrity: sha512-VcwWlwk1mmq+kAK8AcUE7viWd2YuEpP+6vFO3/weVKFvBTGwGlXsx5xcIf1dGpcSe/+psyQq39kFHIoRyRv+/Q==}
-    peerDependencies:
-      next: ^14 || ^15
-
-  '@slyxup/react@1.0.4':
-    resolution: {integrity: sha512-FtTD+mDa6oUI9H1bXG1PaaxswOB3yOIZVdbZ2mwVCw6MwQsJEl+t7kskKvJgvgLk6h5g4AmToejoOGdDM+nj+w==}
-    peerDependencies:
-      react: ^18 || ^19
-
-  '@slyxup/ui@0.2.13':
-    resolution: {integrity: sha512-ccHy/7d3qOX1U2pKgQtjxBjKQOXmiuPhU/x0VUElFMWS58JYGPHyWhX2sMsWadeJveba+bRL0upJCy/CF6eX0w==}
-    peerDependencies:
-      react: ^18 || ^19
 
   '@smithy/config-resolver@4.7.2':
     resolution: {integrity: sha512-Y1XfSefHIOub9762qm3ShafdlEE/Va8h3kLUeMq765fNeWeNLcOP2YUPr86H1SlyGwZTOqQ67RlBZPZ3k9Djgg==}
@@ -6289,29 +6268,6 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.62.5':
     optional: true
-
-  '@slyxup/billing@1.0.0':
-    dependencies:
-      '@slyxup/core': 1.0.0
-
-  '@slyxup/core@1.0.0': {}
-
-  '@slyxup/nextjs@1.0.4(next@15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
-    dependencies:
-      '@slyxup/core': 1.0.0
-      next: 15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-
-  '@slyxup/react@1.0.4(react@18.3.1)':
-    dependencies:
-      '@slyxup/billing': 1.0.0
-      '@slyxup/core': 1.0.0
-      react: 18.3.1
-
-  '@slyxup/ui@0.2.13(react@18.3.1)':
-    dependencies:
-      '@slyxup/core': 1.0.0
-      '@slyxup/react': 1.0.4(react@18.3.1)
-      react: 18.3.1
 
   '@smithy/config-resolver@4.7.2':
     dependencies:

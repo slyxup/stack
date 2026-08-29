@@ -54,7 +54,8 @@ describe('saveCredentials', () => {
     expect(mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
     expect(writeFileSync).toHaveBeenCalledWith(
       CREDENTIALS_PATH,
-      `${JSON.stringify(creds, null, 2)}\n`
+      `${JSON.stringify(creds, null, 2)}\n`,
+      { mode: 0o600 }
     );
   });
 });

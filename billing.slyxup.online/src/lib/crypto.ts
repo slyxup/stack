@@ -1,4 +1,7 @@
 // SlyxUp Billing — WebCrypto helpers (Workers-compatible)
+// NOTE: This is a deduplicated copy of auth.slyxup.online/src/lib/crypto.ts hmac/timing helpers.
+// Canonical implementation lives in auth — billing keeps a lightweight copy for Workers isolation.
+// If updating logic, sync both files or extract to @slyxup/shared/crypto (TODO).
 
 /** HMAC-SHA256 -> lowercase hex string */
 export async function hmacSha256Hex(

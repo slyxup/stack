@@ -1,38 +1,25 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { getSessionToken } from '../lib/cookies';
 import { randomToken } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { auditLogs, webhookEndpoints } from '../lib/schema';
-import { sessions, users } from '../lib/schema';
+import { getSession } from '../services/auth.service';
 
 const audit = new Hono<{
   Bindings: { DB: D1Database };
   Variables: { userId: string };
 }>();
 
-/** Require admin session */
+/** Require admin session (deduplicated) */
 audit.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth?.startsWith('Bearer '))
-    return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const token = auth.slice(7).trim();
-  const db = getDb(c.env);
-  const session = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.token, token))
-    .get();
-  if (!session) return c.json({ ok: false, error: 'Invalid session' }, 401);
-  if (session.expiresAt < new Date())
-    return c.json({ ok: false, error: 'Session expired' }, 401);
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .get();
-  if (!user || user.role !== 'admin')
+  const token = getSessionToken(c);
+  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const data = await getSession(c.env, token);
+  if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  if (data.user.role !== 'admin')
     return c.json({ ok: false, error: 'Admin required' }, 403);
-  c.set('userId', user.id);
+  c.set('userId', data.user.id);
   await next();
 });
 

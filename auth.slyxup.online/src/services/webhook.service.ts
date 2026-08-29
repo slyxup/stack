@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { hmacSha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { webhookEndpoints } from '../lib/schema';
 
@@ -76,19 +77,5 @@ export async function dispatchWebhooks(
 }
 
 async function signPayload(body: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sig = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(body)
-  );
-  return Array.from(new Uint8Array(sig), (b) =>
-    b.toString(16).padStart(2, '0')
-  ).join('');
+  return hmacSha256Hex(secret, body);
 }

@@ -1087,10 +1087,6 @@ function fail(e: unknown, json = false): never {
   process.exit(1);
 }
 
-if (existsSync(join(process.cwd(), '.env'))) {
-  void writeFileSync;
-}
-
 program.parseAsync(process.argv).catch((e) => {
   const json = process.argv.includes('--json');
   if (json) jsonOut({ ok: false, error: String(e) });

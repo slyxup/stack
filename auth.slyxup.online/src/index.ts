@@ -44,7 +44,7 @@ app.use('*', async (c, next) => {
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, Cookie, X-Publishable-Key',
+      'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key',
     'Access-Control-Max-Age': '86400',
   };
 
@@ -191,13 +191,61 @@ app.route('/v1/audit', auditRoute);
 
 // Public: resolve publishable key → projectId (used by billing Worker in local dev
 // where AUTH_DB is a separate D1 instance without api_keys data).
-app.get('/v1/key/resolve', async (c) => {
-  const key = c.req.query('key');
+// SECURITY: Prefer POST with JSON body {key} or X-Publishable-Key header — GET leaks keys via
+// URL logs/brower history. GET kept for backwards compat but is now rate-limited.
+async function handleKeyResolve(
+  c: { env: unknown; json: (data: unknown, status?: number) => Response },
+  rawKey: string | undefined
+) {
+  const key = rawKey?.trim();
   if (!key) return c.json({ ok: false, error: 'key required' }, 400);
-  const info = await ProjectService.verifyApiKey(c.env, key);
+  const info = await ProjectService.verifyApiKey(
+    c.env as unknown as { DB: D1Database },
+    key
+  );
   if (!info || info.type !== 'publishable')
     return c.json({ ok: false, error: 'Invalid key' }, 404);
   return c.json({ ok: true, projectId: info.projectId });
+}
+
+// Rate-limit key resolution (prevent enumeration / DB-DoS)
+app.use('/v1/key/resolve', async (c, next) => {
+  const ip =
+    c.req.header('CF-Connecting-IP') ??
+    c.req.header('X-Forwarded-For') ??
+    'unknown';
+  const rl = await checkRateLimit(c.env.KV, `key_resolve:${ip}`, 30, 60);
+  if (!rl.allowed) {
+    return new Response(
+      JSON.stringify({ ok: false, error: 'Too many requests' }),
+      {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(rl.resetIn),
+        },
+      }
+    );
+  }
+  await next();
+});
+
+app.get('/v1/key/resolve', async (c) => {
+  const key = c.req.query('key');
+  return handleKeyResolve(c, key);
+});
+
+app.post('/v1/key/resolve', async (c) => {
+  // Prefer header, fallback to JSON body {key}
+  const headerKey = c.req.header('X-Publishable-Key');
+  let bodyKey: string | undefined;
+  try {
+    const body = (await c.req.json()) as { key?: string };
+    bodyKey = body?.key;
+  } catch {
+    /* ignore — header-only call */
+  }
+  return handleKeyResolve(c, headerKey ?? bodyKey);
 });
 
 // Legacy SDK path — mount only the session endpoint at /v1/session (not the

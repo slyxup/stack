@@ -1,4 +1,6 @@
-/** Simple KV-based rate limiter */
+/** Simple KV-based rate limiter — DEDUPLICATED: identical to auth.slyxup.online/src/lib/rate-limit.ts
+ * TODO: Extract to @slyxup/shared/rate-limit and import in both Workers (single source).
+ */
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;

@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { randomToken, randomUUID } from '../lib/crypto';
+import { randomToken, randomUUID, sha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
 import {
@@ -10,14 +10,6 @@ import {
 } from '../lib/schema';
 import { verifyTOTP } from '../lib/totp';
 import { sendVerificationEmail } from './token.service';
-
-async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest), (b) =>
-    b.toString(16).padStart(2, '0')
-  ).join('');
-}
 
 export async function signUp(
   env: { DB: D1Database },

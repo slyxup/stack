@@ -4,6 +4,15 @@ import { getDb } from '../lib/db';
 import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
 
+/** Deduplicated SHA256 helper — same logic as auth/lib/crypto sha256Hex, inlined to avoid cross-worker import. */
+async function sha256HexLocal(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // ── Resolve publishable key → projectId via AUTH_DB, with HTTP fallback ──
 async function resolveProjectFromKey(
   authDb: D1Database,
@@ -11,13 +20,7 @@ async function resolveProjectFromKey(
   authUrl?: string
 ): Promise<string | null> {
   try {
-    const enc = new TextEncoder();
-    const keyData = enc.encode(publishableKey);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
-    const hashedKey = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-
+    const hashedKey = await sha256HexLocal(publishableKey.trim());
     const row = await authDb
       .prepare(
         'SELECT project_id FROM api_keys WHERE hashed_key = ? AND type = ? LIMIT 1'
@@ -30,11 +33,17 @@ async function resolveProjectFromKey(
   }
 
   // Fallback: query auth Worker over HTTP (works for local dev with separate D1 instances)
+  // SECURITY: Use POST with header/body to avoid leaking key via URL query logs.
   if (authUrl) {
     try {
-      const res = await fetch(
-        `${authUrl}/v1/key/resolve?key=${encodeURIComponent(publishableKey)}`
-      );
+      const res = await fetch(`${authUrl}/v1/key/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Publishable-Key': publishableKey,
+        },
+        body: JSON.stringify({ key: publishableKey }),
+      });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         projectId?: string;

@@ -5,38 +5,18 @@ import { z } from 'zod';
 import { getDb } from '../lib/db';
 import { sanitizeUser } from '../lib/sanitize';
 import { oauthAccounts, sessions, userProfiles, users } from '../lib/schema';
+import { requireDeveloper } from '../middleware/developer';
 import { isProjectMember } from '../services/project.service';
-import { ensureDeveloper, userFromSession } from './developers';
 
 // ── Project-scoped user management ──
 // Mounted at /v1/projects/:id/users — replaces the global admin panel model.
 // A developer must be a member of the project to read/write its users.
 const app = new Hono<{
   Bindings: { DB: D1Database; KV: KVNamespace };
-  Variables: { developerId?: string };
+  Variables: { developerId?: string; userId?: string };
 }>();
 
-app.use('*', async (c, next) => {
-  const { getSessionToken } = await import('../lib/cookies');
-  const token = getSessionToken(c);
-  if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, token);
-  if (!user)
-    return c.json(
-      { ok: false, error: 'Sign in with a verified SlyxUp account.' },
-      401
-    );
-  try {
-    const dev = await ensureDeveloper(c.env, user);
-    c.set('developerId', dev.id);
-  } catch (e) {
-    return c.json(
-      { ok: false, error: e instanceof Error ? e.message : 'Forbidden' },
-      403
-    );
-  }
-  await next();
-});
+app.use('*', requireDeveloper);
 
 // Project membership guard for every sub-route
 app.use('/:id/*', async (c, next) => {

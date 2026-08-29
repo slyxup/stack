@@ -144,6 +144,8 @@ export type Result<T> = T | ErrorResponse;
 export interface SlyxupClientOptions {
   /** Publishable key — pk_test_xxx / pk_live_xxx */
   publishableKey?: string;
+  /** Secret key — sk_test_xxx / sk_live_xxx (server-side admin API) */
+  secretKey?: string;
   /** API base URL, default https://auth.slyxup.online */
   apiUrl?: string;
 }

@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { randomToken, randomUUID, timingSafeEqual } from '../lib/crypto';
+import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword } from '../lib/password';
 import { passwordResetTokens, users, verificationTokens } from '../lib/schema';
@@ -158,17 +158,15 @@ export async function validateToken(
 ) {
   const db = getDb(env);
   if (table === 'verification') {
-    const row = await db
+    return db
       .select()
       .from(verificationTokens)
       .where(eq(verificationTokens.token, token))
       .get();
-    return row && !timingSafeEqual('', '') ? row : row;
   }
-  const row = await db
+  return db
     .select()
     .from(passwordResetTokens)
     .where(and(eq(passwordResetTokens.token, token)))
     .get();
-  return row;
 }
