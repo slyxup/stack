@@ -113,7 +113,7 @@ export async function createPaddleProduct(
   return paddleFetch<PaddleProduct>(config, 'POST', '/products', {
     name,
     tax_category: 'saas',
-    ...(description ? { description } : {}),
+    description: description || `${name} subscription plan`,
   });
 }
 
@@ -126,14 +126,17 @@ export async function createPaddlePrice(
   interval: 'month' | 'year'
 ): Promise<PaddlePrice> {
   return paddleFetch<PaddlePrice>(config, 'POST', '/prices', {
-    productId,
-    amount: String(amount),
-    currencyCode: currency,
-    billingCycle: {
+    description: `${interval}ly price for ${productId}`,
+    product_id: productId,
+    unit_price: {
+      amount: String(amount),
+      currency_code: currency,
+    },
+    billing_cycle: {
       interval: interval === 'month' ? 'month' : 'year',
       frequency: 1,
     },
-    taxMode: 'account_price',
+    tax_mode: 'account_setting',
   });
 }
 
