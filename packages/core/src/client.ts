@@ -118,6 +118,17 @@ export class SlyxupClient {
       ok: true;
       project: { id: string; name: string; createdAt: string };
     }>;
+    /** Get project statistics */
+    getStats: () => Promise<{
+      ok: true;
+      stats: {
+        totalUsers: number;
+        totalSessions: number;
+        blockedUsers: number;
+        verifiedUsers: number;
+        totalKeys: number;
+      };
+    }>;
     /** List users in the project */
     listUsers: (opts?: { limit?: number; offset?: number }) => Promise<{
       ok: true;
@@ -128,14 +139,14 @@ export class SlyxupClient {
         lastName: string | null;
         emailVerified: boolean;
         blocked: boolean;
+        blockedReason: string | null;
+        role: string;
         createdAt: string;
       }>;
       total: number;
     }>;
     /** Get a single user by ID */
-    getUser: (
-      userId: string
-    ) => Promise<{
+    getUser: (userId: string) => Promise<{
       ok: true;
       user: {
         id: string;
@@ -144,12 +155,24 @@ export class SlyxupClient {
         lastName: string | null;
         emailVerified: boolean;
         blocked: boolean;
+        blockedReason: string | null;
+        role: string;
+        twoFactorEnabled: boolean;
         createdAt: string;
         updatedAt: string;
       };
     }>;
-    /** List active sessions */
-    listSessions: () => Promise<{
+    /** Block a user and revoke all their sessions */
+    blockUser: (userId: string, reason?: string) => Promise<{ ok: true }>;
+    /** Unblock a user */
+    unblockUser: (userId: string) => Promise<{ ok: true }>;
+    /** Delete a user and all their sessions */
+    deleteUser: (userId: string) => Promise<{ ok: true }>;
+    /** List sessions (paginated) */
+    listSessions: (opts?: {
+      limit?: number;
+      offset?: number;
+    }) => Promise<{
       ok: true;
       sessions: Array<{
         id: string;
@@ -160,7 +183,12 @@ export class SlyxupClient {
         isExpired: boolean;
         createdAt: string;
       }>;
+      total: number;
     }>;
+    /** Revoke a specific session */
+    revokeSession: (sessionId: string) => Promise<{ ok: true }>;
+    /** Revoke all sessions for a user */
+    revokeAllSessions: (userId: string) => Promise<{ ok: true }>;
     /** List API keys */
     listKeys: () => Promise<{
       ok: true;
@@ -182,6 +210,25 @@ export class SlyxupClient {
     }) => Promise<{ ok: true; id: string; key: string; prefix: string }>;
     /** Revoke an API key */
     revokeKey: (keyId: string) => Promise<{ ok: true }>;
+    /** List audit logs */
+    listAuditLogs: (opts?: {
+      action?: string;
+      userId?: string;
+      limit?: number;
+      offset?: number;
+    }) => Promise<{
+      ok: true;
+      total: number;
+      logs: Array<{
+        id: string;
+        action: string;
+        userId: string | null;
+        metadata: Record<string, unknown> | null;
+        ipAddress: string | null;
+        userAgent: string | null;
+        createdAt: string;
+      }>;
+    }>;
   };
 
   /** Get current session token (for custom project APIs that need Bearer) */
@@ -536,6 +583,19 @@ export class SlyxupClient {
         }>('/v1/admin/project');
         return res;
       },
+      getStats: async () => {
+        const res = await adminRequest<{
+          ok: true;
+          stats: {
+            totalUsers: number;
+            totalSessions: number;
+            blockedUsers: number;
+            verifiedUsers: number;
+            totalKeys: number;
+          };
+        }>('/v1/admin/stats');
+        return res;
+      },
       listUsers: async (opts) => {
         const params = new URLSearchParams();
         if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
@@ -551,6 +611,8 @@ export class SlyxupClient {
             lastName: string | null;
             emailVerified: boolean;
             blocked: boolean;
+            blockedReason: string | null;
+            role: string;
             createdAt: string;
           }>;
           total: number;
@@ -567,13 +629,45 @@ export class SlyxupClient {
             lastName: string | null;
             emailVerified: boolean;
             blocked: boolean;
+            blockedReason: string | null;
+            role: string;
+            twoFactorEnabled: boolean;
             createdAt: string;
             updatedAt: string;
           };
         }>(`/v1/admin/users/${encodeURIComponent(userId)}`);
         return res;
       },
-      listSessions: async () => {
+      blockUser: async (userId, reason) => {
+        const res = await adminRequest<{ ok: true }>(
+          `/v1/admin/users/${encodeURIComponent(userId)}/block`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ reason }),
+          }
+        );
+        return res as { ok: true };
+      },
+      unblockUser: async (userId) => {
+        const res = await adminRequest<{ ok: true }>(
+          `/v1/admin/users/${encodeURIComponent(userId)}/unblock`,
+          { method: 'POST' }
+        );
+        return res as { ok: true };
+      },
+      deleteUser: async (userId) => {
+        const res = await adminRequest<{ ok: true }>(
+          `/v1/admin/users/${encodeURIComponent(userId)}`,
+          { method: 'DELETE' }
+        );
+        return res as { ok: true };
+      },
+      listSessions: async (opts) => {
+        const params = new URLSearchParams();
+        if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
+        if (opts?.offset !== undefined)
+          params.set('offset', String(opts.offset));
+        const qs = params.toString();
         const res = await adminRequest<{
           ok: true;
           sessions: Array<{
@@ -585,8 +679,23 @@ export class SlyxupClient {
             isExpired: boolean;
             createdAt: string;
           }>;
-        }>('/v1/admin/sessions');
+          total: number;
+        }>(`/v1/admin/sessions${qs ? `?${qs}` : ''}`);
         return res;
+      },
+      revokeSession: async (sessionId) => {
+        const res = await adminRequest<{ ok: true }>(
+          `/v1/admin/sessions/${encodeURIComponent(sessionId)}`,
+          { method: 'DELETE' }
+        );
+        return res as { ok: true };
+      },
+      revokeAllSessions: async (userId) => {
+        const res = await adminRequest<{ ok: true }>(
+          `/v1/admin/sessions?userId=${encodeURIComponent(userId)}`,
+          { method: 'DELETE' }
+        );
+        return res as { ok: true };
       },
       listKeys: async () => {
         const res = await adminRequest<{
@@ -618,6 +727,29 @@ export class SlyxupClient {
           { method: 'DELETE' }
         );
         return res as { ok: true };
+      },
+      listAuditLogs: async (opts) => {
+        const params = new URLSearchParams();
+        if (opts?.action) params.set('action', opts.action);
+        if (opts?.userId) params.set('userId', opts.userId);
+        if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
+        if (opts?.offset !== undefined)
+          params.set('offset', String(opts.offset));
+        const qs = params.toString();
+        const res = await adminRequest<{
+          ok: true;
+          total: number;
+          logs: Array<{
+            id: string;
+            action: string;
+            userId: string | null;
+            metadata: Record<string, unknown> | null;
+            ipAddress: string | null;
+            userAgent: string | null;
+            createdAt: string;
+          }>;
+        }>(`/v1/admin/audit${qs ? `?${qs}` : ''}`);
+        return res;
       },
     };
 

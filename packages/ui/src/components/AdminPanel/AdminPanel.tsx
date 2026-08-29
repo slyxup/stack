@@ -13,7 +13,7 @@ export interface AdminPanelProps {
   fullPage?: boolean;
 }
 
-type Tab = 'overview' | 'users' | 'sessions' | 'keys';
+type Tab = 'overview' | 'users' | 'sessions' | 'keys' | 'audit';
 
 interface Project {
   id: string;
@@ -28,6 +28,8 @@ interface User {
   lastName: string | null;
   emailVerified: boolean;
   blocked: boolean;
+  blockedReason: string | null;
+  role: string;
   createdAt: string;
 }
 
@@ -49,6 +51,24 @@ interface ApiKey {
   type: string;
   lastUsedAt: string | null;
   createdAt: string;
+}
+
+interface AuditLog {
+  id: string;
+  action: string;
+  userId: string | null;
+  metadata: Record<string, unknown> | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+interface Stats {
+  totalUsers: number;
+  totalSessions: number;
+  blockedUsers: number;
+  verifiedUsers: number;
+  totalKeys: number;
 }
 
 function displayName(u: {
@@ -89,6 +109,20 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'users', label: 'Users', icon: '👥' },
   { key: 'sessions', label: 'Sessions', icon: '🔐' },
   { key: 'keys', label: 'API Keys', icon: '🔑' },
+  { key: 'audit', label: 'Audit Log', icon: '📋' },
+];
+
+const AUDIT_ACTIONS = [
+  'user.created',
+  'user.signed_in',
+  'user.signed_out',
+  'user.blocked',
+  'user.unblocked',
+  'email.verified',
+  'password.reset',
+  'password.changed',
+  'key.created',
+  'key.revoked',
 ];
 
 export function AdminPanel({
@@ -100,9 +134,13 @@ export function AdminPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditFilter, setAuditFilter] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyType, setNewKeyType] = useState<'publishable' | 'secret'>(
@@ -110,6 +148,11 @@ export function AdminPanel({
   );
   const [newKeyEnv, setNewKeyEnv] = useState<'test' | 'live'>('test');
   const [createdKeyValue, setCreatedKeyValue] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: string;
+    id: string;
+    label: string;
+  } | null>(null);
 
   const client = useMemo(
     () => new SlyxupClient({ secretKey, apiUrl }),
@@ -120,15 +163,17 @@ export function AdminPanel({
     setLoading(true);
     setError(null);
     try {
-      const [p, u, s, k] = await Promise.all([
+      const [p, s, u, se, k] = await Promise.all([
         client.admin.getProject(),
+        client.admin.getStats(),
         client.admin.listUsers({ limit: 100 }),
-        client.admin.listSessions(),
+        client.admin.listSessions({ limit: 100 }),
         client.admin.listKeys(),
       ]);
       setProject(p.project);
+      setStats(s.stats);
       setUsers(u.users);
-      setSessions(s.sessions);
+      setSessions(se.sessions);
       setKeys(k.keys);
     } catch (err: unknown) {
       const msg =
@@ -139,9 +184,28 @@ export function AdminPanel({
     }
   }, [client]);
 
+  const loadAuditLogs = useCallback(async () => {
+    try {
+      const res = await client.admin.listAuditLogs({
+        action: auditFilter || undefined,
+        limit: 50,
+      });
+      setAuditLogs(res.logs);
+      setAuditTotal(res.total);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Failed to load audit logs';
+      setError(msg);
+    }
+  }, [client, auditFilter]);
+
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (tab === 'audit') loadAuditLogs();
+  }, [tab, loadAuditLogs]);
 
   const handleCreateKey = useCallback(async () => {
     if (!newKeyName.trim()) return;
@@ -178,8 +242,95 @@ export function AdminPanel({
     [client]
   );
 
+  const handleBlockUser = useCallback(
+    async (userId: string) => {
+      try {
+        await client.admin.blockUser(userId, 'Blocked by admin');
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, blocked: true } : u))
+        );
+        setStats((prev) =>
+          prev ? { ...prev, blockedUsers: prev.blockedUsers + 1 } : prev
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to block user';
+        setError(msg);
+      }
+      setConfirmAction(null);
+    },
+    [client]
+  );
+
+  const handleUnblockUser = useCallback(
+    async (userId: string) => {
+      try {
+        await client.admin.unblockUser(userId);
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, blocked: false } : u))
+        );
+        setStats((prev) =>
+          prev
+            ? { ...prev, blockedUsers: Math.max(0, prev.blockedUsers - 1) }
+            : prev
+        );
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to unblock user';
+        setError(msg);
+      }
+      setConfirmAction(null);
+    },
+    [client]
+  );
+
+  const handleDeleteUser = useCallback(
+    async (userId: string) => {
+      try {
+        await client.admin.deleteUser(userId);
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+        setStats((prev) =>
+          prev ? { ...prev, totalUsers: prev.totalUsers - 1 } : prev
+        );
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to delete user';
+        setError(msg);
+      }
+      setConfirmAction(null);
+    },
+    [client]
+  );
+
+  const handleRevokeSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        await client.admin.revokeSession(sessionId);
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to revoke session';
+        setError(msg);
+      }
+    },
+    [client]
+  );
+
+  const handleRevokeAllSessions = useCallback(
+    async (userId: string) => {
+      try {
+        await client.admin.revokeAllSessions(userId);
+        setSessions((prev) => prev.filter((s) => s.userId !== userId));
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to revoke sessions';
+        setError(msg);
+      }
+      setConfirmAction(null);
+    },
+    [client]
+  );
+
   const activeSessions = sessions.filter((s) => !s.isExpired);
-  const totalKeys = keys.length;
   const secretKeys = keys.filter((k) => k.type === 'secret');
 
   injectStyles();
@@ -200,11 +351,11 @@ export function AdminPanel({
   return (
     <div className="slyxup-root" style={scopeStyle}>
       <style>{`
-        .slx-admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .slx-admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .slx-admin-stat { background: var(--slx-bg, #fff); border: 1px solid var(--slx-border, #e4e4e7); border-radius: var(--slx-radius, 10px); padding: 20px; }
         .slx-admin-stat-value { font-size: 28px; font-weight: 700; color: var(--slx-ink, #16161d); font-family: var(--slx-display, inherit); }
         .slx-admin-stat-label { font-size: 13px; color: var(--slx-muted, #71717a); margin-top: 4px; font-weight: 500; }
-        .slx-admin-tabs { display: flex; gap: 4px; background: var(--slx-bg-subtle, #f4f4f5); border-radius: var(--slx-radius, 10px); padding: 4px; margin-bottom: 24px; width: fit-content; }
+        .slx-admin-tabs { display: flex; gap: 4px; background: var(--slx-bg-subtle, #f4f4f5); border-radius: var(--slx-radius, 10px); padding: 4px; margin-bottom: 24px; width: fit-content; flex-wrap: wrap; }
         .slx-admin-tab { padding: 8px 16px; border-radius: 8px; border: none; background: transparent; color: var(--slx-muted, #71717a); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--slx-font, inherit); }
         .slx-admin-tab:hover { color: var(--slx-ink, #16161d); }
         .slx-admin-tab--active { background: var(--slx-bg, #fff); color: var(--slx-ink, #16161d); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
@@ -218,6 +369,7 @@ export function AdminPanel({
         .slx-admin-badge--red { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
         .slx-admin-badge--blue { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
         .slx-admin-badge--gray { background: rgba(113, 113, 122, 0.12); color: #71717a; }
+        .slx-admin-badge--purple { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
         .slx-admin-avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0; }
         .slx-admin-empty { text-align: center; padding: 48px 24px; color: var(--slx-muted, #71717a); font-size: 14px; }
         .slx-admin-input { padding: 10px 14px; border-radius: var(--slx-radius-sm, 8px); border: 1px solid var(--slx-border, #e4e4e7); background: var(--slx-bg, #fff); color: var(--slx-ink, #16161d); font-size: 14px; font-family: var(--slx-font, inherit); outline: none; width: 100%; transition: border-color 0.15s; box-sizing: border-box; }
@@ -229,8 +381,11 @@ export function AdminPanel({
         .slx-admin-btn--primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .slx-admin-btn--danger { background: transparent; color: var(--slx-danger, #d64550); border: 1px solid var(--slx-danger, #d64550); }
         .slx-admin-btn--danger:hover { background: rgba(214, 69, 80, 0.08); }
+        .slx-admin-btn--warning { background: transparent; color: #ca8a04; border: 1px solid #ca8a04; }
+        .slx-admin-btn--warning:hover { background: rgba(202, 138, 4, 0.08); }
         .slx-admin-btn--ghost { background: transparent; color: var(--slx-muted, #71717a); border: 1px solid var(--slx-border, #e4e4e7); }
         .slx-admin-btn--ghost:hover { background: var(--slx-bg-subtle, #f4f4f5); }
+        .slx-admin-btn--sm { padding: 4px 10px; font-size: 12px; }
         .slx-admin-create-form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
         .slx-admin-create-field { display: flex; flex-direction: column; gap: 4px; }
         .slx-admin-create-label { font-size: 12px; font-weight: 600; color: var(--slx-muted, #71717a); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -239,6 +394,12 @@ export function AdminPanel({
         .slx-admin-spinner { width: 32px; height: 32px; border: 3px solid var(--slx-border, #e4e4e7); border-top-color: var(--slx-accent, #5b5bd6); border-radius: 50%; animation: slx-spin 0.6s linear infinite; }
         @keyframes slx-spin { to { transform: rotate(360deg); } }
         .slx-admin-error { background: rgba(214, 69, 80, 0.08); border: 1px solid rgba(214, 69, 80, 0.2); border-radius: var(--slx-radius-sm, 8px); padding: 12px 16px; margin-bottom: 16px; color: var(--slx-danger, #d64550); font-size: 14px; }
+        .slx-admin-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: grid; place-items: center; z-index: 1000; }
+        .slx-admin-confirm-box { background: var(--slx-bg, #fff); border-radius: var(--slx-radius-lg, 14px); padding: 24px; max-width: 400px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .slx-admin-confirm-title { font-size: 16px; font-weight: 600; color: var(--slx-ink, #16161d); margin-bottom: 8px; }
+        .slx-admin-confirm-msg { font-size: 14px; color: var(--slx-muted, #71717a); margin-bottom: 20px; }
+        .slx-admin-confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        .slx-admin-audit-action { font-family: var(--slx-mono, monospace); font-size: 12px; padding: 2px 6px; border-radius: 4px; }
         @media (max-width: 640px) {
           .slx-admin-grid { grid-template-columns: 1fr 1fr; }
           .slx-admin-tabs { width: 100%; overflow-x: auto; }
@@ -247,6 +408,65 @@ export function AdminPanel({
           .slx-admin-row { flex-direction: column; align-items: flex-start; gap: 8px; }
         }
       `}</style>
+
+      {/* Confirm Dialog */}
+      {confirmAction && (
+        <div
+          className="slx-admin-confirm-overlay"
+          onClick={() => setConfirmAction(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setConfirmAction(null)}
+          tabIndex={-1}
+        >
+          <div
+            className="slx-admin-confirm-box"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <div className="slx-admin-confirm-title">Confirm Action</div>
+            <div className="slx-admin-confirm-msg">
+              {confirmAction.type === 'block' &&
+                'Block this user? They will be signed out immediately.'}
+              {confirmAction.type === 'unblock' &&
+                'Unblock this user? They will be able to sign in again.'}
+              {confirmAction.type === 'delete' &&
+                'Delete this user permanently? This cannot be undone.'}
+              {confirmAction.type === 'revokeAllSessions' &&
+                'Revoke all sessions for this user? They will need to sign in again.'}
+            </div>
+            <div className="slx-admin-confirm-actions">
+              <button
+                type="button"
+                className="slx-admin-btn slx-admin-btn--ghost"
+                onClick={() => setConfirmAction(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`slx-admin-btn ${confirmAction.type === 'delete' ? 'slx-admin-btn--danger' : confirmAction.type === 'block' ? 'slx-admin-btn--warning' : 'slx-admin-btn--primary'}`}
+                onClick={() => {
+                  if (confirmAction.type === 'block')
+                    handleBlockUser(confirmAction.id);
+                  else if (confirmAction.type === 'unblock')
+                    handleUnblockUser(confirmAction.id);
+                  else if (confirmAction.type === 'delete')
+                    handleDeleteUser(confirmAction.id);
+                  else if (confirmAction.type === 'revokeAllSessions')
+                    handleRevokeAllSessions(confirmAction.id);
+                }}
+              >
+                {confirmAction.type === 'block'
+                  ? 'Block'
+                  : confirmAction.type === 'delete'
+                    ? 'Delete'
+                    : confirmAction.type === 'unblock'
+                      ? 'Unblock'
+                      : 'Revoke All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div
@@ -260,8 +480,7 @@ export function AdminPanel({
           <span>{error}</span>
           <button
             type="button"
-            className="slx-admin-btn slx-admin-btn--ghost"
-            style={{ padding: '4px 12px', fontSize: 12 }}
+            className="slx-admin-btn slx-admin-btn--ghost slx-admin-btn--sm"
             onClick={() => setError(null)}
           >
             Dismiss
@@ -275,7 +494,6 @@ export function AdminPanel({
         </div>
       ) : (
         <>
-          {/* Header */}
           <div style={{ marginBottom: 24 }}>
             <h1
               style={{
@@ -301,7 +519,6 @@ export function AdminPanel({
             )}
           </div>
 
-          {/* Tabs */}
           <div className="slx-admin-tabs">
             {TABS.map((t) => (
               <button
@@ -315,11 +532,11 @@ export function AdminPanel({
             ))}
           </div>
 
-          {/* Content */}
-          {tab === 'overview' && (
+          {/* Overview */}
+          {tab === 'overview' && stats && (
             <div className="slx-admin-grid">
               <div className="slx-admin-stat">
-                <div className="slx-admin-stat-value">{users.length}</div>
+                <div className="slx-admin-stat-value">{stats.totalUsers}</div>
                 <div className="slx-admin-stat-label">Total Users</div>
               </div>
               <div className="slx-admin-stat">
@@ -329,19 +546,17 @@ export function AdminPanel({
                 <div className="slx-admin-stat-label">Active Sessions</div>
               </div>
               <div className="slx-admin-stat">
-                <div className="slx-admin-stat-value">{totalKeys}</div>
+                <div className="slx-admin-stat-value">{keys.length}</div>
                 <div className="slx-admin-stat-label">API Keys</div>
               </div>
               <div className="slx-admin-stat">
                 <div className="slx-admin-stat-value">
-                  {users.filter((u) => u.emailVerified).length}
+                  {stats.verifiedUsers}
                 </div>
                 <div className="slx-admin-stat-label">Verified Users</div>
               </div>
               <div className="slx-admin-stat">
-                <div className="slx-admin-stat-value">
-                  {users.filter((u) => u.blocked).length}
-                </div>
+                <div className="slx-admin-stat-value">{stats.blockedUsers}</div>
                 <div className="slx-admin-stat-label">Blocked Users</div>
               </div>
               <div className="slx-admin-stat">
@@ -351,6 +566,7 @@ export function AdminPanel({
             </div>
           )}
 
+          {/* Users */}
           {tab === 'users' && (
             <div className="slx-admin-card">
               <div className="slx-admin-card-title">Users ({users.length})</div>
@@ -391,7 +607,12 @@ export function AdminPanel({
                       </div>
                     </div>
                     <div
-                      style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+                      style={{
+                        display: 'flex',
+                        gap: 6,
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}
                     >
                       {u.emailVerified ? (
                         <span className="slx-admin-badge slx-admin-badge--green">
@@ -407,15 +628,74 @@ export function AdminPanel({
                           Blocked
                         </span>
                       )}
+                      {u.role === 'admin' && (
+                        <span className="slx-admin-badge slx-admin-badge--purple">
+                          Admin
+                        </span>
+                      )}
                       <span
                         style={{
                           fontSize: 11,
                           color: 'var(--slx-muted, #71717a)',
-                          marginLeft: 4,
                         }}
                       >
                         {timeAgo(u.createdAt)}
                       </span>
+                      {u.blocked ? (
+                        <button
+                          type="button"
+                          className="slx-admin-btn slx-admin-btn--ghost slx-admin-btn--sm"
+                          onClick={() =>
+                            setConfirmAction({
+                              type: 'unblock',
+                              id: u.id,
+                              label: u.email,
+                            })
+                          }
+                        >
+                          Unblock
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="slx-admin-btn slx-admin-btn--warning slx-admin-btn--sm"
+                          onClick={() =>
+                            setConfirmAction({
+                              type: 'block',
+                              id: u.id,
+                              label: u.email,
+                            })
+                          }
+                        >
+                          Block
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="slx-admin-btn slx-admin-btn--ghost slx-admin-btn--sm"
+                        onClick={() =>
+                          setConfirmAction({
+                            type: 'revokeAllSessions',
+                            id: u.id,
+                            label: displayName(u),
+                          })
+                        }
+                      >
+                        Revoke Sessions
+                      </button>
+                      <button
+                        type="button"
+                        className="slx-admin-btn slx-admin-btn--danger slx-admin-btn--sm"
+                        onClick={() =>
+                          setConfirmAction({
+                            type: 'delete',
+                            id: u.id,
+                            label: u.email,
+                          })
+                        }
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))
@@ -423,6 +703,7 @@ export function AdminPanel({
             </div>
           )}
 
+          {/* Sessions */}
           {tab === 'sessions' && (
             <div className="slx-admin-card">
               <div className="slx-admin-card-title">
@@ -452,30 +733,45 @@ export function AdminPanel({
                           }}
                         >
                           {s.userAgent
-                            ? s.userAgent.slice(0, 60) +
-                              (s.userAgent.length > 60 ? '...' : '')
+                            ? s.userAgent.slice(0, 50) +
+                              (s.userAgent.length > 50 ? '...' : '')
                             : 'No user agent'}
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: 'var(--slx-muted, #71717a)',
-                          }}
-                        >
-                          Expires {timeAgo(s.expiresAt)}
-                        </div>
-                        {s.ipAddress && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <div style={{ textAlign: 'right' }}>
                           <div
                             style={{
-                              fontSize: 11,
-                              color: 'var(--slx-muted, #a1a1aa)',
+                              fontSize: 12,
+                              color: 'var(--slx-muted, #71717a)',
                             }}
                           >
-                            {s.ipAddress}
+                            Expires {timeAgo(s.expiresAt)}
                           </div>
-                        )}
+                          {s.ipAddress && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: 'var(--slx-muted, #a1a1aa)',
+                              }}
+                            >
+                              {s.ipAddress}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="slx-admin-btn slx-admin-btn--danger slx-admin-btn--sm"
+                          onClick={() => handleRevokeSession(s.id)}
+                        >
+                          Revoke
+                        </button>
                       </div>
                     </div>
                   );
@@ -484,13 +780,12 @@ export function AdminPanel({
             </div>
           )}
 
+          {/* Keys */}
           {tab === 'keys' && (
             <div className="slx-admin-card">
               <div className="slx-admin-card-title">
                 API Keys ({keys.length})
               </div>
-
-              {/* Create form */}
               <div className="slx-admin-create-form">
                 <div
                   className="slx-admin-create-field"
@@ -578,13 +873,8 @@ export function AdminPanel({
                   <span>{createdKeyValue}</span>
                   <button
                     type="button"
-                    className="slx-admin-btn slx-admin-btn--ghost"
-                    style={{
-                      padding: '4px 12px',
-                      fontSize: 12,
-                      flexShrink: 0,
-                      marginLeft: 12,
-                    }}
+                    className="slx-admin-btn slx-admin-btn--ghost slx-admin-btn--sm"
+                    style={{ flexShrink: 0, marginLeft: 12 }}
                     onClick={() => {
                       navigator.clipboard.writeText(createdKeyValue);
                     }}
@@ -644,12 +934,140 @@ export function AdminPanel({
                       )}
                       <button
                         type="button"
-                        className="slx-admin-btn slx-admin-btn--danger"
-                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        className="slx-admin-btn slx-admin-btn--danger slx-admin-btn--sm"
                         onClick={() => handleRevokeKey(k.id)}
                       >
                         Revoke
                       </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Audit Log */}
+          {tab === 'audit' && (
+            <div className="slx-admin-card">
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}
+              >
+                <div className="slx-admin-card-title" style={{ margin: 0 }}>
+                  Audit Log ({auditTotal} entries)
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select
+                    className="slx-admin-select"
+                    value={auditFilter}
+                    onChange={(e) => setAuditFilter(e.target.value)}
+                    style={{ fontSize: 13, padding: '6px 10px' }}
+                  >
+                    <option value="">All actions</option>
+                    {AUDIT_ACTIONS.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="slx-admin-btn slx-admin-btn--ghost slx-admin-btn--sm"
+                    onClick={loadAuditLogs}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              {auditLogs.length === 0 ? (
+                <div className="slx-admin-empty">No audit logs found.</div>
+              ) : (
+                auditLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="slx-admin-row"
+                    style={{ alignItems: 'flex-start' }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          alignItems: 'center',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <span
+                          className="slx-admin-audit-action"
+                          style={{
+                            background: log.action.includes('blocked')
+                              ? 'rgba(239,68,68,0.12)'
+                              : log.action.includes('signed_in')
+                                ? 'rgba(34,197,94,0.12)'
+                                : log.action.includes('created')
+                                  ? 'rgba(59,130,246,0.12)'
+                                  : log.action.includes('revoked')
+                                    ? 'rgba(234,179,8,0.12)'
+                                    : 'rgba(113,113,122,0.12)',
+                            color: log.action.includes('blocked')
+                              ? '#dc2626'
+                              : log.action.includes('signed_in')
+                                ? '#16a34a'
+                                : log.action.includes('created')
+                                  ? '#2563eb'
+                                  : log.action.includes('revoked')
+                                    ? '#ca8a04'
+                                    : '#71717a',
+                          }}
+                        >
+                          {log.action}
+                        </span>
+                        {log.userId && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--slx-muted, #a1a1aa)',
+                            }}
+                          >
+                            by {log.userId.slice(0, 8)}...
+                          </span>
+                        )}
+                      </div>
+                      {log.metadata && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--slx-muted, #71717a)',
+                            fontFamily: 'var(--slx-mono, monospace)',
+                          }}
+                        >
+                          {JSON.stringify(log.metadata)}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--slx-muted, #71717a)',
+                        }}
+                      >
+                        {timeAgo(log.createdAt)}
+                      </div>
+                      {log.ipAddress && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: 'var(--slx-muted, #a1a1aa)',
+                          }}
+                        >
+                          {log.ipAddress}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))

@@ -7,6 +7,7 @@ import {
 } from '../lib/cookies';
 import { sanitizeUser } from '../lib/sanitize';
 import { signIn2FASchema, signInSchema, signUpSchema } from '../schemas/auth';
+import { writeAuditLog } from '../services/audit.service';
 import * as AuthService from '../services/auth.service';
 import { verifyApiKey } from '../services/project.service';
 import { dispatchWebhooks } from '../services/webhook.service';
@@ -65,6 +66,17 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
       id: user.id,
       email: user.email,
     });
+    void writeAuditLog(
+      c.env,
+      'user.created',
+      {
+        projectId: projectId ?? null,
+        userId: user.id,
+        ipAddress: c.req.header('CF-Connecting-IP') ?? null,
+        userAgent: c.req.header('User-Agent') ?? null,
+      },
+      { email: user.email }
+    );
     setSessionCookie(c, sessionToken, expiresAt);
     return c.json({ ok: true, user, sessionToken }, 201);
   } catch (e) {
@@ -115,6 +127,17 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
       id: user.id,
       email: user.email,
     });
+    void writeAuditLog(
+      c.env,
+      'user.signed_in',
+      {
+        projectId: user.projectId,
+        userId: user.id,
+        ipAddress: c.req.header('CF-Connecting-IP') ?? null,
+        userAgent: c.req.header('User-Agent') ?? null,
+      },
+      { email: user.email }
+    );
     return c.json({
       ok: true,
       user: {
@@ -164,6 +187,17 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
       id: result.user.id,
       email: result.user.email,
     });
+    void writeAuditLog(
+      c.env,
+      'user.signed_in',
+      {
+        projectId: result.user.projectId,
+        userId: result.user.id,
+        ipAddress: c.req.header('CF-Connecting-IP') ?? null,
+        userAgent: c.req.header('User-Agent') ?? null,
+      },
+      { email: result.user.email, method: '2fa' }
+    );
     return c.json({
       ok: true,
       user: {
@@ -188,7 +222,19 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
 
 auth.post('/sign-out', async (c) => {
   const token = getSessionToken(c);
-  if (token) await AuthService.signOut(c.env, token);
+  if (token) {
+    // Get session info before destroying for audit log
+    const sessionData = await AuthService.getSession(c.env, token);
+    await AuthService.signOut(c.env, token);
+    if (sessionData) {
+      void writeAuditLog(c.env, 'user.signed_out', {
+        projectId: sessionData.user.projectId,
+        userId: sessionData.user.id,
+        ipAddress: c.req.header('CF-Connecting-IP') ?? null,
+        userAgent: c.req.header('User-Agent') ?? null,
+      });
+    }
+  }
   clearSessionCookie(c);
   return c.json({ ok: true });
 });
