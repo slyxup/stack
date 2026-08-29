@@ -3,7 +3,7 @@
 import { SlyxUpProvider, usePlans, useCheckout } from '@slyxup/react';
 import { SlyxUpStyles, PricingTable, UserButton } from '@slyxup/ui';
 
-const PROJECT_ID = '456ff6dd-1619-4ea9-8154-a57652059386';
+const PROJECT_ID = process.env.NEXT_PUBLIC_SLYXUP_PROJECT_ID || '';
 
 function PricingPage() {
   const { plans, loading } = usePlans(PROJECT_ID);
@@ -57,10 +57,14 @@ function PricingPage() {
 
 export default function PricingPageRoute() {
   const pk = process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY;
-  if (!pk) {
+  const projectId = process.env.NEXT_PUBLIC_SLYXUP_PROJECT_ID;
+  if (!pk || !projectId) {
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <p style={{ color: '#71717a' }}>Missing NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</p>
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 460 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Missing configuration</h1>
+          <p style={{ color: '#71717a', marginTop: 8 }}>Set <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> and <code>NEXT_PUBLIC_SLYXUP_PROJECT_ID</code> in <code>.env.local</code></p>
+        </div>
       </div>
     );
   }

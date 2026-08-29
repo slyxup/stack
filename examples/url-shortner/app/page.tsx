@@ -108,8 +108,8 @@ export default function Page() {
   if (!pk) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center' }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Missing publishable key</h1>
+        <div style={{ textAlign: 'center', maxWidth: 460 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Missing configuration</h1>
           <p style={{ color: '#71717a', marginTop: 8 }}>Set <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> in <code>.env.local</code></p>
         </div>
       </div>

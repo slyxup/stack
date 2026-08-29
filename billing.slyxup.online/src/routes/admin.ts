@@ -7,6 +7,20 @@ import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
 import { requireAdmin } from '../middleware/auth';
 import { planCreateSchema, planUpdateSchema } from '../schemas/billing';
+import {
+  type PaddleConfig,
+  createPaddlePrice,
+  createPaddleProduct,
+} from '../services/paddle.service';
+
+function getPaddleConfig(env: Env['Bindings']): PaddleConfig {
+  const vars = env as unknown as Record<string, string | undefined>;
+  return {
+    apiKey: vars.PADDLE_API_KEY ?? '',
+    environment:
+      (vars.PADDLE_ENVIRONMENT as 'sandbox' | 'production') ?? 'sandbox',
+  };
+}
 
 // ── /v1/admin/plans — CRUD guarded by BILLING_ADMIN_SECRET bearer token ──
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
@@ -26,11 +40,35 @@ app.get('/', async (c) => {
   return c.json({ ok: true, plans: list });
 });
 
-/** POST /v1/admin/plans */
+/** POST /v1/admin/plans — auto-creates product + price in Paddle */
 app.post('/', zValidator('json', planCreateSchema), async (c) => {
   const body = c.req.valid('json');
   const db = getDb(c.env);
-  const created = await db.insert(plans).values(body).returning().get();
+
+  let paddlePriceId = body.paddlePriceId;
+
+  // If no paddlePriceId provided, create product + price in Paddle automatically
+  if (!paddlePriceId) {
+    const config = getPaddleConfig(c.env);
+    if (!config.apiKey) {
+      return c.json({ ok: false, error: 'Paddle API key not configured' }, 500);
+    }
+    const product = await createPaddleProduct(config, body.name);
+    const price = await createPaddlePrice(
+      config,
+      product.id,
+      body.amount,
+      body.currency,
+      body.interval
+    );
+    paddlePriceId = price.id;
+  }
+
+  const created = await db
+    .insert(plans)
+    .values({ ...body, paddlePriceId })
+    .returning()
+    .get();
   return c.json({ ok: true, plan: created }, 201);
 });
 

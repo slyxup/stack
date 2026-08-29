@@ -5,7 +5,7 @@ import { SlyxUpStyles, UserButton, UserProfile, PricingTable, BillingPortal } fr
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 
-const PROJECT_ID = '456ff6dd-1619-4ea9-8154-a57652059386';
+const PROJECT_ID = process.env.NEXT_PUBLIC_SLYXUP_PROJECT_ID || '';
 
 interface ShortUrl {
   id: string;
@@ -295,10 +295,19 @@ function BillingTab({ plans, plansLoading, subscription, subLoading, checkout }:
 
 export default function DashboardPage() {
   const pk = process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY;
-  if (!pk) {
+  const projectId = process.env.NEXT_PUBLIC_SLYXUP_PROJECT_ID;
+  if (!pk || !projectId) {
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <p style={{ color: '#71717a' }}>Missing NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</p>
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 460 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Missing configuration</h1>
+          <p style={{ color: '#71717a', marginTop: 8 }}>Set these in <code>.env.local</code>:</p>
+          <pre style={{ background: '#18181b', border: '1px solid #27272a', padding: 16, borderRadius: 10, marginTop: 16, textAlign: 'left', fontSize: 13, color: '#a1a1aa' }}>
+{`NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online
+NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_test_...
+NEXT_PUBLIC_SLYXUP_PROJECT_ID=...`}
+          </pre>
+        </div>
       </div>
     );
   }

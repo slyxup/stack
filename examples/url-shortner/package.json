@@ -3,17 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "NEXT_PUBLIC_SLYXUP_API_URL=http://localhost:8787 next dev --port 3002",
+    "dev": "next dev --port 3002",
     "build": "next build"
   },
   "dependencies": {
     "next": "15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "@slyxup/react": "workspace:*",
-    "@slyxup/nextjs": "workspace:*",
-    "@slyxup/ui": "workspace:*",
-    "@slyxup/core": "workspace:*"
+    "@slyxup/react": "^1.0.4",
+    "@slyxup/nextjs": "^1.0.4",
+    "@slyxup/ui": "^0.2.13",
+    "@slyxup/core": "^1.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",

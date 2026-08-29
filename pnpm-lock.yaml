@@ -31,7 +31,7 @@ importers:
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.11(@types/node@26.3.0)(happy-dom@20.11.6)(vite@8.2.2(@types/node@26.3.0)(esbuild@0.17.19)(jiti@2.6.1)(terser@5.16.9)(yaml@2.9.0)))
       '@testing-library/react':
         specifier: ^16
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       happy-dom:
         specifier: ^20.11.6
         version: 20.11.6
@@ -164,6 +164,40 @@ importers:
       vite:
         specifier: ^5.4.0
         version: 5.4.21(@types/node@26.3.0)(lightningcss@1.33.0)(terser@5.16.9)
+
+  examples/url-shortner:
+    dependencies:
+      '@slyxup/core':
+        specifier: ^1.0.0
+        version: 1.0.0
+      '@slyxup/nextjs':
+        specifier: ^1.0.4
+        version: 1.0.4(next@15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@slyxup/react':
+        specifier: ^1.0.4
+        version: 1.0.4(react@18.3.1)
+      '@slyxup/ui':
+        specifier: ^0.2.13
+        version: 0.2.13(react@18.3.1)
+      next:
+        specifier: 15.0.0
+        version: 15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.0
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.3.0
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.31)
 
   packages/billing:
     dependencies:
@@ -2079,6 +2113,27 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@slyxup/billing@1.0.0':
+    resolution: {integrity: sha512-zT8Q78jRKKcR12jGDlcjs1lcvVOjRil/pTFSPzsYuZ+p9jRDFRfKnlIL7J4SEPodcFZ4DmD0+YXeQVyxijavOA==}
+
+  '@slyxup/core@1.0.0':
+    resolution: {integrity: sha512-gooXZEQ2VVjUfpxqE65cNktNQIW4RdU+g5JkG+Rdjimc0DABMDXsKAVsTA+z5Ynuy+PiYQq4SJsh648E+N0PUg==}
+
+  '@slyxup/nextjs@1.0.4':
+    resolution: {integrity: sha512-VcwWlwk1mmq+kAK8AcUE7viWd2YuEpP+6vFO3/weVKFvBTGwGlXsx5xcIf1dGpcSe/+psyQq39kFHIoRyRv+/Q==}
+    peerDependencies:
+      next: ^14 || ^15
+
+  '@slyxup/react@1.0.4':
+    resolution: {integrity: sha512-FtTD+mDa6oUI9H1bXG1PaaxswOB3yOIZVdbZ2mwVCw6MwQsJEl+t7kskKvJgvgLk6h5g4AmToejoOGdDM+nj+w==}
+    peerDependencies:
+      react: ^18 || ^19
+
+  '@slyxup/ui@0.2.13':
+    resolution: {integrity: sha512-ccHy/7d3qOX1U2pKgQtjxBjKQOXmiuPhU/x0VUElFMWS58JYGPHyWhX2sMsWadeJveba+bRL0upJCy/CF6eX0w==}
+    peerDependencies:
+      react: ^18 || ^19
+
   '@smithy/config-resolver@4.7.2':
     resolution: {integrity: sha512-Y1XfSefHIOub9762qm3ShafdlEE/Va8h3kLUeMq765fNeWeNLcOP2YUPr86H1SlyGwZTOqQ67RlBZPZ3k9Djgg==}
     engines: {node: '>=18.0.0'}
@@ -2349,6 +2404,11 @@ packages:
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
+
+  '@types/react-dom@18.3.7':
+    resolution: {integrity: sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==}
+    peerDependencies:
+      '@types/react': ^18.0.0
 
   '@types/react@18.3.31':
     resolution: {integrity: sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw==}
@@ -6230,6 +6290,29 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.5':
     optional: true
 
+  '@slyxup/billing@1.0.0':
+    dependencies:
+      '@slyxup/core': 1.0.0
+
+  '@slyxup/core@1.0.0': {}
+
+  '@slyxup/nextjs@1.0.4(next@15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+    dependencies:
+      '@slyxup/core': 1.0.0
+      next: 15.0.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+
+  '@slyxup/react@1.0.4(react@18.3.1)':
+    dependencies:
+      '@slyxup/billing': 1.0.0
+      '@slyxup/core': 1.0.0
+      react: 18.3.1
+
+  '@slyxup/ui@0.2.13(react@18.3.1)':
+    dependencies:
+      '@slyxup/core': 1.0.0
+      '@slyxup/react': 1.0.4(react@18.3.1)
+      react: 18.3.1
+
   '@smithy/config-resolver@4.7.2':
     dependencies:
       '@smithy/core': 3.33.3
@@ -6454,7 +6537,7 @@ snapshots:
     optionalDependencies:
       vitest: 4.1.11(@types/node@26.3.0)(happy-dom@20.11.6)(vite@8.2.2(@types/node@26.3.0)(esbuild@0.17.19)(jiti@2.6.1)(terser@5.16.9)(yaml@2.9.0))
 
-  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.29.7
       '@testing-library/dom': 10.4.1
@@ -6462,6 +6545,7 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
     optionalDependencies:
       '@types/react': 18.3.31
+      '@types/react-dom': 18.3.7(@types/react@18.3.31)
 
   '@tsconfig/node18@1.0.3': {}
 
@@ -6543,6 +6627,10 @@ snapshots:
       undici-types: 8.3.0
 
   '@types/prop-types@15.7.15': {}
+
+  '@types/react-dom@18.3.7(@types/react@18.3.31)':
+    dependencies:
+      '@types/react': 18.3.31
 
   '@types/react@18.3.31':
     dependencies:

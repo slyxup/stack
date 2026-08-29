@@ -70,16 +70,70 @@ export async function createPaddleCustomer(
         'GET',
         `/customers?email=${encodeURIComponent(email)}`
       );
-      const found = (list as unknown as { data: PaddleCustomer[] })?.data?.[0] ?? (Array.isArray(list) ? (list as unknown as PaddleCustomer[])[0] : null);
+      const found =
+        (list as unknown as { data: PaddleCustomer[] })?.data?.[0] ??
+        (Array.isArray(list) ? (list as unknown as PaddleCustomer[])[0] : null);
       if (found) return found;
       // Fallback: try to get the conflicting customer ID from the error detail and fetch it
       const match = msg.match(/customer of id (ctm_[a-z0-9]+)/);
       if (match) {
-        return paddleFetch<PaddleCustomer>(config, 'GET', `/customers/${match[1]}`);
+        return paddleFetch<PaddleCustomer>(
+          config,
+          'GET',
+          `/customers/${match[1]}`
+        );
       }
     }
     throw err;
   }
+}
+
+// ── Products & Prices ──
+
+interface PaddleProduct {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+interface PaddlePrice {
+  id: string;
+  productId: string;
+  amount: string;
+  currencyCode: string;
+  billingCycle: { interval: string; frequency: number } | null;
+}
+
+/** Create a product in Paddle */
+export async function createPaddleProduct(
+  config: PaddleConfig,
+  name: string,
+  description?: string
+): Promise<PaddleProduct> {
+  return paddleFetch<PaddleProduct>(config, 'POST', '/products', {
+    name,
+    ...(description ? { description } : {}),
+  });
+}
+
+/** Create a recurring price in Paddle for a product */
+export async function createPaddlePrice(
+  config: PaddleConfig,
+  productId: string,
+  amount: number,
+  currency: string,
+  interval: 'month' | 'year'
+): Promise<PaddlePrice> {
+  return paddleFetch<PaddlePrice>(config, 'POST', '/prices', {
+    productId,
+    amount: String(amount),
+    currencyCode: currency,
+    billingCycle: {
+      interval: interval === 'month' ? 'month' : 'year',
+      frequency: 1,
+    },
+    taxMode: 'account_price',
+  });
 }
 
 // ── Checkout ──

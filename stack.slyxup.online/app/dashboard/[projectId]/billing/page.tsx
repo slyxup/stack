@@ -229,8 +229,7 @@ export default function BillingPage() {
               .split(',')
               .map((s) => s.trim())
               .filter(Boolean);
-            const paddlePriceId = String(fd.get('paddlePriceId') || '').trim();
-            if (!name || !amount || !paddlePriceId) return;
+            if (!name || !amount) return;
             setBusy(true);
             setErr(null);
             try {
@@ -239,7 +238,7 @@ export default function BillingPage() {
                 body: JSON.stringify({
                   projectId,
                   name,
-                  paddlePriceId,
+                  paddlePriceId: '',
                   amount: Math.round(amount * 100),
                   currency,
                   interval,
@@ -258,7 +257,6 @@ export default function BillingPage() {
           style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr', marginBottom: 12 }}
         >
           <input name="name" placeholder="Plan name (e.g. Pro)" className="cin" required />
-          <input name="paddlePriceId" placeholder="Paddle price ID (pri_...)" className="cin" required />
           <input name="amount" placeholder="Amount (e.g. 29)" type="number" min={0} step={0.01} className="cin" required />
           <input name="currency" placeholder="USD" defaultValue="USD" className="cin" />
           <select name="interval" className="cin" defaultValue="month">

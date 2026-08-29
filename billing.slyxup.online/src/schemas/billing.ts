@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const planCreateSchema = z.object({
   projectId: z.string().min(1),
   name: z.string().min(1).max(100),
-  paddlePriceId: z.string().min(1).max(100),
+  paddlePriceId: z.string().max(100).default(''),
   amount: z.number().int().min(0), // cents
   currency: z.string().length(3).default('USD'),
   interval: z.enum(['month', 'year']).default('month'),
