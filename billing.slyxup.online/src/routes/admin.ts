@@ -53,15 +53,21 @@ app.post('/', zValidator('json', planCreateSchema), async (c) => {
     if (!config.apiKey) {
       return c.json({ ok: false, error: 'Paddle API key not configured' }, 500);
     }
-    const product = await createPaddleProduct(config, body.name);
-    const price = await createPaddlePrice(
-      config,
-      product.id,
-      body.amount,
-      body.currency,
-      body.interval
-    );
-    paddlePriceId = price.id;
+    try {
+      const product = await createPaddleProduct(config, body.name);
+      const price = await createPaddlePrice(
+        config,
+        product.id,
+        body.amount,
+        body.currency,
+        body.interval
+      );
+      paddlePriceId = price.id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[admin] Paddle create failed:', msg);
+      return c.json({ ok: false, error: `Paddle error: ${msg}` }, 502);
+    }
   }
 
   const created = await db
