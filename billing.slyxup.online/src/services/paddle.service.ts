@@ -112,6 +112,7 @@ export async function createPaddleProduct(
 ): Promise<PaddleProduct> {
   return paddleFetch<PaddleProduct>(config, 'POST', '/products', {
     name,
+    tax_category: 'saas',
     ...(description ? { description } : {}),
   });
 }
