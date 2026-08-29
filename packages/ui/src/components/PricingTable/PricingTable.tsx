@@ -93,7 +93,7 @@ export function PricingTable({ plans, onSelect, loading }: PricingTableProps) {
                 fontSize: 38,
                 fontWeight: 750,
                 letterSpacing: '-0.03em',
-                fontFamily: '"Space Grotesk",sans-serif',
+                fontFamily: 'var(--slx-display)',
               }}
             >
               ${(plan.amount / 100).toFixed(0)}
