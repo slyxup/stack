@@ -13,6 +13,8 @@ export interface SlyxupUser {
   preferences: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
+  /** Extended profile bio (from the auth worker user_profiles table). */
+  bio?: string | null;
 }
 
 export interface SlyxupSession {
@@ -40,11 +42,17 @@ export interface UpdateUserInput {
   avatarUrl?: string;
   username?: string | null;
   preferences?: Record<string, unknown>;
+  bio?: string | null;
 }
 
 export interface SessionResponse {
   ok: true;
-  user: Pick<SlyxupUser, 'id' | 'email'>;
+  user: Pick<SlyxupUser, 'id' | 'email'> & {
+    name?: string | null;
+    username?: string | null;
+    avatarUrl?: string | null;
+    bio?: string | null;
+  };
   session: Pick<SlyxupSession, 'id' | 'expiresAt'>;
 }
 
@@ -83,7 +91,12 @@ export interface UserResponse {
 
 export interface AuthResponse {
   ok: true;
-  user: Pick<SlyxupUser, 'id' | 'email'>;
+  user: Pick<SlyxupUser, 'id' | 'email'> & {
+    name?: string | null;
+    username?: string | null;
+    avatarUrl?: string | null;
+    bio?: string | null;
+  };
   sessionToken?: string;
   expiresAt?: string;
 }

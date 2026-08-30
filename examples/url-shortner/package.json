@@ -10,10 +10,10 @@
     "next": "15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "@slyxup/react": "workspace:*",
-    "@slyxup/nextjs": "workspace:*",
-    "@slyxup/ui": "workspace:*",
-    "@slyxup/core": "workspace:*"
+    "@slyxup/react": "^1.1.0",
+    "@slyxup/nextjs": "^1.0.4",
+    "@slyxup/ui": "^0.2.15",
+    "@slyxup/core": "^1.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",

@@ -249,6 +249,14 @@ auth.get('/session', async (c) => {
     user: {
       id: data.user.id,
       email: data.user.email,
+      name:
+        data.user.firstName ||
+        data.user.username ||
+        data.user.email ||
+        'Member',
+      username: data.user.username ?? null,
+      avatarUrl: data.user.avatarUrl ?? null,
+      bio: data.user.bio ?? null,
       role: data.user.role,
       emailVerified: data.user.emailVerified,
     },

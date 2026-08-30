@@ -13,6 +13,10 @@ export { useSession } from './hooks/useSession';
 export { useTwoFactor } from './hooks/useTwoFactor';
 export { useConnectedAccounts } from './hooks/useConnectedAccounts';
 export {
+  useTheme,
+  type ThemePreference,
+} from './hooks/useTheme';
+export {
   useBilling,
   usePlans,
   useSubscription,

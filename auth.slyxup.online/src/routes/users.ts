@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getDb } from '../lib/db';
 import { sanitizeUser } from '../lib/sanitize';
-import { users as usersTable } from '../lib/schema';
+import { userProfiles, users as usersTable } from '../lib/schema';
 import { requireSession } from '../middleware/auth';
 import {
   changePasswordSchema,
@@ -24,6 +24,7 @@ import {
 import {
   changePassword,
   deleteUser,
+  setProfileBio,
   updateUser,
 } from '../services/user.service';
 import { dispatchWebhooks } from '../services/webhook.service';
@@ -44,13 +45,24 @@ users.get('/', async (c) => {
     .where(eq(usersTable.id, userId))
     .get();
   if (!user) return c.json({ ok: false, error: 'User not found' }, 404);
-  return c.json({ ok: true, user: sanitizeUser(user) });
+  const profile = await db
+    .select({ bio: userProfiles.bio })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, userId))
+    .get();
+  return c.json({
+    ok: true,
+    user: sanitizeUser({ ...user, bio: profile?.bio ?? null }),
+  });
 });
 
 users.patch('/', zValidator('json', updateUserSchema), async (c) => {
   const input = c.req.valid('json');
   try {
     const updated = await updateUser(c.env, c.get('userId'), input);
+    if (input.bio !== undefined) {
+      await setProfileBio(c.env, c.get('userId'), input.bio);
+    }
     if (updated) {
       void dispatchWebhooks(c.env, updated.projectId, 'user.updated', {
         id: updated.id,

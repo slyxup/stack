@@ -11,6 +11,8 @@ export interface AuthContextValue {
   userId: string | null;
   sessionId: string | null;
   sessionExpiresAt: string | null;
+  /** Raw session token (for custom project APIs that need Bearer). */
+  sessionToken: string | null;
   /** Refresh session/user from API */
   reload: () => Promise<void>;
 }

@@ -115,6 +115,19 @@ export async function ensureProfile(env: { DB: D1Database }, userId: string) {
   return profile;
 }
 
+export async function setProfileBio(
+  env: { DB: D1Database },
+  userId: string,
+  bio: string | null | undefined
+) {
+  const db = getDb(env);
+  await ensureProfile(env, userId);
+  await db
+    .update(userProfiles)
+    .set({ bio: bio || null, updatedAt: new Date() })
+    .where(eq(userProfiles.userId, userId));
+}
+
 /** Change password: verify current, then rehash. Throws on bad current password. */
 export async function changePassword(
   env: { DB: D1Database },

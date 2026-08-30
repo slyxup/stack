@@ -96,22 +96,24 @@ export function SlyxUpProvider({
     try {
       const res = await client.sessions.get();
       const me = await client.users.me().catch(() => null);
+      const sessionUser = res.user;
       setState({
         isLoaded: true,
         isSignedIn: true,
         user: me?.user ?? {
-          id: res.user.id,
+          id: sessionUser.id,
           projectId: null,
-          email: res.user.email,
+          email: sessionUser.email,
           emailVerified: false,
-          username: null,
-          firstName: null,
+          username: sessionUser.username ?? null,
+          firstName: sessionUser.name ?? null,
           lastName: null,
-          avatarUrl: null,
+          avatarUrl: sessionUser.avatarUrl ?? null,
           twoFactorEnabled: false,
           preferences: null,
           createdAt: '',
           updatedAt: '',
+          bio: sessionUser.bio ?? null,
         },
         sessionId: res.session.id,
         sessionExpiresAt: res.session.expiresAt,
@@ -142,6 +144,7 @@ export function SlyxUpProvider({
     client,
     ...state,
     userId: state.user?.id ?? null,
+    sessionToken: client.getToken() ?? null,
     reload,
   };
 

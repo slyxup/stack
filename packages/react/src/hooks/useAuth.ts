@@ -9,7 +9,7 @@ import { useAuthContext } from '../context/auth-context';
 
 export function useAuth() {
   const ctx = useAuthContext();
-  const { client, isLoaded, isSignedIn, userId, reload } = ctx;
+  const { client, isLoaded, isSignedIn, userId, reload, sessionToken } = ctx;
 
   const signIn = async (input: SignInInput) => {
     const res = await client.auth.signIn(input);
@@ -42,6 +42,7 @@ export function useAuth() {
     isLoaded,
     isSignedIn,
     userId,
+    sessionToken,
     client,
     signIn,
     completeSignIn,

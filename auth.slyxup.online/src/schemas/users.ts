@@ -23,6 +23,7 @@ export const updateUserSchema = z.object({
     .nullable(),
   // preferences as json
   preferences: z.record(z.string(), z.unknown()).optional(),
+  bio: z.string().trim().max(280).optional().nullable(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

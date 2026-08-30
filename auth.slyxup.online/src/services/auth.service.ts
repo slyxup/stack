@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from '../lib/password';
 import {
   recoveryCodes,
   sessions,
+  userProfiles,
   users,
   verificationTokens,
 } from '../lib/schema';
@@ -402,7 +403,12 @@ export async function getSession(env: { DB: D1Database }, token: string) {
       .catch(() => undefined);
     return null;
   }
-  return { session, user };
+  const profile = await db
+    .select({ bio: userProfiles.bio })
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, user.id))
+    .get();
+  return { session, user: { ...user, bio: profile?.bio ?? null } };
 }
 
 export async function signOut(env: { DB: D1Database }, token: string) {

@@ -48,6 +48,16 @@ function getEnvApiUrl(): string | undefined {
     )
       return process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL;
   } catch {}
+  try {
+    // @ts-ignore
+    if (
+      typeof import.meta !== 'undefined' &&
+      (import.meta as unknown as { env?: Record<string, string> }).env
+        ?.VITE_SLYXUP_BILLING_URL
+    )
+      return (import.meta as unknown as { env: Record<string, string> }).env
+        .VITE_SLYXUP_BILLING_URL;
+  } catch {}
 
   // 2. Derive billing URL from auth URL (auth → billing domain swap)
   let authUrl: string | undefined;

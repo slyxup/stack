@@ -9,9 +9,9 @@
   "dependencies": {
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "@slyxup/react": "workspace:*",
-    "@slyxup/ui": "workspace:*",
-    "@slyxup/core": "workspace:*"
+    "@slyxup/react": "^1.1.0",
+    "@slyxup/ui": "^0.2.15",
+    "@slyxup/core": "^1.2.0"
   },
   "devDependencies": {
     "vite": "^5.4.0",
