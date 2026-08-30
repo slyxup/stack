@@ -27,6 +27,9 @@ vi.mock('@slyxup/core', () => ({
       this.publishableKey = opts.publishableKey;
       this.apiUrl = opts.apiUrl ?? '';
     }
+    getToken() {
+      return null;
+    }
   },
 }));
 
