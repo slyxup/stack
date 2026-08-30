@@ -89,3 +89,34 @@ the auth URL. `VITE_SLYXUP_BILLING_URL` is now read explicitly.
 - `PATCH https://auth.slyxup.online/v1/user { "bio": "..." }` → upserts profile.
 - `GET https://api-prompt.slyxup.online/v1/me` → `author.bio` reflects the auth profile.
 - `GET https://billing.slyxup.online/v1/billing/plans?projectId=f4cc2309-8aa4-48a6-a540-c27e856961b2` → 200 "Promptly Pro".
+# 2026-08-30 — Production incident & CI/CD harden (this session)
+
+## 5. useMemo boot crash — root cause & fix
+- **Symptom**: `Uncaught TypeError: Cannot read properties of null (reading 'useMemo')` on prompt.slyxup.online before any UI mounted.
+- **Root cause**: `@slyxup/react` shipped `react`/`react-dom` as **devDependencies**. Installed as a workspace member, its devDeps version (react 18.3.1) coexisted with the app's react 19.2.8 → **two React copies** → `@slyxup/react`'s `useMemo` resolved against its own resident React (null in the app's module graph).
+- **Fix**: `react` + `react-dom` moved to **peerDependencies `^18 || ^19`**; members keep react 18 as devDeps so workspace consumers share a single React. Verified single instance: `@slyxup+react@1.1.0_react-dom@19.2.8_react@19.2.8`.
+
+## 6. CSP inline-script violation
+- worker CSP had no inline-script allowance (`script-src 'self' https://static.cloudflareinsights.com`), and the theme bootstrap was an inline `<script>` in `index.html`.
+- **Fix**: extract to `public/theme.js`, load via `<script src="/theme.js">` (classic render-blocking script, allowed by `'self'`).
+
+## 7. npm publish matrix (latest on registry, all aligned)
+| Package | latest | Notes |
+| ------- | ------ | ----- |
+| `@slyxup/core` | 1.2.0 | |
+| `@slyxup/react` | 1.1.2 | peers `react`/`react-dom` `^18 \|\| ^19`; deps `@slyxup/core 1.2.0`, `@slyxup/billing 1.0.2`; `sessionToken` in `useAuth` + provider. |
+| `@slyxup/ui` | 0.3.2 | deps `@slyxup/core ^1.2.0`, `@slyxup/react ^1.1.0`. |
+| `@slyxup/billing` | 1.0.2 | |
+| `@slyxup/nextjs` | 1.0.6 | deps `@slyxup/core ^1.2.0`. |
+- Prompt platform + examples consume these via **plain `^` ranges** (npm, not workspace). Example staging is `workspace:^`-free.
+
+## 8. CI/CD findings (stack, now green)
+- `ci` (lint/typecheck/build/test), `deploy` (Workers + Pages), `release` (auto-bump patch + npm publish on push for changed `packages/*`) all pass on `main`.
+- Pitfalls fixed this session:
+  1. Example build "SlyxUp hooks must be used inside <SlyxUpProvider>" — registry `@slyxup/ui` had pinned OLD `@slyxup/react@1.0.5` → duplicate SDK contexts. Fixed by publishing aligned `ui@0.3.x` / `nextjs@1.0.x` and pinning examples to `@slyxup/ui ^0.3.0`.
+  2. pnpm 11 resolves plain `^` ranges from the **registry only** (workspace members ignored) — so "workspace latest" must equal "npm latest", else `ERR_PNPM_NO_MATCHING_VERSION`.
+  3. `@testing-library/react` was only a root devDep (relied on old hoisting) → adds to `packages/react` + `packages/ui` devDeps.
+  4. Provider now calls `client.getToken()` → test mocks updated.
+
+## 9. Production verification (2026-08-30)
+- `verify_promptly4.py` against prompt.slyxup.online: **34/34** — landing, system-dark theme + toggle persistence, app/explore, `/pro` billing, prompt detail, mobile drawer first-open + 4× close/open, full-screen profile edit → bio via UI, `auth /v1/user`, and `api-prompt /v1/me`; zero console errors.
