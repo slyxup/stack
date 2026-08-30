@@ -28,10 +28,10 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vitest": "^4.1.11"
   },
   "peerDependencies": {

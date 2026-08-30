@@ -12,7 +12,7 @@
     "react-dom": "^18.3.0",
     "@slyxup/react": "^1.1.0",
     "@slyxup/nextjs": "^1.0.4",
-    "@slyxup/ui": "^0.2.15",
+    "@slyxup/ui": "^0.3.0",
     "@slyxup/core": "^1.2.0"
   }
 }
