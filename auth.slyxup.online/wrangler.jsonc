@@ -18,7 +18,10 @@
     "GITHUB_CLIENT_ID": "Ov23liAPqCFTwbp2umVu",
     "EMAIL_FROM": "noreply@slyxup.online",
     "EMAIL_FROM_NAME": "SlyxUp",
-    "BREVO_SENDER": "noreply@slyxup.online"
+    "BREVO_SENDER": "noreply@slyxup.online",
+    "SINGLE_TENANT_MODE": "true",
+    "ALLOW_PUBLIC_DEVELOPER_REGISTRATION": "false",
+    "BOOTSTRAP_ADMIN_EMAIL": ""
   },
   "d1_databases": [
     {

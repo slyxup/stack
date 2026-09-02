@@ -8,12 +8,21 @@ import { ensureDeveloper, userFromSession } from '../routes/developers';
  * Previously duplicated inline in keys.ts / projects.ts / project-users.ts / developers.ts.
  */
 export const requireDeveloper = createMiddleware<{
-  Bindings: { DB: D1Database };
+  Bindings: {
+    DB: D1Database;
+    SINGLE_TENANT_MODE?: string;
+    ALLOW_PUBLIC_DEVELOPER_REGISTRATION?: string;
+    BOOTSTRAP_ADMIN_EMAIL?: string;
+    INITIAL_ADMIN_EMAIL?: string;
+  };
   Variables: { developerId: string; userId: string };
 }>(async (c, next) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const user = await userFromSession(c.env, token);
+  const user = await userFromSession(
+    c.env as unknown as { DB: D1Database },
+    token
+  );
   if (!user)
     return c.json(
       {
@@ -24,7 +33,13 @@ export const requireDeveloper = createMiddleware<{
       401
     );
   try {
-    const dev = await ensureDeveloper(c.env, user);
+    const dev = await ensureDeveloper(
+      c.env as unknown as { DB: D1Database } & Record<
+        string,
+        string | undefined
+      >,
+      user
+    );
     c.set('developerId', dev.id);
     c.set('userId', user.id);
   } catch (e) {

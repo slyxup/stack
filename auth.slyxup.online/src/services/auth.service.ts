@@ -13,7 +13,7 @@ import { verifyTOTP } from '../lib/totp';
 import { sendVerificationEmail } from './token.service';
 
 export async function signUp(
-  env: { DB: D1Database },
+  env: { DB: D1Database } & Record<string, string | undefined>,
   input: {
     email: string;
     password: string;
@@ -21,6 +21,7 @@ export async function signUp(
     firstName?: string;
     lastName?: string;
     username?: string;
+    bootstrapToken?: string;
   }
 ) {
   const db = getDb(env);
@@ -63,6 +64,21 @@ export async function signUp(
     .from(users);
   const role = count === 0 ? 'admin' : 'user';
 
+  // Single-tenant: first admin claim can be locked via env
+  if (count === 0 && !input.projectId) {
+    const requiredEmail = (
+      env.BOOTSTRAP_ADMIN_EMAIL ?? env.INITIAL_ADMIN_EMAIL
+    )?.toLowerCase();
+    if (requiredEmail && input.email.toLowerCase() !== requiredEmail) {
+      throw new Error('EMAIL_NOT_ALLOWED_FOR_BOOTSTRAP');
+    }
+    const secret = env.BOOTSTRAP_SECRET ?? env.ADMIN_BOOTSTRAP_TOKEN;
+    if (secret) {
+      const token = input.bootstrapToken ?? '';
+      if (token !== secret) throw new Error('INVALID_BOOTSTRAP_TOKEN');
+    }
+  }
+
   // Security: after bootstrap, require a publishable key (projectId) for sign-ups.
   if (!input.projectId && count > 0) {
     throw new Error(
@@ -70,6 +86,11 @@ export async function signUp(
     );
   }
 
+  // Default bootstrap passwords are flagged for rotation
+  const isDefaultPass =
+    input.password === 'admin' ||
+    input.password === 'changeme' ||
+    input.password === 'password';
   await db.insert(users).values({
     id: userId,
     projectId: input.projectId ?? null,
@@ -80,6 +101,7 @@ export async function signUp(
     firstName: input.firstName ?? null,
     lastName: input.lastName ?? null,
     role,
+    mustChangePassword: role === 'admin' && isDefaultPass,
     createdAt: now,
     updatedAt: now,
   });
@@ -213,6 +235,7 @@ export async function signIn(
     throw new Error(
       `ACCOUNT_BLOCKED:${user.blockedReason ?? 'Contact support'}`
     );
+  if (user.mustChangePassword) throw new Error('PASSWORD_CHANGE_REQUIRED');
   if (!user.emailVerified) throw new Error('EMAIL_NOT_VERIFIED');
 
   if (user.twoFactorEnabled) {
@@ -409,6 +432,61 @@ export async function getSession(env: { DB: D1Database }, token: string) {
     .where(eq(userProfiles.userId, user.id))
     .get();
   return { session, user: { ...user, bio: profile?.bio ?? null } };
+}
+
+export async function forcePasswordChange(
+  env: { DB: D1Database },
+  input: {
+    email: string;
+    oldPassword: string;
+    newPassword: string;
+    projectId?: string | null;
+  }
+) {
+  const db = getDb(env);
+  let user: typeof users.$inferSelect | undefined;
+  if (input.projectId) {
+    user = await db
+      .select()
+      .from(users)
+      .where(
+        and(eq(users.email, input.email), eq(users.projectId, input.projectId))
+      )
+      .get();
+    if (!user) {
+      user = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.email, input.email), isNull(users.projectId)))
+        .get();
+    }
+  } else {
+    user = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.email, input.email), isNull(users.projectId)))
+      .get();
+  }
+  if (!user || !user.passwordHash) throw new Error('Invalid credentials');
+  const ok = await verifyPassword(input.oldPassword, user.passwordHash);
+  if (!ok) throw new Error('Invalid credentials');
+  if (!user.mustChangePassword) throw new Error('PASSWORD_CHANGE_NOT_REQUIRED');
+  if (input.newPassword.length < 8)
+    throw new Error('Password must be at least 8 characters');
+  if (input.newPassword === input.oldPassword)
+    throw new Error('New password must differ');
+  const newHash = await hashPassword(input.newPassword);
+  await db
+    .update(users)
+    .set({
+      passwordHash: newHash,
+      mustChangePassword: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, user.id));
+  // Revoke all sessions after forced change
+  await db.delete(sessions).where(eq(sessions.userId, user.id));
+  return { ok: true as const };
 }
 
 export async function signOut(env: { DB: D1Database }, token: string) {

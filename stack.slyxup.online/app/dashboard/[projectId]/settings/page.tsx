@@ -109,6 +109,26 @@ export default function SettingsPage() {
     }
   }
 
+  async function deleteProject() {
+    if (!project) return;
+    const ok = window.confirm(`Delete project "${project.name}" permanently? This will remove all users, API keys, domains and sessions. This cannot be undone.`);
+    if (!ok) return;
+    const typed = window.prompt(`Type the project slug "${project.slug}" to confirm:`);
+    if (typed?.trim() !== project.slug) {
+      setErr(`Slug mismatch — expected "${project.slug}"`);
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await api(`/v1/projects/${projectId}`, dev, { method: 'DELETE' });
+      window.location.href = '/dashboard';
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'Delete failed');
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <h1 className="page-title">Settings</h1>
@@ -186,13 +206,21 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className="panel">
-        <h3>Project deletion</h3>
-        <p className="hint" style={{ lineHeight: 1.65 }}>
-          Project deletion is managed via the CLI. Run{' '}
-          <code className="inl">npx @slyxup/cli project delete</code>{' '}
-          to remove this project and all its data permanently.
+      <div className="panel" style={{ borderColor: 'rgba(239,68,68,.35)' }}>
+        <h3 style={{ color: '#fecaca' }}>Danger zone — delete project</h3>
+        <p className="hint" style={{ lineHeight: 1.65, marginBottom: 12 }}>
+          Permanently delete this project and all its users, keys, domains and audit logs. Also deletes the project in billing if you use{' '}
+          <code className="inl">SlyxUp Billing</code>. This cannot be undone. CLI alternative:{' '}
+          <code className="inl">npx @slyxup/cli project delete {projectId}</code>
         </p>
+        <button
+          className="btn-secondary c-btn"
+          style={{ background: '#ef4444', color: 'white', borderColor: '#ef4444' }}
+          disabled={busy}
+          onClick={() => void deleteProject()}
+        >
+          Delete project permanently
+        </button>
       </div>
     </>
   );

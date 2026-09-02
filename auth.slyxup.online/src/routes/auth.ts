@@ -58,10 +58,19 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
   // (overrides any body projectId to prevent cross-project spoofing)
   const projectId = resolved ?? input.projectId;
   try {
-    const { sessionToken, expiresAt, user } = await AuthService.signUp(c.env, {
-      ...input,
-      projectId,
-    });
+    const bootstrapToken =
+      c.req.header('X-Bootstrap-Token') ?? c.req.header('x-bootstrap-token');
+    const { sessionToken, expiresAt, user } = await AuthService.signUp(
+      c.env as unknown as { DB: D1Database } & Record<
+        string,
+        string | undefined
+      >,
+      {
+        ...input,
+        projectId,
+        bootstrapToken,
+      }
+    );
     void dispatchWebhooks(c.env, projectId ?? null, 'user.created', {
       id: user.id,
       email: user.email,
@@ -81,6 +90,24 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
     return c.json({ ok: true, user, sessionToken }, 201);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
+    if (msg === 'INVALID_BOOTSTRAP_TOKEN')
+      return c.json(
+        {
+          ok: false,
+          code: 'INVALID_BOOTSTRAP_TOKEN',
+          error: 'Invalid bootstrap token',
+        },
+        403
+      );
+    if (msg === 'EMAIL_NOT_ALLOWED_FOR_BOOTSTRAP')
+      return c.json(
+        {
+          ok: false,
+          code: 'EMAIL_NOT_ALLOWED',
+          error: 'Email not allowed for bootstrap',
+        },
+        403
+      );
     return c.json({ ok: false, error: msg }, 400);
   }
 });
@@ -160,6 +187,34 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
           code: 'EMAIL_NOT_VERIFIED',
           error:
             'Please verify your email before signing in. Check your inbox, or resend via POST /v1/verification/resend.',
+        },
+        403
+      );
+    if (msg === 'PASSWORD_CHANGE_REQUIRED')
+      return c.json(
+        {
+          ok: false,
+          code: 'PASSWORD_CHANGE_REQUIRED',
+          error:
+            'You must change your password before continuing. POST /v1/auth/change-password with your current default password.',
+        },
+        403
+      );
+    if (msg === 'INVALID_BOOTSTRAP_TOKEN')
+      return c.json(
+        {
+          ok: false,
+          code: 'INVALID_BOOTSTRAP_TOKEN',
+          error: 'Invalid bootstrap token',
+        },
+        403
+      );
+    if (msg === 'EMAIL_NOT_ALLOWED_FOR_BOOTSTRAP')
+      return c.json(
+        {
+          ok: false,
+          code: 'EMAIL_NOT_ALLOWED',
+          error: 'Email not allowed for bootstrap',
         },
         403
       );
@@ -259,6 +314,9 @@ auth.get('/session', async (c) => {
       bio: data.user.bio ?? null,
       role: data.user.role,
       emailVerified: data.user.emailVerified,
+      mustChangePassword:
+        (data.user as unknown as { mustChangePassword?: boolean })
+          .mustChangePassword ?? false,
     },
     session: { id: data.session.id, expiresAt: data.session.expiresAt },
   });
@@ -270,6 +328,50 @@ auth.get('/user', async (c) => {
   const data = await AuthService.getSession(c.env, token);
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
   return c.json({ ok: true, user: sanitizeUser(data.user) });
+});
+
+// ── Force password change (for mustChangePassword flag, no session required) ──
+auth.post('/password/force-change', async (c) => {
+  const body = (await c.req
+    .json<{
+      email?: string;
+      oldPassword?: string;
+      newPassword?: string;
+      projectId?: string;
+    }>()
+    .catch(() => ({}))) as {
+    email?: string;
+    oldPassword?: string;
+    newPassword?: string;
+    projectId?: string;
+  };
+  const email = body.email?.trim();
+  const oldPassword = body.oldPassword;
+  const newPassword = body.newPassword;
+  if (!email || !oldPassword || !newPassword) {
+    return c.json(
+      { ok: false, error: 'email, oldPassword, newPassword required' },
+      400
+    );
+  }
+  try {
+    await AuthService.forcePasswordChange(
+      c.env as unknown as { DB: D1Database },
+      { email, oldPassword, newPassword, projectId: body.projectId ?? null }
+    );
+    return c.json({
+      ok: true,
+      message: 'Password updated — please sign in again.',
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed';
+    if (msg === 'PASSWORD_CHANGE_NOT_REQUIRED')
+      return c.json(
+        { ok: false, code: 'PASSWORD_CHANGE_NOT_REQUIRED', error: msg },
+        400
+      );
+    return c.json({ ok: false, error: msg }, 400);
+  }
 });
 
 export default auth;

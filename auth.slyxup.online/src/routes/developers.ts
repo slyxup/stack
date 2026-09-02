@@ -37,7 +37,7 @@ export async function userFromSession(
 
 /** Ensure a developer row exists for this user; return it. */
 export async function ensureDeveloper(
-  env: { DB: D1Database },
+  env: { DB: D1Database } & Record<string, string | undefined>,
   user: { id: string; email: string }
 ) {
   const db = getDb(env);
@@ -47,6 +47,34 @@ export async function ensureDeveloper(
     .where(eq(developers.userId, user.id))
     .get();
   if (existing) return existing;
+
+  // ── Single-tenant guard: only admins can become developers on personal instances ──
+  // Docs/public SDK stays open, but dashboard/project creation is owner-only.
+  // Others must self-host. See bootstrap.service isSingleTenant().
+  const singleTenant =
+    (env.SINGLE_TENANT_MODE ?? env.ALLOW_PUBLIC_DEVELOPER_REGISTRATION) !==
+    undefined
+      ? env.SINGLE_TENANT_MODE === 'true' ||
+        env.ALLOW_PUBLIC_DEVELOPER_REGISTRATION === 'false'
+      : true; // default safe = single tenant
+  if (singleTenant) {
+    const u = await db.select().from(users).where(eq(users.id, user.id)).get();
+    // Only the first admin (role=admin) may claim developer. Non-admins get docs-only.
+    // In single-tenant mode, project users (with projectId) never become developers.
+    if (!u || u.role !== 'admin') {
+      throw new Error(
+        'Developer registration is disabled on this instance. Please self-host your own SlyxUp Stack — see https://stack.slyxup.online/docs for setup. Docs and SDK remain public.'
+      );
+    }
+    // Also enforce email whitelist if BOOTSTRAP_ADMIN_EMAIL is set
+    const allowed = (
+      env.BOOTSTRAP_ADMIN_EMAIL ?? env.INITIAL_ADMIN_EMAIL
+    )?.toLowerCase();
+    if (allowed && u.email.toLowerCase() !== allowed) {
+      throw new Error('Developer access restricted to instance owner.');
+    }
+  }
+
   // Reclaim legacy row created by the old CLI flow (same email, no link)
   const legacy = await db
     .select()
@@ -101,7 +129,13 @@ developersRoute.use('*', async (c, next) => {
       401
     );
   try {
-    const dev = await ensureDeveloper(c.env, user);
+    const dev = await ensureDeveloper(
+      c.env as unknown as { DB: D1Database } & Record<
+        string,
+        string | undefined
+      >,
+      user
+    );
     c.set('userId', user.id);
     c.set('developerId', dev.id);
   } catch (e) {

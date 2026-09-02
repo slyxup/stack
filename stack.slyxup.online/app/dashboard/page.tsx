@@ -100,6 +100,30 @@ function DashboardHome({ dev }: { dev: Dev }) {
     }
   }
 
+  async function removeProject(id: string, name: string) {
+    const ok = window.confirm(`Delete project "${name}" permanently? This removes all users, keys, domains and billing data. Type OK to proceed.`);
+    if (!ok) return;
+    const typed = window.prompt(`Type the project slug to confirm deletion:`);
+    const target = projects.find((p) => p.id === id);
+    if (!target) return;
+    if (typed?.trim() !== target.slug) {
+      setErr(`Slug mismatch — expected "${target.slug}"`);
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      await api(`/v1/projects/${id}`, dev, { method: 'DELETE' });
+      setProjects((cur) => cur.filter((p) => p.id !== id));
+      setMsg(`Project "${name}" deleted.`);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : 'Delete failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="wrap" style={{ padding: '40px 24px 80px', maxWidth: 980 }}>
       <div className="dash-top" style={{ position: 'static', background: 'transparent', border: 'none', padding: 0, marginBottom: 28 }}>
@@ -170,10 +194,18 @@ function DashboardHome({ dev }: { dev: Dev }) {
                     </span>
                   </td>
                   <td className="cell-sub">{keys[p.id]?.length ?? 0}</td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td style={{ textAlign: 'right', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <Link className="btn-secondary c-btn" href={`/dashboard/${p.id}`}>
                       Open →
                     </Link>
+                    <button
+                      className="btn-secondary c-btn"
+                      style={{ borderColor: 'var(--danger, #ef4444)', color: 'var(--danger, #ef4444)' }}
+                      disabled={busy}
+                      onClick={() => void removeProject(p.id, p.name)}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

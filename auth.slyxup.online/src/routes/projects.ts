@@ -9,6 +9,7 @@ import {
 } from '../lib/schema';
 import { requireDeveloper } from '../middleware/developer';
 import { createProjectSchema } from '../schemas/projects';
+import { writeAuditLog } from '../services/audit.service';
 import * as ProjectService from '../services/project.service';
 
 const projects = new Hono<{
@@ -158,6 +159,37 @@ projects.post('/:id/go-live', async (c) => {
     .where(eq(projectsTable.id, id));
   await c.env.KV.delete('cors_live_domains');
   return c.json({ ok: true, environment: 'live' });
+});
+
+projects.delete('/:id', async (c) => {
+  const developerId = c.get('developerId');
+  if (!developerId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const id = c.req.param('id');
+  try {
+    const proj = await ProjectService.getProject(c.env, id);
+    const name = proj?.name ?? id;
+    await ProjectService.deleteProject(c.env, id, developerId);
+    await c.env.KV.delete('cors_live_domains');
+    void writeAuditLog(
+      c.env,
+      'project.deleted',
+      {
+        projectId: id,
+        userId: c.get('userId') ?? null,
+        ipAddress: c.req.header('CF-Connecting-IP') ?? null,
+        userAgent: c.req.header('User-Agent') ?? null,
+      },
+      { name, projectId: id }
+    );
+    return c.json({ ok: true, deleted: id });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed';
+    if (msg === 'Project not found')
+      return c.json({ ok: false, error: msg }, 404);
+    if (msg === 'Forbidden' || msg === 'Only project owner can delete')
+      return c.json({ ok: false, error: msg }, 403);
+    return c.json({ ok: false, error: msg }, 400);
+  }
 });
 
 export default projects;

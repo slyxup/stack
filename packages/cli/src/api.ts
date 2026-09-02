@@ -117,4 +117,6 @@ export const api = {
       'POST',
       `/v1/projects/${projectId}/go-live`
     ),
+  deleteProject: (c: Credentials, id: string) =>
+    req<{ ok: true; deleted: string }>(c, 'DELETE', `/v1/projects/${id}`),
 };

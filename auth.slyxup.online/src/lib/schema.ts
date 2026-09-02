@@ -173,6 +173,10 @@ export const users = sqliteTable(
       .default('user'),
     blocked: integer('blocked', { mode: 'boolean' }).notNull().default(false),
     blockedReason: text('blocked_reason'),
+    /** Force password change on next sign-in (for default/bootstrap credentials). */
+    mustChangePassword: integer('must_change_password', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     // Typed JSON prefs — D1 stores as TEXT
     preferences: text('preferences', { mode: 'json' }).$type<
       Record<string, unknown>
@@ -538,6 +542,7 @@ export const auditLogs = sqliteTable(
         'key.created',
         'key.revoked',
         'project.created',
+        'project.deleted',
       ],
     }).notNull(),
     metadata: text('metadata', { mode: 'json' }).$type<

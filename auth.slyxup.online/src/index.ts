@@ -13,6 +13,7 @@ import oauthRoute from './routes/oauth';
 import projectUsersRoute from './routes/project-users';
 import projectsRoute from './routes/projects';
 import sessionsRoute from './routes/sessions';
+import setupRoute from './routes/setup';
 import usersRoute from './routes/users';
 import verificationRoute from './routes/verification';
 import { getSession } from './services/auth.service';
@@ -30,6 +31,12 @@ type Bindings = {
   ENCRYPTION_KEY: string;
   APP_URL: string;
   CORS_ORIGINS: string;
+  BOOTSTRAP_SECRET?: string;
+  ADMIN_BOOTSTRAP_TOKEN?: string;
+  BOOTSTRAP_ADMIN_EMAIL?: string;
+  INITIAL_ADMIN_EMAIL?: string;
+  SINGLE_TENANT_MODE?: string;
+  ALLOW_PUBLIC_DEVELOPER_REGISTRATION?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -44,7 +51,7 @@ app.use('*', async (c, next) => {
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key',
+      'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key, X-Bootstrap-Token',
     'Access-Control-Max-Age': '86400',
   };
 
@@ -121,6 +128,7 @@ const rateLimited = [
   '/v1/auth/*',
   '/v1/admin/*',
   '/v1/verification/*',
+  '/v1/setup/*',
   '/v1/session',
 ];
 for (const pattern of rateLimited) {
@@ -188,6 +196,7 @@ app.route('/v1/oauth', oauthRoute);
 app.route('/v1/sessions', sessionsRoute);
 app.route('/v1/admin', adminRoute);
 app.route('/v1/audit', auditRoute);
+app.route('/v1/setup', setupRoute);
 
 // Public: resolve publishable key → projectId (used by billing Worker in local dev
 // where AUTH_DB is a separate D1 instance without api_keys data).
@@ -270,6 +279,9 @@ app.get('/v1/session', async (c) => {
       bio: data.user.bio ?? null,
       role: data.user.role,
       emailVerified: data.user.emailVerified,
+      mustChangePassword:
+        (data.user as unknown as { mustChangePassword?: boolean })
+          .mustChangePassword ?? false,
     },
     session: { id: data.session.id, expiresAt: data.session.expiresAt },
   });

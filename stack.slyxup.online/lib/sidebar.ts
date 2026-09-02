@@ -5,6 +5,7 @@ export const DOCS_SIDEBAR = [
       { title: 'Introduction', slug: '/docs', desc: 'What is SlyxUp and how it works' },
       { title: 'Quick Start', slug: '/docs/quick-start', desc: 'Set up in 30 seconds' },
       { title: 'Installation', slug: '/docs/installation', desc: 'npm packages and setup' },
+      { title: 'Self-Host', slug: '/docs/self-host', desc: 'Run your own stack — single-tenant setup' },
     ],
   },
   {

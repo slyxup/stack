@@ -214,3 +214,38 @@ export async function revokeApiKey(env: { DB: D1Database }, keyId: string) {
   const db = getDb(env);
   await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
 }
+
+export async function deleteProject(
+  env: { DB: D1Database },
+  projectId: string,
+  developerId: string
+) {
+  const db = getDb(env);
+  const project = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .get();
+  if (!project) throw new Error('Project not found');
+  // Only owner or admin can delete — check member role
+  const membership = await db
+    .select()
+    .from(projectMembers)
+    .where(
+      and(
+        eq(projectMembers.projectId, projectId),
+        eq(projectMembers.developerId, developerId)
+      )
+    )
+    .get();
+  if (!membership) throw new Error('Forbidden');
+  if (membership.role !== 'owner') {
+    // Allow if developer is the original creator (developerId matches)
+    if (project.developerId !== developerId)
+      throw new Error('Only project owner can delete');
+  }
+  // D1 cascades handle most FKs (users, apiKeys, domains, members, sessions, auditLogs, webhooks)
+  // But explicitly delete for safety + to avoid orphan KV cache
+  await db.delete(projects).where(eq(projects.id, projectId));
+  return { ok: true as const, projectId };
+}

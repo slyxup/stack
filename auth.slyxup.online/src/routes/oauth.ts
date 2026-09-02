@@ -22,6 +22,9 @@ type Bindings = {
   APP_URL: string;
   HOSTED_AUTH_URL: string;
   ALLOWED_REDIRECT_ORIGINS?: string;
+  BOOTSTRAP_ADMIN_EMAIL?: string;
+  BOOTSTRAP_SECRET?: string;
+  INITIAL_ADMIN_EMAIL?: string;
 };
 
 const oauth = new Hono<{ Bindings: Bindings }>();
@@ -255,10 +258,31 @@ oauth.get('/callback/:provider', async (c) => {
           .get();
 
     if (!user) {
-      // Bootstrap: first user ever becomes admin (OAuth counts too)
+      // Bootstrap: first user ever becomes admin (OAuth counts too) — guarded for single-tenant
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(users);
+      if (count === 0) {
+        const requiredEmail = (
+          c.env.BOOTSTRAP_ADMIN_EMAIL ??
+          (c.env as unknown as Record<string, string | undefined>)
+            .INITIAL_ADMIN_EMAIL
+        )?.toLowerCase();
+        if (requiredEmail && profile.email.toLowerCase() !== requiredEmail) {
+          return c.redirect(
+            `${base}/sign-in?error=${encodeURIComponent('Bootstrap restricted to owner email')}`
+          );
+        }
+        const secret = (c.env as unknown as Record<string, string | undefined>)
+          .BOOTSTRAP_SECRET;
+        if (secret) {
+          // OAuth bootstrap via secret cannot be validated without token — disallow OAuth for first admin when secret is set.
+          // Owner must use POST /v1/setup/bootstrap with token instead (secure).
+          return c.redirect(
+            `${base}/sign-in?error=${encodeURIComponent('Bootstrap requires secret — use /setup')}`
+          );
+        }
+      }
       const id = randomUUID();
       const [first, last] = (profile.name ?? '').split(' ');
       await db.insert(users).values({
@@ -269,6 +293,7 @@ oauth.get('/callback/:provider', async (c) => {
         lastName: last || null,
         avatarUrl: profile.avatarUrl ?? null,
         role: count === 0 ? 'admin' : 'user',
+        mustChangePassword: false,
         createdAt: now,
         updatedAt: now,
       });

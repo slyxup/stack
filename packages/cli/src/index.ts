@@ -401,22 +401,57 @@ project
 
 project
   .command('delete <id>')
-  .description('Delete a project (coming soon: needs DELETE /v1/projects/:id)')
+  .description(
+    'Delete a project permanently (requires owner role). Use --yes to skip confirmation.'
+  )
   .option('--json', 'JSON output')
+  .option('-y, --yes', 'skip confirmation prompt')
   .action(async (id: string, opts) => {
-    void id;
+    const creds = needCreds();
     const json = isJsonOpts(opts);
-    if (json)
-      return jsonOut({
-        ok: false,
-        error: 'DELETE /v1/projects/:id not yet implemented',
-      });
-    console.error(
-      style.yellow(
-        'Project delete requires DELETE /v1/projects/:id — coming soon.'
-      )
-    );
-    process.exit(1);
+    try {
+      if (!opts.yes && !json) {
+        // Interactive confirmation: require slug
+        let slug: string | undefined;
+        try {
+          const info = await api.getProject(creds, id);
+          slug = info.project.slug;
+          console.log(style.dim(`Project: ${info.project.name} (${slug})`));
+          process.stdout.write(`Type slug "${slug}" to confirm deletion: `);
+          const typed = await readLine();
+          if (typed.trim() !== slug) {
+            console.error(style.red(`✗ Slug mismatch — expected "${slug}"`));
+            process.exit(1);
+          }
+        } catch {
+          // If get fails, fall back to id confirmation
+          process.stdout.write(`Delete project ${id}? Type "yes" to confirm: `);
+          const typed = await readLine();
+          if (typed.trim().toLowerCase() !== 'yes') {
+            console.error(style.red('✗ Aborted'));
+            process.exit(1);
+          }
+        }
+      } else if (!opts.yes && json) {
+        // In JSON mode without --yes, require explicit --yes for safety
+        console.log(
+          JSON.stringify(
+            {
+              ok: false,
+              error: 'Add --yes to confirm deletion in --json mode',
+            },
+            null,
+            2
+          )
+        );
+        process.exit(1);
+      }
+      const res = await api.deleteProject(creds, id);
+      if (json) return jsonOut({ ok: true, deleted: res.deleted });
+      console.log(style.green(`✓ Project deleted: ${res.deleted}`));
+    } catch (e) {
+      fail(e, json);
+    }
   });
 
 // ── keys ──
@@ -1069,6 +1104,86 @@ authCmd
     if (json) return jsonOut({ ok: true, url });
     console.log(style.dim(`Opening ${url} ...`));
     openBrowser(url);
+  });
+
+// ── bootstrap (first admin claim) ──
+program
+  .command('bootstrap')
+  .description(
+    'Claim the first admin on a fresh instance (single-tenant). Requires BOOTSTRAP_SECRET if configured.'
+  )
+  .requiredOption('-e, --email <email>', 'owner email')
+  .requiredOption('-p, --password <password>', 'owner password (≥8 chars)')
+  .option('--name <name>', 'display name')
+  .option(
+    '--token <token>',
+    'bootstrap token (or set SLYXUP_BOOTSTRAP_TOKEN env)'
+  )
+  .option('--api-url <url>', DEFAULT_API_URL)
+  .option('--json', 'JSON output')
+  .action(async (opts) => {
+    const apiUrl = opts.apiUrl ?? DEFAULT_API_URL;
+    const json = isJsonOpts(opts);
+    const token =
+      opts.token ??
+      process.env.SLYXUP_BOOTSTRAP_TOKEN ??
+      process.env.BOOTSTRAP_SECRET;
+    try {
+      const res = await fetch(`${apiUrl}/v1/setup/bootstrap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-Bootstrap-Token': token } : {}),
+        },
+        body: JSON.stringify({
+          email: opts.email,
+          password: opts.password,
+          name: opts.name,
+          token,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (!res.ok)
+        throw new Error(
+          typeof data.error === 'string'
+            ? data.error
+            : `Bootstrap failed (${res.status})`
+        );
+      // Save credentials like login does so next commands (project create etc.) work immediately
+      if (data.sessionToken) {
+        saveCredentials({
+          token: String(data.sessionToken),
+          developerId: undefined,
+          email: String(opts.email),
+          apiUrl,
+        });
+      }
+      if (json) return jsonOut({ ok: true, ...data });
+      console.log(style.green(`✓ Bootstrapped admin: ${opts.email}`));
+      if (data.project)
+        console.log(
+          `  Project: ${(data.project as { name: string }).name} (${(data.project as { slug: string }).slug})`
+        );
+      if (data.keys) {
+        const k = data.keys as { publishable: string; secret: string };
+        console.log(`  Publishable: ${style.cyan(k.publishable)}`);
+        console.log(
+          `  Secret:      ${style.yellow(k.secret)} ${style.dim('(save once!)')}`
+        );
+        console.log(
+          style.dim(
+            `  Set NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=${k.publishable} in your stack front-end`
+          )
+        );
+      }
+      if ((data as { message?: string }).message)
+        console.log(style.dim(String((data as { message?: string }).message)));
+    } catch (e) {
+      fail(e, json);
+    }
   });
 
 // ── helpers ──

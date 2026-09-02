@@ -19,16 +19,22 @@ export type Env = {
 };
 
 export const SESSION_COOKIE = 'slyxup_session';
+export const SESSION_COOKIE_HOST = '__Host-slyxup_session';
 
-/** Session token from `slyxup_session` cookie or `Authorization: Bearer <token>` */
+/** Session token — Bearer preferred for per-platform isolation, then host cookie, then legacy */
 export function getSessionToken(c: {
   req: { header: (name: string) => string | undefined };
 }): string | undefined {
+  const auth = c.req.header('Authorization');
+  if (auth?.startsWith('Bearer ')) {
+    const bearer = auth.slice(7).trim();
+    if (bearer) return bearer;
+  }
   const cookie = c.req.header('Cookie') ?? '';
+  const hostMatch = cookie.match(new RegExp(`${SESSION_COOKIE_HOST}=([^;]+)`));
+  if (hostMatch) return decodeURIComponent(hostMatch[1]);
   const match = cookie.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
   if (match) return decodeURIComponent(match[1]);
-  const auth = c.req.header('Authorization');
-  if (auth?.startsWith('Bearer ')) return auth.slice(7).trim();
   return undefined;
 }
 
