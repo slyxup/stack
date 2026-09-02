@@ -110,15 +110,19 @@ function InnerGate({ children }: { children: (dev: Dev) => ReactNode }) {
   }
 
   if (!isSignedIn) {
+    // In single-tenant personal mode (owner-only), hide registration completely.
+    // Bootstrap already handled above; here we are not in bootstrap and singleTenant=true → login only.
+    const single = bootstrap?.singleTenant ?? true;
+    const showRegister = !single;
     return (
       <div className="wrap" style={{ padding: '56px 24px 80px', maxWidth: 980 }}>
         <h1 className="display" style={{ fontSize: 34, marginBottom: 8 }}>
           SlyxUp Dashboard
         </h1>
         <p className="page-sub" style={{ marginBottom: 28 }}>
-          Sign in to manage projects. Email + password or continue with GitHub / Google.
+          Sign in to manage projects. {showRegister ? 'Email + password or continue with GitHub / Google.' : 'Owner login only.'}
         </p>
-        {bootstrap?.singleTenant && (
+        {single && (
           <div
             style={{
               padding: 12,
@@ -140,9 +144,24 @@ function InnerGate({ children }: { children: (dev: Dev) => ReactNode }) {
         )}
         <div style={{ maxWidth: 420 }}>
           {mode === 'signin' ? (
-            <SignIn social onSignUpClick={() => setMode('register')} />
-          ) : (
+            showRegister ? (
+              <SignIn social onSignUpClick={() => setMode('register')} />
+            ) : (
+              <SignIn social />
+            )
+          ) : showRegister ? (
             <SignUp social onSignInClick={() => setMode('signin')} />
+          ) : (
+            <SignIn social />
+          )}
+          {!showRegister && (
+            <p style={{ fontSize: 12, color: '#7c8195', marginTop: 12 }}>
+              No registration on this instance. Need your own stack?{' '}
+              <a href="/docs/self-host" style={{ color: 'var(--accent)' }}>
+                Self-host in 3 commands
+              </a>
+              .
+            </p>
           )}
         </div>
       </div>

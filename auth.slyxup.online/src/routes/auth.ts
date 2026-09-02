@@ -86,7 +86,9 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
       },
       { email: user.email }
     );
-    setSessionCookie(c, sessionToken, expiresAt);
+    // Per-platform isolation: only platform (no projectId) gets a host-only cookie.
+    // Project users (with publishable key → projectId) use Bearer token only (per-origin localStorage) — no shared cookie → no cross-login overwrite.
+    if (!projectId) setSessionCookie(c, sessionToken, expiresAt);
     return c.json({ ok: true, user, sessionToken }, 201);
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
@@ -149,7 +151,8 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
       );
     }
     const { user, sessionToken, expiresAt } = result;
-    setSessionCookie(c, sessionToken, expiresAt);
+    // Only platform logins get a cookie; project logins stay Bearer-only for isolation
+    if (!user.projectId) setSessionCookie(c, sessionToken, expiresAt);
     void dispatchWebhooks(c.env, user.projectId, 'user.signed_in', {
       id: user.id,
       email: user.email,
@@ -237,7 +240,8 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
       code,
       recoveryCode
     );
-    setSessionCookie(c, result.sessionToken, result.expiresAt);
+    if (!result.user.projectId)
+      setSessionCookie(c, result.sessionToken, result.expiresAt);
     void dispatchWebhooks(c.env, result.user.projectId, 'user.signed_in', {
       id: result.user.id,
       email: result.user.email,
@@ -277,9 +281,11 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
 
 auth.post('/sign-out', async (c) => {
   const token = getSessionToken(c);
+  // Fetch session before deletion to decide cookie handling (platform vs project isolation)
+  let sessionData: Awaited<ReturnType<typeof AuthService.getSession>> | null =
+    null;
   if (token) {
-    // Get session info before destroying for audit log
-    const sessionData = await AuthService.getSession(c.env, token);
+    sessionData = await AuthService.getSession(c.env, token);
     await AuthService.signOut(c.env, token);
     if (sessionData) {
       void writeAuditLog(c.env, 'user.signed_out', {
@@ -290,7 +296,12 @@ auth.post('/sign-out', async (c) => {
       });
     }
   }
-  clearSessionCookie(c);
+  // Per-platform isolation: only clear the host-only platform cookie when the session was platform (projectId null).
+  // Project users use Bearer tokens stored per-origin — clearing the shared platform cookie would log out the dashboard and other platforms.
+  const isPlatformLogout = !sessionData || sessionData.user.projectId == null;
+  if (isPlatformLogout) {
+    clearSessionCookie(c);
+  }
   return c.json({ ok: true });
 });
 
