@@ -2,11 +2,11 @@
   "name": "stack.slyxup.online",
   "private": true,
   "version": "0.1.0",
-  "description": "SlyxUp Stack — Marketing ONLY (https://stack.slyxup.online) — CF Pages/Workers",
+  "description": "SlyxUp Stack \u2014 Marketing ONLY (https://stack.slyxup.online) \u2014 CF Pages/Workers",
   "scripts": {
-    "dev": "NEXT_PUBLIC_SLYXUP_API_URL=http://localhost:8787 next dev",
-    "build": "next build",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "dev": "NEXT_PUBLIC_SLYXUP_API_URL=http://localhost:8787 NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_test_09c5d2c9f32865a525457a7b2aa40973b48b8393782bcdba next dev",
+    "build": "NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_live_0ac05a57ebc388bae5650c45d9bab4b7ba4bd00c52f7997b NEXT_PUBLIC_SLYXUP_BILLING_URL=https://billing.slyxup.online next build",
+    "deploy": "NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_live_0ac05a57ebc388bae5650c45d9bab4b7ba4bd00c52f7997b NEXT_PUBLIC_SLYXUP_BILLING_URL=https://billing.slyxup.online opennextjs-cloudflare build && NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_live_0ac05a57ebc388bae5650c45d9bab4b7ba4bd00c52f7997b NEXT_PUBLIC_SLYXUP_BILLING_URL=https://billing.slyxup.online opennextjs-cloudflare deploy",
     "cf:dev": "wrangler pages dev .next --compatibility-date=2025-08-24",
     "preview": "next build && wrangler pages dev .next"
   },

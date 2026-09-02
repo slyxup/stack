@@ -148,7 +148,7 @@ export function SignIn({
               className="slx-input"
               type="text"
               inputMode="numeric"
-              autoComplete="one-time-code"
+              autoComplete="off"
               maxLength={6}
               pattern="[0-9]*"
               placeholder="000000"

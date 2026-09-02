@@ -3,7 +3,9 @@
   "name": "auth-slyxup-online",
   "main": "src/index.ts",
   "compatibility_date": "2025-07-18",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
@@ -21,7 +23,7 @@
     "BREVO_SENDER": "noreply@slyxup.online",
     "SINGLE_TENANT_MODE": "true",
     "ALLOW_PUBLIC_DEVELOPER_REGISTRATION": "false",
-    "BOOTSTRAP_ADMIN_EMAIL": ""
+    "BOOTSTRAP_ADMIN_EMAIL": "slyxup@gmail.com"
   },
   "d1_databases": [
     {
@@ -32,12 +34,21 @@
     }
   ],
   "kv_namespaces": [
-    { "binding": "KV", "id": "99d2ebe401894b328c75745ffca9eb19" }
+    {
+      "binding": "KV",
+      "id": "99d2ebe401894b328c75745ffca9eb19"
+    }
   ],
   "r2_buckets": [
-    { "binding": "STORAGE", "bucket_name": "slyxup-storage" }
+    {
+      "binding": "STORAGE",
+      "bucket_name": "slyxup-storage"
+    }
   ],
   "routes": [
-    { "pattern": "auth.slyxup.online/*", "zone_name": "slyxup.online" }
+    {
+      "pattern": "auth.slyxup.online/*",
+      "zone_name": "slyxup.online"
+    }
   ]
 }

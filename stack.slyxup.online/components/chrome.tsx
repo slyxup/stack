@@ -1,8 +1,38 @@
+'use client';
+
 import Link from 'next/link';
 import { BrandShield } from './icons';
 import { ThemeToggle } from './ThemeToggle';
+import { useAuth } from '@slyxup/react';
+import { usePathname } from 'next/navigation';
+
+function NavCta() {
+  // Try to read auth; if no provider (e.g. landing page outside SlyxUpProvider), fallback to static link
+  let isSignedIn = false;
+  let isLoaded = false;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const a = useAuth() as unknown as { isSignedIn?: boolean; isLoaded?: boolean };
+    isSignedIn = !!a?.isSignedIn;
+    isLoaded = !!a?.isLoaded;
+  } catch {
+    // No provider — marketing page
+  }
+  // While loading, show neutral CTA to avoid layout shift
+  if (!isLoaded) {
+    return <Link className="nav-cta" href="/dashboard">Open Dashboard</Link>;
+  }
+  return isSignedIn ? (
+    <Link className="nav-cta" href="/dashboard">Open Dashboard</Link>
+  ) : (
+    <Link className="nav-cta" href="/login">Sign in</Link>
+  );
+}
 
 export function Nav() {
+  const pathname = usePathname();
+  const isDashboard = pathname?.startsWith('/dashboard');
+  const isLogin = pathname === '/login' || pathname === '/sign-in';
   return (
     <nav className="nav">
       <div className="wrap nav-in">
@@ -18,7 +48,8 @@ export function Nav() {
         </div>
         <div className="nav-right">
           <ThemeToggle />
-          <Link className="nav-cta" href="/dashboard">Open Dashboard</Link>
+          {/* On dashboard/login show context-aware CTA, else generic */}
+          {isDashboard || isLogin ? <NavCta /> : <Link className="nav-cta" href="/dashboard">Open Dashboard</Link>}
         </div>
       </div>
     </nav>

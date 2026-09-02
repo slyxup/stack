@@ -4,6 +4,7 @@ import { SlyxupClient } from '@slyxup/core';
 import { SlyxUpProvider, useAuth, useUser } from '@slyxup/react';
 import { SignIn, SignUp, SlyxUpStyles } from '@slyxup/ui';
 import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { setGlobalClient } from '../../lib/dashboard-client';
 
 // Re-export DevContext for project API helpers that still need raw token access
@@ -35,6 +36,7 @@ export function useLogout() {
 }
 
 function InnerGate({ children }: { children: (dev: Dev) => ReactNode }) {
+  const router = useRouter();
   const { isLoaded, isSignedIn, client } = useAuth() as {
     isLoaded: boolean;
     isSignedIn: boolean;
@@ -54,7 +56,10 @@ function InnerGate({ children }: { children: (dev: Dev) => ReactNode }) {
   // Fetch bootstrap status once (tells us if this is a fresh self-host)
   useEffect(() => {
     try {
-      const api = (client as unknown as { apiUrl?: string })?.apiUrl ?? process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online';
+      let api = (client as unknown as { apiUrl?: string })?.apiUrl ?? process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online';
+      if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && (api.includes('localhost') || api.includes('127.0.0.1'))) {
+        api = 'https://auth.slyxup.online';
+      }
       fetch(`${api.replace(/\/$/, '')}/v1/setup/status`, { cache: 'no-store' })
         .then((r) => r.json())
         .then((j: unknown) => {
@@ -109,9 +114,28 @@ function InnerGate({ children }: { children: (dev: Dev) => ReactNode }) {
     );
   }
 
+  // Protected route: dashboard requires auth — redirect to dedicated /login (middleware also enforces server-side)
+  useEffect(() => {
+    if (isLoaded && !isSignedIn && !bootstrap?.needsBootstrap) {
+      // Avoid redirect loop if already on login
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/sign-in') {
+        router.replace('/login');
+      }
+    }
+  }, [isLoaded, isSignedIn, bootstrap, router]);
+
   if (!isSignedIn) {
     // In single-tenant personal mode (owner-only), hide registration completely.
     // Bootstrap already handled above; here we are not in bootstrap and singleTenant=true → login only.
+    // Show brief redirecting state — middleware will also redirect server-side to /login
+    if (isLoaded && !bootstrap?.needsBootstrap) {
+      return (
+        <div className="wrap" style={{ padding: '60px 24px', maxWidth: 720, textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 12 }}>Redirecting to login…</p>
+          <a href="/login" style={{ color: 'var(--accent)' }}>Go to login →</a>
+        </div>
+      );
+    }
     const single = bootstrap?.singleTenant ?? true;
     const showRegister = !single;
     return (
@@ -183,7 +207,10 @@ function InnerGate({ children }: { children: (dev: Dev) => ReactNode }) {
             const oldPw = String(fd.get('old') ?? '');
             const nextPw = String(fd.get('next') ?? '');
             try {
-              const api = (client as unknown as { apiUrl?: string })?.apiUrl ?? process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online';
+              let api = (client as unknown as { apiUrl?: string })?.apiUrl ?? process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online';
+              if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && (api.includes('localhost') || api.includes('127.0.0.1'))) {
+                api = 'https://auth.slyxup.online';
+              }
               const res = await fetch(`${api.replace(/\/$/, '')}/v1/auth/password/force-change`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

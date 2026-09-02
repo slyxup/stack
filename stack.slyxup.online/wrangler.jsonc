@@ -3,9 +3,26 @@
   "name": "stack-slyxup-online",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-07-18",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": { "directory": ".open-next/assets", "binding": "ASSETS", "not_found_handling": "single-page-application" },
-  "vars": { "NEXT_PUBLIC_SLYXUP_API_URL": "https://auth.slyxup.online" },
-  "routes": [{ "pattern": "stack.slyxup.online/*", "zone_name": "slyxup.online" }],
-  "observability": { "enabled": true }
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "NEXT_PUBLIC_SLYXUP_API_URL": "https://auth.slyxup.online",
+    "NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY": "pk_live_0ac05a57ebc388bae5650c45d9bab4b7ba4bd00c52f7997b",
+    "NEXT_PUBLIC_SLYXUP_BILLING_URL": "https://billing.slyxup.online"
+  },
+  "routes": [
+    {
+      "pattern": "stack.slyxup.online/*",
+      "zone_name": "slyxup.online"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
 }

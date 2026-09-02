@@ -4,8 +4,17 @@
 
 import { SlyxupClient } from '@slyxup/core';
 
-export const API = process.env.NEXT_PUBLIC_SLYXUP_API_URL ?? 'https://auth.slyxup.online';
-export const BILLING = process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL ?? 'https://billing.slyxup.online';
+function sanitizeApiUrl(url: string | undefined, fallback: string): string {
+  const u = (url ?? fallback).trim();
+  // In prod (non-localhost), ignore localhost URLs that leaked from .env.local
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (u.includes('localhost') || u.includes('127.0.0.1')) return fallback;
+  }
+  return u || fallback;
+}
+
+export const API = sanitizeApiUrl(process.env.NEXT_PUBLIC_SLYXUP_API_URL, 'https://auth.slyxup.online');
+export const BILLING = sanitizeApiUrl(process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL, 'https://billing.slyxup.online');
 
 export interface Dev {
   token: string;
