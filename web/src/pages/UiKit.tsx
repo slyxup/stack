@@ -117,15 +117,31 @@ function Section({
 }) {
   return (
     <section className="min-w-0">
-      <h2 className="font-mono text-[14px] font-bold">{`<${title} />`}</h2>
-      <p className="text-[13px] text-[#63666f] mt-1 mb-4 max-w-2xl leading-relaxed">
+      <h2 className="font-mono text-[14px] font-bold text-white">{`<${title} />`}</h2>
+      <p className="text-[13px] text-white/55 mt-1 mb-4 max-w-2xl leading-relaxed">
         {desc}
       </p>
-      <div className="rounded-2xl border border-[#e4e6eb] bg-white p-4 sm:p-8 min-w-0">
-        <div
-          className={`mx-auto min-w-0 ${wide ? 'max-w-3xl' : 'max-w-[400px]'}`}
-        >
-          <DemoBoundary label={title}>{demo}</DemoBoundary>
+      <div className="demo-frame min-w-0">
+        <div className="demo-frame-inner min-w-0">
+          <div className="demo-bar">
+            <span className="flex gap-1.5">
+              <i className="block size-2 rounded-full bg-[#ff5f56]" />
+              <i className="block size-2 rounded-full bg-[#ffbd2e]" />
+              <i className="block size-2 rounded-full bg-[#27c93f]" />
+            </span>
+            <span className="ml-1 truncate">live preview — {title}</span>
+            <span className="ml-auto flex items-center gap-1.5 shrink-0">
+              <span className="size-1.5 rounded-full bg-emerald-500 pulse-dot" />{' '}
+              interactive
+            </span>
+          </div>
+          <div className="p-4 sm:p-8 overflow-x-auto">
+            <div
+              className={`mx-auto min-w-0 ${wide ? 'max-w-3xl' : 'max-w-[400px]'}`}
+            >
+              <DemoBoundary label={title}>{demo}</DemoBoundary>
+            </div>
+          </div>
         </div>
       </div>
       <div className="mt-3 min-w-0">
@@ -155,7 +171,7 @@ function Switch({
       aria-checked={on}
       aria-label={label}
       onClick={onClick}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${on ? 'bg-[#6d28d9]' : 'bg-[#d4d7de]'}`}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${on ? 'bg-black' : 'bg-[#d4d7de]'}`}
     >
       <span
         className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`}
@@ -168,7 +184,7 @@ type FontKey = keyof typeof FONTS;
 
 export default function UiKit() {
   const [mode, setMode] = useState<ThemeMode>('auto');
-  const [accent, setAccent] = useState<AccentName | 'custom'>('violet');
+  const [accent, setAccent] = useState<AccentName | 'custom'>('mono');
   const [customColor, setCustomColor] = useState('#e8562a');
   const [font, setFont] = useState<FontKey>('default');
   const [radius, setRadius] = useState(10);
@@ -214,7 +230,7 @@ applyTheme({
     <div className="min-h-screen bg-[#0b0b10] text-white overflow-x-clip">
       <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0b10]/85 backdrop-blur">
         <div className="mx-auto max-w-[1000px] px-4 sm:px-8 py-3 flex items-center gap-2 min-w-0">
-          <div className="size-8 rounded-lg bg-gradient-to-br from-[#6d28d9] to-[#4c1d95] flex items-center justify-center text-white shrink-0">
+          <div className="size-8 rounded-lg bg-gradient-to-br from-[#3f3f46] to-black flex items-center justify-center text-white shrink-0">
             <Blocks className="size-4" />
           </div>
           <span className="text-[14px] font-bold truncate">SlyxUp UI Kit</span>
@@ -250,7 +266,7 @@ applyTheme({
             className="absolute inset-0 pointer-events-none"
             style={{
               background:
-                'radial-gradient(640px 300px at 12% 0%, rgba(109,40,217,0.42), transparent 65%), radial-gradient(520px 280px at 95% 100%, rgba(34,211,238,0.13), transparent 60%)',
+                'radial-gradient(640px 300px at 12% 0%, rgba(255,255,255,0.1), transparent 65%), radial-gradient(520px 280px at 95% 100%, rgba(255,255,255,0.05), transparent 60%)',
             }}
           />
           <div className="relative max-w-2xl min-w-0">
@@ -298,7 +314,7 @@ applyTheme({
                     key={m}
                     type="button"
                     onClick={() => setMode(m)}
-                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${mode === m ? 'bg-[#101014] text-white' : 'text-[#63666f]'}`}
+                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${mode === m ? 'bg-black text-white' : 'text-[#63666f]'}`}
                   >
                     {m}
                   </button>
@@ -313,7 +329,7 @@ applyTheme({
                     key={p}
                     type="button"
                     onClick={() => setPrimary(p)}
-                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${primary === p ? 'bg-[#6d28d9] text-white' : 'text-[#63666f]'}`}
+                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${primary === p ? 'bg-black text-white' : 'text-[#63666f]'}`}
                   >
                     {p}
                   </button>
@@ -343,7 +359,7 @@ applyTheme({
                     type="button"
                     title={ACCENTS[a].label}
                     onClick={() => setAccent(a)}
-                    className={`size-7 rounded-full cursor-pointer border-2 shrink-0 ${accent === a ? 'border-[#101014] scale-110' : 'border-transparent'}`}
+                    className={`size-7 rounded-full cursor-pointer border-2 shrink-0 ${accent === a ? 'border-black scale-110' : 'border-transparent'}`}
                     style={{
                       background: `linear-gradient(135deg, ${ACCENTS[a].accent}, ${ACCENTS[a].gradientTo})`,
                     }}
@@ -351,7 +367,7 @@ applyTheme({
                 ))}
                 <label
                   title="Custom color"
-                  className={`size-7 rounded-full cursor-pointer border-2 overflow-hidden relative shrink-0 ${accent === 'custom' ? 'border-[#101014] scale-110' : 'border-dashed border-[#c6c9d2]'}`}
+                  className={`size-7 rounded-full cursor-pointer border-2 overflow-hidden relative shrink-0 ${accent === 'custom' ? 'border-black scale-110' : 'border-dashed border-[#c6c9d2]'}`}
                   style={
                     accent === 'custom'
                       ? { background: customColor }
@@ -383,7 +399,7 @@ applyTheme({
                 max={20}
                 value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
-                className="w-full accent-[#6d28d9] cursor-pointer"
+                className="w-full accent-black cursor-pointer"
               />
             </div>
             <div className="min-w-0 sm:col-span-2 xl:col-span-1">
@@ -412,7 +428,7 @@ applyTheme({
                         key={l}
                         type="button"
                         onClick={() => setLayout(l)}
-                        className={`rounded-full px-4 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer whitespace-nowrap ${layout === l ? 'bg-[#101014] text-white' : 'text-[#63666f]'}`}
+                        className={`rounded-full px-4 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer whitespace-nowrap ${layout === l ? 'bg-black text-white' : 'text-[#63666f]'}`}
                       >
                         {l}
                       </button>

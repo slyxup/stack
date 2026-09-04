@@ -6,14 +6,38 @@ import { Button, Card, CardBody } from '../components/ui';
 import { AUTH_URL, BILLING_URL } from '../lib/api';
 
 const SECTIONS = [
-  { id: 'quickstart', label: 'Quickstart', keys: 'start install key domain project setup' },
-  { id: 'react', label: 'React', keys: 'provider hooks signin signup userbutton' },
+  {
+    id: 'quickstart',
+    label: 'Quickstart',
+    keys: 'start install key domain project setup',
+  },
+  {
+    id: 'react',
+    label: 'React',
+    keys: 'provider hooks signin signup userbutton',
+  },
   { id: 'nextjs', label: 'Next.js', keys: 'middleware server component ssr' },
-  { id: 'core', label: 'Core SDK', keys: 'headless client auth billing checkout' },
-  { id: 'uikit', label: 'UI kit', keys: 'components theme pricing admin signin' },
-  { id: 'api', label: 'API reference', keys: 'endpoints rest users keys projects domains oauth' },
+  {
+    id: 'core',
+    label: 'Core SDK',
+    keys: 'headless client auth billing checkout',
+  },
+  {
+    id: 'uikit',
+    label: 'UI kit',
+    keys: 'components theme pricing admin signin',
+  },
+  {
+    id: 'api',
+    label: 'API reference',
+    keys: 'endpoints rest users keys projects domains oauth',
+  },
   { id: 'cli', label: 'CLI', keys: 'terminal commands shorten' },
-  { id: 'security', label: 'Security', keys: 'sessions password argon keys block https' },
+  {
+    id: 'security',
+    label: 'Security',
+    keys: 'sessions password argon keys block https',
+  },
 ];
 
 function SectionContent({ section }: { section: string }) {
@@ -361,7 +385,9 @@ export default function Docs() {
       (s) => s.label.toLowerCase().includes(needle) || s.keys.includes(needle)
     );
   }, [q]);
-  const active = visible.some((s) => s.id === section) ? section : visible[0]?.id || 'quickstart';
+  const active = visible.some((s) => s.id === section)
+    ? section
+    : visible[0]?.id || 'quickstart';
 
   return (
     <div className="min-w-0">
@@ -371,13 +397,13 @@ export default function Docs() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'radial-gradient(600px 260px at 15% 0%, rgba(109,40,217,0.4), transparent 65%), radial-gradient(500px 260px at 90% 100%, rgba(34,211,238,0.14), transparent 60%)',
+              'radial-gradient(600px 260px at 15% 0%, rgba(255,255,255,0.09), transparent 65%), radial-gradient(500px 260px at 90% 100%, rgba(255,255,255,0.05), transparent 60%)',
           }}
         />
         <div className="relative flex flex-col sm:flex-row sm:items-center gap-4 min-w-0">
           <div className="min-w-0">
             <h1 className="font-display flex items-center gap-2.5 text-[22px] sm:text-[26px] font-extrabold tracking-tight">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-[#6d28d9] shrink-0">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-black shrink-0">
                 <BookOpen className="size-[18px]" />
               </span>
               Documentation
@@ -385,7 +411,10 @@ export default function Docs() {
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-relaxed text-white/60">
               Integrate SlyxUp into your own platform. Public docs — no sign-in
               needed.{' '}
-              <Link to="/admin" className="font-semibold text-white underline underline-offset-4">
+              <Link
+                to="/admin"
+                className="font-semibold text-white underline underline-offset-4"
+              >
                 Open admin →
               </Link>
             </p>
@@ -397,7 +426,7 @@ export default function Docs() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search docs…"
-                className="h-10 w-full rounded-full border border-white/15 bg-white/[0.07] pl-10 pr-4 text-[13px] text-white placeholder:text-white/35 focus:border-[#8b5cf6] focus:outline-none"
+                className="h-10 w-full rounded-full border border-white/15 bg-white/[0.07] pl-10 pr-4 text-[13px] text-white placeholder:text-white/35 focus:border-black focus:outline-none"
               />
             </div>
           </div>
@@ -411,13 +440,15 @@ export default function Docs() {
             type="button"
             key={s.id}
             onClick={() => setSection(s.id)}
-            className={`shrink-0 rounded-full px-4 py-2 text-[12.5px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${active === s.id ? 'bg-[#101014] text-white' : 'bg-white border border-[#e4e6eb] text-[#63666f] hover:text-[#101014]'}`}
+            className={`shrink-0 rounded-full px-4 py-2 text-[12.5px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${active === s.id ? 'bg-black text-white' : 'bg-white border border-[#e4e6eb] text-[#63666f] hover:text-black'}`}
           >
             {s.label}
           </button>
         ))}
         {visible.length === 0 && (
-          <span className="text-[12.5px] text-[#63666f] py-2">No sections match “{q}”.</span>
+          <span className="text-[12.5px] text-[#63666f] py-2">
+            No sections match “{q}”.
+          </span>
         )}
       </div>
 
@@ -431,7 +462,7 @@ export default function Docs() {
                   type="button"
                   key={s.id}
                   onClick={() => setSection(s.id)}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] font-semibold cursor-pointer transition-colors ${active === s.id ? 'bg-[#101014] text-white' : 'text-[#63666f] hover:bg-[#eceef2] hover:text-[#101014]'}`}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] font-semibold cursor-pointer transition-colors ${active === s.id ? 'bg-black text-white' : 'text-[#63666f] hover:bg-[#eceef2] hover:text-black'}`}
                 >
                   {s.label}
                   {active === s.id && <ArrowRight className="size-3.5" />}
@@ -439,17 +470,24 @@ export default function Docs() {
               ))}
             </div>
           </Card>
-          <Link to="/ui" className="mt-3 block rounded-2xl bg-gradient-to-br from-[#6d28d9] to-[#4c1d95] p-4 text-white">
+          <Link
+            to="/ui"
+            className="mt-3 block rounded-2xl bg-gradient-to-br from-[#3f3f46] to-black p-4 text-white"
+          >
             <div className="text-[13px] font-bold">Prefer visuals?</div>
-            <div className="text-[12px] text-white/70 mt-0.5">Every component, live in the UI kit →</div>
+            <div className="text-[12px] text-white/70 mt-0.5">
+              Every component, live in the UI kit →
+            </div>
           </Link>
         </aside>
 
         <Card className="flex-1 min-w-0">
-          <CardBody className="!px-5 sm:!px-7 !py-6">
+          <CardBody className="px-5! sm:px-7! py-6!">
             <SectionContent section={active} />
             <div className="mt-8 flex items-center justify-between border-t border-[#e4e6eb] pt-4">
-              <span className="text-[12px] text-[#9a9da8]">Was this helpful?</span>
+              <span className="text-[12px] text-[#9a9da8]">
+                Was this helpful?
+              </span>
               <Link to="/admin">
                 <Button size="sm" variant="secondary">
                   Try it in admin <ArrowRight className="size-3.5" />

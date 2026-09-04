@@ -114,7 +114,7 @@ export default function Projects() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'radial-gradient(560px 240px at 12% 0%, rgba(109,40,217,0.42), transparent 65%), radial-gradient(480px 240px at 92% 100%, rgba(34,211,238,0.13), transparent 60%)',
+              'radial-gradient(560px 240px at 12% 0%, rgba(255,255,255,0.1), transparent 65%), radial-gradient(480px 240px at 92% 100%, rgba(255,255,255,0.05), transparent 60%)',
           }}
         />
         <div className="relative flex flex-col gap-4 min-w-0">
@@ -137,7 +137,7 @@ export default function Projects() {
                 placeholder="Search projects"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="h-9 w-full sm:w-[220px] rounded-full border border-white/15 bg-white/[0.07] pl-9 pr-4 text-[13px] text-white placeholder:text-white/35 focus:border-[#8b5cf6] focus:outline-none"
+                className="h-9 w-full sm:w-[220px] rounded-full border border-white/15 bg-white/[0.07] pl-9 pr-4 text-[13px] text-white placeholder:text-white/35 focus:border-black focus:outline-none"
               />
             </div>
             <button
@@ -149,7 +149,7 @@ export default function Projects() {
             </button>
             <Button
               size="sm"
-              className="btn-glow !border-0 !bg-[#6d28d9] hover:!bg-[#5b21b6]"
+              className="btn-glow border-0! bg-black! hover:bg-[#27272a]!"
               onClick={() => {
                 setShowNew(true);
                 setMutError(null);
@@ -192,11 +192,14 @@ export default function Projects() {
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((p, i) => (
-            <Card key={p.id} className="card-hover flex flex-col overflow-hidden">
+            <Card
+              key={p.id}
+              className="card-hover flex flex-col overflow-hidden"
+            >
               <div
                 className="h-1.5"
                 style={{
-                  background: `linear-gradient(90deg, ${['#6d28d9,#a78bfa', '#0891b2,#67e8f9', '#059669,#34d399', '#d97706,#fbbf24', '#e11d48,#fb7185'][i % 5]})`,
+                  background: `linear-gradient(90deg, ${['#09090b,#52525b', '#27272a,#a1a1aa', '#09090b,#71717a', '#3f3f46,#d4d4d8', '#18181b,#52525b'][i % 5]})`,
                 }}
               />
               <CardHeader>
@@ -204,7 +207,7 @@ export default function Projects() {
                   <div className="size-9 rounded-xl bg-gradient-to-br from-[#1a1a22] to-[#0b0b10] text-white flex items-center justify-center text-[13px] font-extrabold ring-1 ring-black/10">
                     {p.name[0]?.toUpperCase()}
                   </div>
-                  <Badge tone="violet">{counts[p.id] ?? '…'} users</Badge>
+                  <Badge tone="mono">{counts[p.id] ?? '…'} users</Badge>
                 </div>
                 <CardTitle>{p.name}</CardTitle>
                 <CardDesc>
@@ -221,7 +224,7 @@ export default function Projects() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="!text-[#dc2626] hover:!bg-red-50"
+                  className="text-[#dc2626]! hover:bg-red-50!"
                   onClick={() => void remove(p)}
                 >
                   Delete

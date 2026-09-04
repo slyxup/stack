@@ -63,8 +63,5 @@
     "typescript": "^5.5.0",
     "vitest": "^4.1.11",
     "wrangler": "^3.80.0"
-  },
-  "lint-staged": {
-    "*.*": "biome check --write --no-errors-on-unmatched"
   }
 }

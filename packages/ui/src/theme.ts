@@ -25,6 +25,7 @@ export type PrimaryStyle = 'ink' | 'accent';
 export type Density = 'comfortable' | 'compact';
 
 export type AccentName =
+  | 'mono'
   | 'violet'
   | 'blue'
   | 'emerald'
@@ -45,6 +46,13 @@ export interface AccentDef {
 }
 
 export const ACCENTS: Record<AccentName, AccentDef> = {
+  mono: {
+    label: 'Mono (black & white)',
+    accent: '#101014',
+    accentHover: '#000000',
+    accentSoft: 'rgba(16, 16, 20, 0.08)',
+    gradientTo: '#3f3f48',
+  },
   violet: {
     label: 'Violet',
     accent: '#5b5bd6',
@@ -227,13 +235,15 @@ export function applyTheme(theme: SlyxUpTheme, root?: HTMLElement): () => void {
 
   // ── Primary button style ──
   if (theme.primary !== undefined) {
-    if (theme.primary === 'accent') el.setAttribute('data-slyxup-primary', 'accent');
+    if (theme.primary === 'accent')
+      el.setAttribute('data-slyxup-primary', 'accent');
     else el.removeAttribute('data-slyxup-primary');
   }
 
   // ── Density ──
   if (theme.density !== undefined) {
-    if (theme.density === 'compact') el.setAttribute('data-slyxup-density', 'compact');
+    if (theme.density === 'compact')
+      el.setAttribute('data-slyxup-density', 'compact');
     else el.removeAttribute('data-slyxup-density');
   }
 
@@ -297,9 +307,9 @@ export function getTheme(root?: HTMLElement): Required<
       (el.getAttribute('data-slyxup-accent') as AccentName) ||
       cs.getPropertyValue(VAR_ACCENT).trim() ||
       'violet',
-    primary:
-      (el.getAttribute('data-slyxup-primary') as PrimaryStyle) || 'ink',
-    density: (el.getAttribute('data-slyxup-density') as Density) || 'comfortable',
+    primary: (el.getAttribute('data-slyxup-primary') as PrimaryStyle) || 'ink',
+    density:
+      (el.getAttribute('data-slyxup-density') as Density) || 'comfortable',
     font: cs.getPropertyValue('--slx-font').trim(),
     radius: cs.getPropertyValue('--slx-radius').trim(),
   };

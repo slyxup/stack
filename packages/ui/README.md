@@ -313,6 +313,8 @@ Extra classes: `.slx-btn-accent` renders the primary button in your accent inste
 
 Responsive + accessible by default: auth cards reflow under 460px, UserProfile nav collapses to a horizontal strip under 680px, labeled fields, visible focus rings, `prefers-reduced-motion` respected, semantic buttons throughout.
 
+Contrast is engineered, not eyeballed: body/secondary/link/error/success text pass WCAG AA (≥4.5) in both modes, and every gradient surface (avatars, marks, badges, split panels, accent buttons) deepens automatically so white text stays readable under **any** accent — including custom hex colors.
+
 ## License
 
 MIT © [SlyxUp](https://github.com/slyxup/stack)

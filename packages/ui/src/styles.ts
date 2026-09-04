@@ -21,8 +21,8 @@ export const CSS = `
   --slx-muted: #6f6f7b;
   --slx-border: #e3e3ee;
   --slx-border-strong: #d3d3e2;
-  --slx-danger: #d64550;
-  --slx-success: #1f9d55;
+  --slx-danger: #cc333f;
+  --slx-success: #177245;
   --slx-radius-sm: 8px;
   --slx-radius: 10px;
   --slx-radius-lg: 14px;
@@ -108,7 +108,7 @@ export const CSS = `
 .slx-mark {
   width: 46px; height: 46px; border-radius: 13px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(140deg, var(--slx-accent) 0%, var(--slx-accent-2) 100%);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12) 0%, color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.28),
     0 6px 16px -6px rgba(91,91,214,.55);
@@ -266,7 +266,7 @@ export const CSS = `
   border: 1px solid var(--slx-border); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; font-weight: 650; color: #fff;
-  background: linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12), color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12));
   padding: 0; overflow: hidden;
   transition: box-shadow .15s, transform .06s;
 }
@@ -418,7 +418,7 @@ export const CSS = `
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 24px; font-weight: 700; color: #fff;
-  background: linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12), color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12));
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(91,91,214,.3);
 }
@@ -525,7 +525,7 @@ export const CSS = `
 .slx-plan-badge {
   position: absolute; top: -10px; right: 12px;
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
-  color: #fff; background: linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2));
+  color: #fff; background: linear-gradient(135deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12), color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12));
   padding: 3px 8px; border-radius: 999px;
 }
 .slx-plan-name { font-size: 14px; font-weight: 600; color: var(--slx-ink-strong); margin: 0 0 6px; }
@@ -625,11 +625,31 @@ export const CSS = `
   --slx-muted: #6f6f7b;
   --slx-border: #e3e3ee;
   --slx-border-strong: #d3d3e2;
-  --slx-danger: #d64550;
-  --slx-success: #1f9d55;
+  --slx-danger: #cc333f;
+  --slx-success: #177245;
 }
 
 /* ── Accent presets (applyTheme or data-slyxup-accent) ── */
+.slyxup-root[data-slyxup-accent='mono'] {
+  --slx-accent: #101014;
+  --slx-accent-hover: #000000;
+  --slx-accent-soft: rgba(16, 16, 20, 0.08);
+  --slx-accent-2: #3f3f48;
+}
+@media (prefers-color-scheme: dark) {
+  .slyxup-root[data-slyxup-accent='mono']:not([data-slyxup-theme='light']) {
+    --slx-accent: #fafafa;
+    --slx-accent-hover: #ffffff;
+    --slx-accent-soft: rgba(250, 250, 250, 0.14);
+    --slx-accent-2: #a1a1aa;
+  }
+}
+.slyxup-root[data-slyxup-theme='dark'][data-slyxup-accent='mono'] {
+  --slx-accent: #fafafa;
+  --slx-accent-hover: #ffffff;
+  --slx-accent-soft: rgba(250, 250, 250, 0.14);
+  --slx-accent-2: #a1a1aa;
+}
 .slyxup-root[data-slyxup-accent='violet'] { --slx-accent: #5b5bd6; --slx-accent-hover: #4c4cc4; --slx-accent-soft: rgba(91,91,214,.12); --slx-accent-2: #8b5cf6; }
 .slyxup-root[data-slyxup-accent='blue'] { --slx-accent: #2563eb; --slx-accent-hover: #1d4ed8; --slx-accent-soft: rgba(37,99,235,.12); --slx-accent-2: #60a5fa; }
 .slyxup-root[data-slyxup-accent='emerald'] { --slx-accent: #059669; --slx-accent-hover: #047857; --slx-accent-soft: rgba(5,150,105,.12); --slx-accent-2: #34d399; }
@@ -639,7 +659,7 @@ export const CSS = `
 
 /* ── Accent primary button (alternative to the default ink button) ── */
 .slx-btn-accent {
-  background: linear-gradient(180deg, var(--slx-accent-hover) 0%, var(--slx-accent) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--slx-accent-hover) 78%, #0c0c12) 0%, color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12) 100%);
   border-color: var(--slx-accent);
   color: #fff;
   box-shadow: 0 1px 2px rgba(18,18,28,.3), inset 0 1px 0 rgba(255,255,255,.18);
@@ -651,7 +671,7 @@ export const CSS = `
 
 /* ── Primary buttons in brand accent (opt-in via data-slyxup-primary='accent') ── */
 .slyxup-root[data-slyxup-primary='accent'] .slx-btn {
-  background: linear-gradient(180deg, var(--slx-accent-hover) 0%, var(--slx-accent) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--slx-accent-hover) 78%, #0c0c12) 0%, color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12) 100%);
   border-color: var(--slx-accent);
   color: #fff;
   box-shadow: 0 1px 2px rgba(18, 18, 28, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -677,7 +697,7 @@ export const CSS = `
   overflow: hidden;
 }
 .slx-split-brand {
-  background: linear-gradient(150deg, var(--slx-accent) 0%, var(--slx-accent-2) 130%);
+  background: linear-gradient(150deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12) 0%, color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12) 130%);
   color: #fff;
   padding: 40px 36px;
   display: flex;

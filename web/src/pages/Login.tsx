@@ -1,13 +1,15 @@
 import { ArrowRight, Check, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { CodeBlock } from '../components/CodeBlock';
-import { Logo } from '../components/marketing';
 import { Alert, Button, Input, Label } from '../components/ui';
 import { AUTH_URL } from '../lib/api';
 import { useAuth } from '../store/auth';
 
-const POINTS = ['Projects with isolated data', 'Keys, domains & billing live', 'Docs to integrate in minutes'];
+const POINTS = [
+  'Projects with isolated data',
+  'Keys, domains & billing live',
+  'Docs to integrate in minutes',
+];
 
 export default function Login() {
   const { user, ready, login } = useAuth();
@@ -33,60 +35,63 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b10] text-white flex flex-col lg:grid lg:grid-cols-[1fr_1.05fr] overflow-x-clip">
+    <div className="min-h-screen bg-white text-black flex flex-col lg:grid lg:grid-cols-[1fr_1.05fr] overflow-x-clip">
       {/* Brand panel */}
-      <div className="relative overflow-hidden flex flex-col justify-between p-6 sm:p-10 min-h-[280px] lg:min-h-screen min-w-0">
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              'radial-gradient(700px 420px at 20% 0%, rgba(109,40,217,0.4), transparent 65%), radial-gradient(560px 380px at 90% 90%, rgba(34,211,238,0.14), transparent 60%), linear-gradient(160deg, #150b2e 0%, #0b0b10 70%)',
-          }}
-        />
+      <div className="relative overflow-hidden bg-[#050505] text-white flex flex-col justify-between p-6 sm:p-12 min-h-[300px] lg:min-h-screen min-w-0">
+        <div className="absolute inset-0 bg-dots pointer-events-none" />
         <Link to="/" className="relative flex items-center gap-2.5 w-fit">
-          <Logo size={32} />
-          <span className="text-[15px] font-bold">SlyxUp</span>
+          <span className="flex size-8 items-center justify-center rounded-lg bg-white font-extrabold text-[13px] text-black">
+            S
+          </span>
+          <span className="text-[14px] font-semibold">SlyxUp</span>
         </Link>
         <div className="relative my-8 lg:my-0 min-w-0">
-          <h1 className="font-display text-[30px] sm:text-[44px] font-extrabold leading-[1.02] text-balance">
-            Run every project <span className="text-gradient">from one chair.</span>
+          <h1 className="font-display text-[30px] sm:text-[46px] font-bold leading-[1.0] text-balance">
+            Run every project from one chair.
           </h1>
-          <p className="mt-4 max-w-[420px] text-[14px] leading-relaxed text-white/60">
+          <p className="mt-4 max-w-[420px] text-[14px] leading-relaxed text-white/55">
             Sign in with your{' '}
-            <span className="font-mono text-[12.5px] text-white/85">{AUTH_URL.replace('https://', '')}</span>{' '}
+            <span className="font-mono text-[12.5px] text-white/85">
+              {AUTH_URL.replace('https://', '')}
+            </span>{' '}
             account. Everything behind this wall is live API — no demo data.
           </p>
           <ul className="mt-6 space-y-2.5">
             {POINTS.map((p) => (
-              <li key={p} className="flex items-center gap-2.5 text-[13.5px] font-medium text-white/75">
-                <span className="flex size-5 items-center justify-center rounded-full bg-emerald-400/15 shrink-0">
-                  <Check className="size-3 text-emerald-400" />
+              <li
+                key={p}
+                className="flex items-center gap-2.5 text-[13.5px] font-medium text-white/75"
+              >
+                <span className="flex size-5 items-center justify-center rounded-full border border-white/20 shrink-0">
+                  <Check className="size-3" />
                 </span>
                 {p}
               </li>
             ))}
           </ul>
         </div>
-        <div className="relative hidden lg:block max-w-[420px] min-w-0">
-          <CodeBlock title="cli" lang="bash" code="slyxup project list --json" />
+        <div className="relative font-mono text-[11px] text-white/35">
+          HttpOnly sessions · Argon2id · rate limits
         </div>
       </div>
 
       {/* Form panel */}
-      <div className="relative flex items-center justify-center bg-[#f6f7f9] px-4 sm:px-8 py-10 lg:py-0 min-w-0">
-        <div className="w-full max-w-[400px] min-w-0">
-          <div className="lg:hidden flex items-center gap-2.5 mb-6">
-            <Logo size={30} />
-            <span className="text-[14px] font-bold text-[#101014]">SlyxUp Admin</span>
-          </div>
-          <h2 className="text-[24px] font-extrabold tracking-tight text-[#101014]">Welcome back</h2>
-          <p className="mt-1 text-[13.5px] text-[#63666f]">
+      <div className="relative flex items-center justify-center bg-[#fafafa] px-4 sm:px-8 py-10 lg:py-0 min-w-0">
+        <div className="w-full max-w-[380px] min-w-0">
+          <h2 className="font-display text-[24px] font-bold">Welcome back</h2>
+          <p className="mt-1 text-[13.5px] text-[#71717a]">
             Sign in to open your projects.{' '}
-            <Link to="/docs" className="font-semibold text-[#6d28d9] hover:underline">
+            <Link
+              to="/docs"
+              className="font-medium text-black underline underline-offset-4"
+            >
               New here? Read the docs
             </Link>
           </p>
-          <form onSubmit={submit} className="mt-6 rounded-2xl border border-[#e4e6eb] bg-white p-5 sm:p-6 space-y-4 min-w-0">
+          <form
+            onSubmit={submit}
+            className="mt-6 rounded-xl border border-black/[0.08] bg-white p-5 sm:p-6 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] min-w-0"
+          >
             <div className="min-w-0">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -112,13 +117,16 @@ export default function Login() {
               />
             </div>
             {error && <Alert>{error}</Alert>}
-            <Button type="submit" size="lg" className="btn-glow w-full !border-0 !bg-[#6d28d9] hover:!bg-[#5b21b6]" disabled={busy}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <>Continue <ArrowRight className="size-4" /></>}
+            <Button type="submit" size="lg" className="w-full" disabled={busy}>
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <>
+                  Continue <ArrowRight className="size-4" />
+                </>
+              )}
             </Button>
           </form>
-          <p className="mt-4 text-center text-[12px] text-[#9a9da8]">
-            Protected by HttpOnly sessions · Argon2id · rate limits
-          </p>
         </div>
       </div>
     </div>

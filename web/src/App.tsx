@@ -27,7 +27,7 @@ function RequireAuth() {
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="size-8 rounded-full border-2 border-[#e4e6eb] border-t-[#6d28d9] animate-spin" />
+        <div className="size-8 rounded-full border-2 border-[#e4e6eb] border-t-black animate-spin" />
       </div>
     );
   }
@@ -92,13 +92,13 @@ function DocsStandalone() {
     <div className="min-h-screen">
       <div className="sticky top-0 z-30 border-b border-[#e4e6eb] bg-white/90 backdrop-blur">
         <div className="mx-auto max-w-[1120px] px-4 sm:px-8 py-3 flex items-center gap-2">
-          <div className="size-8 rounded-lg bg-[#6d28d9] flex items-center justify-center font-extrabold text-white text-[13px]">
+          <div className="size-8 rounded-lg bg-black flex items-center justify-center font-extrabold text-white text-[13px]">
             S
           </div>
           <span className="text-[14px] font-bold">SlyxUp Docs</span>
           <Link
             to="/admin"
-            className="ml-auto flex items-center gap-1.5 rounded-full bg-[#101014] text-white px-4 py-2 text-[12.5px] font-semibold"
+            className="ml-auto flex items-center gap-1.5 rounded-full bg-black text-white px-4 py-2 text-[12.5px] font-semibold"
           >
             <BookOpen className="size-3.5" /> Open admin
           </Link>

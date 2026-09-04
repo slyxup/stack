@@ -328,7 +328,7 @@ export default function ProjectDetail() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'radial-gradient(520px 220px at 10% 0%, rgba(109,40,217,0.42), transparent 65%), radial-gradient(420px 200px at 95% 100%, rgba(34,211,238,0.12), transparent 60%)',
+              'radial-gradient(520px 220px at 10% 0%, rgba(255,255,255,0.1), transparent 65%), radial-gradient(420px 200px at 95% 100%, rgba(255,255,255,0.05), transparent 60%)',
           }}
         />
         <div className="relative flex items-center gap-3 min-w-0">
@@ -340,7 +340,7 @@ export default function ProjectDetail() {
           >
             <ArrowLeft className="size-4" />
           </button>
-          <div className="size-11 rounded-2xl bg-gradient-to-br from-[#6d28d9] to-[#4c1d95] flex items-center justify-center text-[16px] font-extrabold shrink-0">
+          <div className="size-11 rounded-2xl bg-gradient-to-br from-[#3f3f46] to-black flex items-center justify-center text-[16px] font-extrabold shrink-0">
             {project.name[0]?.toUpperCase()}
           </div>
           <div className="min-w-0">
@@ -360,7 +360,7 @@ export default function ProjectDetail() {
               <span className="font-mono text-[11px]">{project.id}</span>
             </p>
           </div>
-          <span className="ml-auto hidden sm:inline-flex items-center gap-1.5 rounded-full bg-[#6d28d9]/25 border border-[#6d28d9]/40 px-3 py-1.5 text-[12px] font-bold shrink-0">
+          <span className="ml-auto hidden sm:inline-flex items-center gap-1.5 rounded-full bg-black/25 border border-white/20 px-3 py-1.5 text-[12px] font-bold shrink-0">
             {total} users
           </span>
         </div>
@@ -373,7 +373,7 @@ export default function ProjectDetail() {
             type="button"
             key={t.k}
             onClick={() => setTab(t.k)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13.5px] font-semibold whitespace-nowrap border-b-2 -mb-px cursor-pointer ${tab === t.k ? 'border-[#101014] text-[#101014]' : 'border-transparent text-[#63666f] hover:text-[#101014]'}`}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13.5px] font-semibold whitespace-nowrap border-b-2 -mb-px cursor-pointer ${tab === t.k ? 'border-black text-black' : 'border-transparent text-[#63666f] hover:text-black'}`}
           >
             <t.icon className="size-3.5" /> {t.label}
           </button>
@@ -460,7 +460,7 @@ export default function ProjectDetail() {
                 placeholder="Search email"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="pl-9 !rounded-full sm:w-[240px]"
+                className="pl-9 rounded-full! sm:w-[240px]"
               />
             </div>
           </CardHeader>
@@ -513,11 +513,11 @@ export default function ProjectDetail() {
                               <Input
                                 value={editName}
                                 onChange={(e) => setEditName(e.target.value)}
-                                className="!h-8 !w-32"
+                                className="h-8! w-32!"
                               />
                               <Button
                                 size="sm"
-                                className="!h-8"
+                                className="h-8!"
                                 disabled={busy}
                                 onClick={() => void saveName(u)}
                               >
@@ -526,7 +526,7 @@ export default function ProjectDetail() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="!h-8"
+                                className="h-8!"
                                 onClick={() => setEditing(null)}
                               >
                                 Cancel
@@ -537,7 +537,7 @@ export default function ProjectDetail() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="!h-8"
+                                className="h-8!"
                                 onClick={() => {
                                   setEditing(u.id);
                                   setEditName(fullName(u));
@@ -548,7 +548,7 @@ export default function ProjectDetail() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="!h-8"
+                                className="h-8!"
                                 disabled={busy}
                                 onClick={() => void toggleBlock(u)}
                               >
@@ -557,7 +557,7 @@ export default function ProjectDetail() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="!h-8 !text-[#dc2626] hover:!bg-red-50"
+                                className="h-8! text-[#dc2626]! hover:bg-red-50!"
                                 disabled={busy}
                                 onClick={() => void removeUser(u)}
                               >
@@ -625,7 +625,7 @@ export default function ProjectDetail() {
                     type="button"
                     key={t}
                     onClick={() => setKeyType(t)}
-                    className={`px-3.5 py-1.5 rounded-full cursor-pointer ${keyType === t ? 'bg-[#101014] text-white' : 'text-[#63666f]'}`}
+                    className={`px-3.5 py-1.5 rounded-full cursor-pointer ${keyType === t ? 'bg-black text-white' : 'text-[#63666f]'}`}
                   >
                     {t}
                   </button>
@@ -679,7 +679,7 @@ export default function ProjectDetail() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="!text-[#dc2626] hover:!bg-red-50"
+                        className="text-[#dc2626]! hover:bg-red-50!"
                         onClick={() => void dropKey(k)}
                       >
                         Revoke
@@ -839,7 +839,7 @@ export default function ProjectDetail() {
               </div>
             </CardBody>
           </Card>
-          <Card className="!border-red-200">
+          <Card className="border-red-200!">
             <CardHeader>
               <CardTitle>
                 <span className="text-[#dc2626]">Danger zone</span>
