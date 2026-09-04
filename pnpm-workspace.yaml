@@ -1,6 +1,6 @@
 packages:
-  - "auth.slyxup.online"
-  - "stack.slyxup.online"
-  - "billing.slyxup.online"
+  - "auth"
+  - "billing"
+  - "web"
   - "packages/*"
   - "examples/*"

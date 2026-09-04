@@ -1,6 +1,6 @@
 'use client';
 
-import { SlyxUpProvider, usePlans, useCheckout } from '@slyxup/react';
+import { SlyxUpProvider, usePlans, useCheckout } from '@slyxup/ui';
 import { SlyxUpStyles, PricingTable, UserButton } from '@slyxup/ui';
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_SLYXUP_PROJECT_ID || '';

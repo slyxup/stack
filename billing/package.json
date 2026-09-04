@@ -1,0 +1,28 @@
+{
+  "name": "billing",
+  "private": true, "version": "0.1.0",
+  "description": "SlyxUp Billing Worker — Hono + D1 + Paddle (https://billing.slyxup.online) — CF Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8788",
+    "deploy": "wrangler deploy",
+    "typegen": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply slyxup_billing --local",
+    "db:migrate:remote": "wrangler d1 migrations apply slyxup_billing --remote"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.0",
+    "drizzle-orm": "^0.33.0",
+    "hono": "^4.7.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240605.0",
+    "@types/node": "^26.2.0",
+    "drizzle-kit": "^0.24.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^3.80.0"
+  }
+}

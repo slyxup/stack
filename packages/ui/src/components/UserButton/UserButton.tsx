@@ -1,5 +1,6 @@
-import { useAuth, useUser } from '@slyxup/react';
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../../react/hooks/useAuth';
+import { useUser } from '../../react/hooks/useUser';
 import { injectStyles } from '../../styles';
 
 function initials(name: string | null | undefined, email: string): string {

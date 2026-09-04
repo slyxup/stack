@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stack-slyxup-online",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "./dist",
+  "vars": {
+    "APP_NAME": "SlyxUp Stack"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

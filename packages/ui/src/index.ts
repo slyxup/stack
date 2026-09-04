@@ -1,5 +1,40 @@
 export { injectStyles, CSS } from './styles';
+export {
+  applyTheme,
+  getTheme,
+  ACCENTS,
+  FONTS,
+  type SlyxUpTheme,
+  type ThemeMode,
+  type AccentName,
+  type AccentDef,
+  type FontDef,
+  type CustomFont,
+} from './theme';
 export { KeyholeMark, GoogleIcon, GitHubIcon, CheckIcon } from './icons';
+// All React lives here now (2-SDK model) — provider, context, hooks.
+export {
+  SlyxUpProvider,
+  type SlyxUpProviderProps,
+} from './react/provider/SlyxUpProvider';
+export {
+  AuthContext,
+  useAuthContext,
+  type AuthContextValue,
+} from './react/context/auth-context';
+export { useAuth } from './react/hooks/useAuth';
+export { useUser } from './react/hooks/useUser';
+export { useSession } from './react/hooks/useSession';
+export { useTwoFactor } from './react/hooks/useTwoFactor';
+export { useConnectedAccounts } from './react/hooks/useConnectedAccounts';
+export { useTheme, type ThemePreference } from './react/hooks/useTheme';
+export {
+  useBilling,
+  usePlans,
+  useSubscription,
+  useInvoices,
+  useCheckout,
+} from './react/hooks/useBilling';
 
 export { SignIn, type SignInProps } from './components/SignIn/SignIn';
 export { SignUp, type SignUpProps } from './components/SignUp/SignUp';

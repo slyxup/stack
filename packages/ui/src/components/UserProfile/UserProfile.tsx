@@ -1,5 +1,4 @@
 import type { SlyxupSessionInfo } from '@slyxup/core';
-import { useAuth, useUser } from '@slyxup/react';
 import {
   type FormEvent,
   useCallback,
@@ -8,6 +7,8 @@ import {
   useState,
 } from 'react';
 import { initPaddle, openPaddleCheckout } from '../../lib/paddle';
+import { useAuth } from '../../react/hooks/useAuth';
+import { useUser } from '../../react/hooks/useUser';
 import { injectStyles } from '../../styles';
 
 export interface UserProfileProps {

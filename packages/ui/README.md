@@ -195,27 +195,71 @@ import { AdminPanel } from '@slyxup/ui';
 
 ## Theming
 
-Override CSS variables on any wrapper — light/dark is automatic via `prefers-color-scheme`, force dark with `slyxup-dark`, force light with `slyxup-light`.
+Three ways to theme, in order of precedence: `applyTheme()` → data attributes → raw CSS variables (always win).
+
+```tsx
+import { applyTheme } from "@slyxup/ui"
+
+// Mode: "light" | "dark" | "auto" (follows OS, default)
+applyTheme({ mode: "dark" })
+
+// Accent: preset name or any custom color
+applyTheme({ accent: "emerald" })
+applyTheme({ accent: "#e8562a" })
+
+// Font: preset or custom stack (default inherits your app font — best for embeds)
+applyTheme({ font: "inter" })
+applyTheme({ font: { body: "'Plus Jakarta Sans', sans-serif", display: "'Plus Jakarta Sans', sans-serif" } })
+
+// Radius: base corner radius in px (sm/lg scale from it)
+applyTheme({ radius: 16 })
+
+// Everything at once, scoped to one panel instead of the whole page:
+const cleanup = applyTheme(
+  { mode: "dark", accent: "cyan", font: "dm", radius: 14 },
+  document.getElementById("preview")!
+)
+cleanup() // restore previous values
+```
+
+Accent presets: `violet` (default), `blue`, `emerald`, `amber`, `rose`, `cyan` — every gradient, badge, avatar and focus ring follows the accent.
+Font presets: `default` (inherit host — recommended), `system`, `dm` (DM Sans + Space Grotesk), `inter`.
+
+Prefer markup? Set attributes directly (works without JS):
+
+```html
+<div class="slyxup-root" data-slyxup-theme="dark" data-slyxup-accent="blue">
+  <!-- components here -->
+</div>
+```
+
+Or go fully manual with CSS variables on any wrapper — light/dark is automatic via `prefers-color-scheme`:
 
 ```css
 .slyxup-root {
   --slx-accent: #e8562a;        /* your brand color */
+  --slx-accent-2: #ff8a5c;      /* gradient end */
   --slx-radius: 16px;
   --slx-font: "Inter", sans-serif;
+  --slx-display: "Inter", sans-serif;
+  --slx-mono: ui-monospace, monospace;
 }
 ```
 
 | Variable | Default (light) |
 |---|---|
 | `--slx-accent` | `#5b5bd6` |
+| `--slx-accent-2` | `#8b5cf6` |
 | `--slx-bg` | `#ffffff` |
 | `--slx-ink` | `#16161d` |
 | `--slx-muted` | `#6f6f7b` |
 | `--slx-border` | `#e6e6ec` |
 | `--slx-danger` | `#d64550` |
-| `--slx-radius` | `12px` |
+| `--slx-radius` | `10px` |
 
-Accessibility built in: labeled fields, visible focus rings, `prefers-reduced-motion` respected, semantic buttons throughout.
+Extra classes: `.slx-btn-accent` renders the primary button in your accent instead of ink — `<button className="slx-btn slx-btn-accent">`.
+
+Responsive + accessible by default: auth cards reflow under 460px, UserProfile nav collapses to a horizontal strip under 680px, labeled fields, visible focus rings, `prefers-reduced-motion` respected, semantic buttons throughout.
 
 ## License
 

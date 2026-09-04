@@ -1,6 +1,6 @@
 'use client';
 
-import { SlyxUpProvider, useAuth, useUser, usePlans, useSubscription, useCheckout } from '@slyxup/react';
+import { SlyxUpProvider, useAuth, useUser, usePlans, useSubscription, useCheckout } from '@slyxup/ui';
 import { SlyxUpStyles, UserButton, UserProfile, PricingTable, BillingPortal } from '@slyxup/ui';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';

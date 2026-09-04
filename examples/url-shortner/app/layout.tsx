@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import ThemeInit from './theme-init';
 
 export const metadata = { title: 'Shrinkr — URL Shortener' };
 
@@ -22,7 +23,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <ThemeInit />
+        {children}
+      </body>
     </html>
   );
 }

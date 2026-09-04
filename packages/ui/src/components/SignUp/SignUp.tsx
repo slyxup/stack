@@ -1,7 +1,7 @@
 import { SlyxupError } from '@slyxup/core';
-import { useAuth } from '@slyxup/react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { GitHubIcon, GoogleIcon, KeyholeMark } from '../../icons';
+import { useAuth } from '../../react/hooks/useAuth';
 import { injectStyles } from '../../styles';
 
 export interface SignUpProps {

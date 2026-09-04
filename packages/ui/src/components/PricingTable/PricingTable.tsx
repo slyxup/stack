@@ -73,7 +73,7 @@ export function PricingTable({ plans, onSelect, loading }: PricingTableProps) {
                 fontSize: 10.5,
                 fontFamily: 'var(--slx-mono)',
                 background:
-                  'linear-gradient(135deg, var(--slx-accent), #8b5cf6)',
+                  'linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2))',
                 color: '#fff',
                 padding: '3px 10px',
                 borderRadius: 999,

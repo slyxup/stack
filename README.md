@@ -5,7 +5,7 @@
 ```
 slyxup.online/stack/               ← monorepo (here, pnpm + wrangler)
 ├── auth.slyxup.online/  → https://auth.slyxup.online (Hono Worker + D1 + KV — identity only)
-├── stack.slyxup.online/ → https://stack.slyxup.online (Next.js App Router static export → CF Workers assets; marketing + docs)
+├── stack.slyxup.online/ → https://stack.slyxup.online (Vite + React 19 + Tailwind v4 • Workers Assets SPA • seeded owner + setup wizard + docs)
 ├── billing.slyxup.online/ → https://billing.slyxup.online (Hono Worker + D1 — sole owner of billing)
 ├── examples/  → starter apps
 └── packages/{core,react,nextjs,ui,cli,billing}
@@ -30,17 +30,34 @@ slyxup.online/stack/               ← monorepo (here, pnpm + wrangler)
 - **Drizzle** `sqliteTable` + `wrangler d1 migrations apply` both envs, `wrangler types`
 - **Security** `CODEQL`, `SECURITY.md`, `wrangler secret put` only
 
-## Quick Start (CF) — Dev First
+## Quick Start — Platform (no DB needed)
+
+```bash
+cd slyxup.online/stack/stack.slyxup.online
+pnpm install
+cp .env.example .env        # optional — defaults to admin@slyxup.local / Admin@123
+pnpm dev                    # → http://localhost:5173
+# login: admin@slyxup.local / Admin@123 → /change-password → /setup → /dashboard
+```
+
+**Full CF (auth + billing) — Dev First**
 
 ```bash
 cd slyxup.online/stack
 pnpm install
 cp .env.example auth.slyxup.online/.dev.vars
 # wrangler.jsonc me D1/KV IDs already wired (cfa91e79 / 99d2ebe4), naya DB ho to wrangler d1 create
-pnpm typecheck && pnpm build # 7/7 green hona chahiye
+pnpm typecheck && pnpm build
 pnpm --filter auth.slyxup.online db:generate
 pnpm --filter auth.slyxup.online db:migrate:local
 pnpm --filter auth.slyxup.online dev  # wrangler dev localhost:8787
+```
+
+Platform deploy (Workers Static Assets):
+
+```bash
+pnpm --filter stack.slyxup.online build
+pnpm --filter stack.slyxup.online deploy   # or pnpm --filter stack.slyxup.online preview
 ```
 
 **Dev → Prod Flow (tumhara flow):**

@@ -12,6 +12,7 @@ export const CSS = `
   --slx-accent: #5b5bd6;
   --slx-accent-hover: #4c4cc4;
   --slx-accent-soft: rgba(91, 91, 214, 0.12);
+  --slx-accent-2: #8b5cf6;
   --slx-bg: #ffffff;
   --slx-bg-subtle: #f7f7fb;
   --slx-bg-page: #e9eaf6;
@@ -43,7 +44,7 @@ export const CSS = `
   font-feature-settings: "cv11", "ss01";
 }
 @media (prefers-color-scheme: dark) {
-  .slyxup-root:not(.slyxup-light) {
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']):not([data-slyxup-theme='light']) {
     --slx-accent: #8484f2;
     --slx-accent-hover: #9696f5;
     --slx-accent-soft: rgba(132, 132, 242, 0.16);
@@ -99,7 +100,7 @@ export const CSS = `
   box-sizing: border-box;
   animation: slx-rise .38s cubic-bezier(.22,.9,.32,1) both;
 }
-.slyxup-root:not(.slyxup-light) .slx-card,
+.slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-card,
 .slx-card { color: var(--slx-ink); }
 .slx-card-error { animation: slx-shake .45s cubic-bezier(.36,.07,.19,.97) both; }
 
@@ -107,7 +108,7 @@ export const CSS = `
 .slx-mark {
   width: 46px; height: 46px; border-radius: 13px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(140deg, var(--slx-accent) 0%, #8b5cf6 100%);
+  background: linear-gradient(140deg, var(--slx-accent) 0%, var(--slx-accent-2) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.28),
     0 6px 16px -6px rgba(91,91,214,.55);
@@ -167,14 +168,14 @@ export const CSS = `
   border-radius: var(--slx-radius-sm);
   padding: 9px 11px; margin: 0 0 16px;
 }
-.slyxup-root:not(.slyxup-light) .slx-setup-note {
+.slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-setup-note {
   color: #f5d878; background: rgba(250,204,21,.07); border-color: rgba(250,204,21,.25);
 }
 .slx-setup-note code {
   font-family: var(--slx-mono); font-size: 11px;
   background: rgba(0,0,0,.05); border-radius: 4px; padding: 1px 4px;
 }
-.slyxup-root:not(.slyxup-light) .slx-setup-note code { background: rgba(255,255,255,.08); }
+.slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-setup-note code { background: rgba(255,255,255,.08); }
 
 /* ── Primary button ── */
 .slx-btn {
@@ -192,19 +193,19 @@ export const CSS = `
 .slx-btn:focus-visible { outline: none; box-shadow: 0 0 0 3.5px rgba(10,10,15,.16), 0 0 0 1.5px #0a0a0f; }
 .slx-btn[disabled] { opacity: .55; cursor: not-allowed; }
 @media (prefers-color-scheme: dark) {
-  .slyxup-root:not(.slyxup-light) .slx-btn {
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn {
     background: linear-gradient(180deg, #ffffff 0%, #ececf1 100%);
     color: #0a0a0f; border-color: #ececf1;
     box-shadow: 0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.9);
   }
-  .slyxup-root:not(.slyxup-light) .slx-btn:hover { filter: brightness(.94); }
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn:hover { filter: brightness(.94); }
 }
 .slx-spinner {
   width: 15px; height: 15px; flex: none;
   border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
   border-radius: 50%; animation: slx-spin .7s linear infinite;
 }
-.slyxup-root:not(.slyxup-light) .slx-spinner { border-color: rgba(10,10,15,.25); border-top-color: #0a0a0f; }
+.slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-spinner { border-color: rgba(10,10,15,.25); border-top-color: #0a0a0f; }
 
 /* ── Social ── */
 .slx-social { display: grid; gap: 9px; margin-bottom: 4px; }
@@ -265,7 +266,7 @@ export const CSS = `
   border: 1px solid var(--slx-border); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; font-weight: 650; color: #fff;
-  background: linear-gradient(135deg, var(--slx-accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2));
   padding: 0; overflow: hidden;
   transition: box-shadow .15s, transform .06s;
 }
@@ -309,7 +310,7 @@ export const CSS = `
 .slx-badge-ok { color: var(--slx-success); background: color-mix(in srgb, var(--slx-success) 9%, transparent); border-color: color-mix(in srgb, var(--slx-success) 30%, transparent); }
 .slx-badge-warn { color: #b45309; background: color-mix(in srgb, #f59e0b 10%, transparent); border-color: color-mix(in srgb, #f59e0b 30%, transparent); }
 .slx-badge-accent { color: var(--slx-accent); background: var(--slx-accent-soft); border-color: color-mix(in srgb, var(--slx-accent) 30%, transparent); }
-.slyxup-root:not(.slyxup-light) .slx-badge-warn { color: #fbbf24; }
+.slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-badge-warn { color: #fbbf24; }
 
 /* ── Modal overlay ── */
 .slx-overlay {
@@ -417,7 +418,7 @@ export const CSS = `
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 24px; font-weight: 700; color: #fff;
-  background: linear-gradient(135deg, var(--slx-accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2));
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(91,91,214,.3);
 }
@@ -524,7 +525,7 @@ export const CSS = `
 .slx-plan-badge {
   position: absolute; top: -10px; right: 12px;
   font-size: 10px; font-weight: 700; letter-spacing: .05em;
-  color: #fff; background: linear-gradient(135deg, var(--slx-accent), #8b5cf6);
+  color: #fff; background: linear-gradient(135deg, var(--slx-accent), var(--slx-accent-2));
   padding: 3px 8px; border-radius: 999px;
 }
 .slx-plan-name { font-size: 14px; font-weight: 600; color: var(--slx-ink-strong); margin: 0 0 6px; }
@@ -579,6 +580,81 @@ export const CSS = `
   .slx-pagination { flex-wrap: wrap; gap: 6px; }
   .slx-pagination .slx-btn-secondary { font-size: 12px; padding: 4px 10px; }
   .slx-invoice-row { flex-wrap: wrap; gap: 6px; }
+}
+/* ── Explicit theme mode (wins over OS preference) ── */
+.slyxup-root[data-slyxup-theme='dark'] {
+  --slx-accent: #8484f2;
+  --slx-accent-hover: #9696f5;
+  --slx-accent-soft: rgba(132, 132, 242, 0.16);
+  --slx-bg: #17171f;
+  --slx-bg-subtle: #1e1e28;
+  --slx-bg-page: #101016;
+  --slx-ink: #f0f0f4;
+  --slx-ink-strong: #ffffff;
+  --slx-muted: #9a9aa6;
+  --slx-border: #292935;
+  --slx-border-strong: #343442;
+  --slx-danger: #f0737d;
+  --slx-success: #4ade80;
+  --slx-shadow-card:
+    0 1px 2px rgba(0,0,0,.25),
+    0 12px 32px -8px rgba(0,0,0,.5),
+    0 32px 72px -20px rgba(0,0,0,.55);
+  --slx-shadow-pop:
+    0 4px 12px rgba(0,0,0,.4),
+    0 24px 56px -12px rgba(0,0,0,.6);
+}
+.slyxup-root[data-slyxup-theme='dark'] .slx-btn {
+  background: linear-gradient(180deg, #ffffff 0%, #ececf1 100%);
+  color: #0a0a0f; border-color: #ececf1;
+  box-shadow: 0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.9);
+}
+.slyxup-root[data-slyxup-theme='dark'] .slx-btn:hover { filter: brightness(.94); }
+.slyxup-root[data-slyxup-theme='dark'] .slx-spinner { border-color: rgba(10,10,15,.25); border-top-color: #0a0a0f; }
+.slyxup-root[data-slyxup-theme='dark'] .slx-setup-note {
+  color: #f5d878; background: rgba(250,204,21,.07); border-color: rgba(250,204,21,.25);
+}
+.slyxup-root[data-slyxup-theme='dark'] .slx-setup-note code { background: rgba(255,255,255,.08); }
+.slyxup-root[data-slyxup-theme='dark'] .slx-badge-warn { color: #fbbf24; }
+.slyxup-root[data-slyxup-theme='light'] {
+  --slx-bg: #ffffff;
+  --slx-bg-subtle: #f7f7fb;
+  --slx-bg-page: #e9eaf6;
+  --slx-ink: #16161d;
+  --slx-ink-strong: #0c0c12;
+  --slx-muted: #6f6f7b;
+  --slx-border: #e3e3ee;
+  --slx-border-strong: #d3d3e2;
+  --slx-danger: #d64550;
+  --slx-success: #1f9d55;
+}
+
+/* ── Accent presets (applyTheme or data-slyxup-accent) ── */
+.slyxup-root[data-slyxup-accent='violet'] { --slx-accent: #5b5bd6; --slx-accent-hover: #4c4cc4; --slx-accent-soft: rgba(91,91,214,.12); --slx-accent-2: #8b5cf6; }
+.slyxup-root[data-slyxup-accent='blue'] { --slx-accent: #2563eb; --slx-accent-hover: #1d4ed8; --slx-accent-soft: rgba(37,99,235,.12); --slx-accent-2: #60a5fa; }
+.slyxup-root[data-slyxup-accent='emerald'] { --slx-accent: #059669; --slx-accent-hover: #047857; --slx-accent-soft: rgba(5,150,105,.12); --slx-accent-2: #34d399; }
+.slyxup-root[data-slyxup-accent='amber'] { --slx-accent: #d97706; --slx-accent-hover: #b45309; --slx-accent-soft: rgba(217,119,6,.14); --slx-accent-2: #fbbf24; }
+.slyxup-root[data-slyxup-accent='rose'] { --slx-accent: #e11d48; --slx-accent-hover: #be123c; --slx-accent-soft: rgba(225,29,72,.12); --slx-accent-2: #fb7185; }
+.slyxup-root[data-slyxup-accent='cyan'] { --slx-accent: #0891b2; --slx-accent-hover: #0e7490; --slx-accent-soft: rgba(8,145,178,.12); --slx-accent-2: #22d3ee; }
+
+/* ── Accent primary button (alternative to the default ink button) ── */
+.slx-btn-accent {
+  background: linear-gradient(180deg, var(--slx-accent-hover) 0%, var(--slx-accent) 100%);
+  border-color: var(--slx-accent);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(18,18,28,.3), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.slx-btn-accent:hover { filter: brightness(1.07); }
+.slx-btn-accent:active { transform: scale(.985); filter: brightness(.95); }
+.slx-btn-accent:focus-visible { outline: none; box-shadow: 0 0 0 3.5px var(--slx-accent-soft); }
+.slx-btn-accent .slx-spinner { border-color: rgba(255,255,255,.35); border-top-color: #fff; }
+
+/* ── Small-screen polish for auth cards & menus ── */
+@media (max-width: 460px) {
+  .slx-card { padding: 26px 22px 24px; border-radius: var(--slx-radius-lg); }
+  .slx-title { font-size: 19px; }
+  .slx-menu { min-width: 210px; max-width: calc(100vw - 32px); }
+  .slx-social-btn { font-size: 13px; padding: 11px 12px; }
 }
 @media (max-width: 380px) {
   .slx-profile-content { padding: 12px; }

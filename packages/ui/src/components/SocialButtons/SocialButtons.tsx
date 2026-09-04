@@ -1,5 +1,5 @@
-import { useAuth } from '@slyxup/react';
 import { GitHubIcon, GoogleIcon } from '../../icons';
+import { useAuth } from '../../react/hooks/useAuth';
 import { injectStyles } from '../../styles';
 
 export interface SocialButtonsProps {

@@ -1,6 +1,6 @@
 'use client';
 
-import { SlyxUpProvider, useAuth, useUser } from '@slyxup/react';
+import { SlyxUpProvider, useAuth, useUser } from '@slyxup/ui';
 import { SignIn, SignUp, SlyxUpStyles, UserButton } from '@slyxup/ui';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
