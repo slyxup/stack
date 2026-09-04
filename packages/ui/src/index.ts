@@ -10,8 +10,11 @@ export {
   type AccentDef,
   type FontDef,
   type CustomFont,
+  type AuthLayout,
+  type PrimaryStyle,
+  type Density,
 } from './theme';
-export { KeyholeMark, GoogleIcon, GitHubIcon, CheckIcon } from './icons';
+export { KeyholeMark, GoogleIcon, GitHubIcon, CheckIcon, EyeIcon, EyeOffIcon } from './icons';
 // All React lives here now (2-SDK model) — provider, context, hooks.
 export {
   SlyxUpProvider,
@@ -37,6 +40,7 @@ export {
 } from './react/hooks/useBilling';
 
 export { SignIn, type SignInProps } from './components/SignIn/SignIn';
+export { PasswordField, type PasswordFieldProps } from './components/PasswordField';
 export { SignUp, type SignUpProps } from './components/SignUp/SignUp';
 export {
   UserButton,

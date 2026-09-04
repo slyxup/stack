@@ -1,19 +1,19 @@
-import { BookOpen } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, BookOpen, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CodeBlock } from '../components/CodeBlock';
-import { Card, CardBody } from '../components/ui';
+import { Button, Card, CardBody } from '../components/ui';
 import { AUTH_URL, BILLING_URL } from '../lib/api';
 
 const SECTIONS = [
-  { id: 'quickstart', label: 'Quickstart' },
-  { id: 'react', label: 'React' },
-  { id: 'nextjs', label: 'Next.js' },
-  { id: 'core', label: 'Core SDK' },
-  { id: 'uikit', label: 'UI kit' },
-  { id: 'api', label: 'API reference' },
-  { id: 'cli', label: 'CLI' },
-  { id: 'security', label: 'Security' },
+  { id: 'quickstart', label: 'Quickstart', keys: 'start install key domain project setup' },
+  { id: 'react', label: 'React', keys: 'provider hooks signin signup userbutton' },
+  { id: 'nextjs', label: 'Next.js', keys: 'middleware server component ssr' },
+  { id: 'core', label: 'Core SDK', keys: 'headless client auth billing checkout' },
+  { id: 'uikit', label: 'UI kit', keys: 'components theme pricing admin signin' },
+  { id: 'api', label: 'API reference', keys: 'endpoints rest users keys projects domains oauth' },
+  { id: 'cli', label: 'CLI', keys: 'terminal commands shorten' },
+  { id: 'security', label: 'Security', keys: 'sessions password argon keys block https' },
 ];
 
 function SectionContent({ section }: { section: string }) {
@@ -353,63 +353,109 @@ slyxup domains add app.example.com --project-id <id>`}
 
 export default function Docs() {
   const [section, setSection] = useState('quickstart');
+  const [q, setQ] = useState('');
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return SECTIONS;
+    return SECTIONS.filter(
+      (s) => s.label.toLowerCase().includes(needle) || s.keys.includes(needle)
+    );
+  }, [q]);
+  const active = visible.some((s) => s.id === section) ? section : visible[0]?.id || 'quickstart';
+
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-[22px] font-bold tracking-tight flex items-center gap-2">
-          <BookOpen className="size-5" /> Docs
-        </h1>
-        <p className="text-[13px] text-[#63666f] mt-1">
-          Read how SlyxUp works and integrate it into your own platform. Public
-          docs — no sign-in needed.{' '}
-          <Link to="/admin" className="underline underline-offset-4">
-            Open admin →
-          </Link>
-        </p>
-      </div>
-
-      <div className="flex gap-6 items-start">
-        {/* Section nav */}
-        <aside className="hidden md:block w-[180px] shrink-0 sticky top-6">
-          <div className="space-y-0.5">
-            {SECTIONS.map((s) => (
-              <button
-                type="button"
-                key={s.id}
-                onClick={() => setSection(s.id)}
-                className={`block w-full text-left rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer ${section === s.id ? 'bg-[#101014] text-white' : 'text-[#63666f] hover:bg-[#eceef2] hover:text-[#101014]'}`}
-              >
-                {s.label}
-              </button>
-            ))}
+    <div className="min-w-0">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#0b0b10] text-white p-6 sm:p-8 min-w-0">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(600px 260px at 15% 0%, rgba(109,40,217,0.4), transparent 65%), radial-gradient(500px 260px at 90% 100%, rgba(34,211,238,0.14), transparent 60%)',
+          }}
+        />
+        <div className="relative flex flex-col sm:flex-row sm:items-center gap-4 min-w-0">
+          <div className="min-w-0">
+            <h1 className="font-display flex items-center gap-2.5 text-[22px] sm:text-[26px] font-extrabold tracking-tight">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-[#6d28d9] shrink-0">
+                <BookOpen className="size-[18px]" />
+              </span>
+              Documentation
+            </h1>
+            <p className="mt-1.5 max-w-[520px] text-[13px] leading-relaxed text-white/60">
+              Integrate SlyxUp into your own platform. Public docs — no sign-in
+              needed.{' '}
+              <Link to="/admin" className="font-semibold text-white underline underline-offset-4">
+                Open admin →
+              </Link>
+            </p>
           </div>
-        </aside>
-
-        {/* Mobile select */}
-        <div className="md:hidden mb-4 w-full">
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
-            {SECTIONS.map((s) => (
-              <button
-                type="button"
-                key={s.id}
-                onClick={() => setSection(s.id)}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold cursor-pointer ${section === s.id ? 'bg-[#101014] text-white' : 'bg-white border border-[#e4e6eb]'}`}
-              >
-                {s.label}
-              </button>
-            ))}
+          <div className="sm:ml-auto w-full sm:w-[280px] shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search docs…"
+                className="h-10 w-full rounded-full border border-white/15 bg-white/[0.07] pl-10 pr-4 text-[13px] text-white placeholder:text-white/35 focus:border-[#8b5cf6] focus:outline-none"
+              />
+            </div>
           </div>
         </div>
+      </div>
 
-        <Card className="flex-1 min-w-0 hidden md:block">
-          <CardBody>
-            <SectionContent section={section} />
-          </CardBody>
-        </Card>
+      {/* Section pills */}
+      <div className="mt-4 flex gap-1.5 overflow-x-auto pb-1 min-w-0">
+        {visible.map((s) => (
+          <button
+            type="button"
+            key={s.id}
+            onClick={() => setSection(s.id)}
+            className={`shrink-0 rounded-full px-4 py-2 text-[12.5px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${active === s.id ? 'bg-[#101014] text-white' : 'bg-white border border-[#e4e6eb] text-[#63666f] hover:text-[#101014]'}`}
+          >
+            {s.label}
+          </button>
+        ))}
+        {visible.length === 0 && (
+          <span className="text-[12.5px] text-[#63666f] py-2">No sections match “{q}”.</span>
+        )}
+      </div>
 
-        <Card className="flex-1 min-w-0 md:hidden">
-          <CardBody>
-            <SectionContent section={section} />
+      <div className="mt-3 flex gap-6 items-start min-w-0">
+        {/* Side nav */}
+        <aside className="hidden md:block w-[190px] shrink-0 sticky top-6">
+          <Card>
+            <div className="p-2 space-y-0.5">
+              {visible.map((s) => (
+                <button
+                  type="button"
+                  key={s.id}
+                  onClick={() => setSection(s.id)}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] font-semibold cursor-pointer transition-colors ${active === s.id ? 'bg-[#101014] text-white' : 'text-[#63666f] hover:bg-[#eceef2] hover:text-[#101014]'}`}
+                >
+                  {s.label}
+                  {active === s.id && <ArrowRight className="size-3.5" />}
+                </button>
+              ))}
+            </div>
+          </Card>
+          <Link to="/ui" className="mt-3 block rounded-2xl bg-gradient-to-br from-[#6d28d9] to-[#4c1d95] p-4 text-white">
+            <div className="text-[13px] font-bold">Prefer visuals?</div>
+            <div className="text-[12px] text-white/70 mt-0.5">Every component, live in the UI kit →</div>
+          </Link>
+        </aside>
+
+        <Card className="flex-1 min-w-0">
+          <CardBody className="!px-5 sm:!px-7 !py-6">
+            <SectionContent section={active} />
+            <div className="mt-8 flex items-center justify-between border-t border-[#e4e6eb] pt-4">
+              <span className="text-[12px] text-[#9a9da8]">Was this helpful?</span>
+              <Link to="/admin">
+                <Button size="sm" variant="secondary">
+                  Try it in admin <ArrowRight className="size-3.5" />
+                </Button>
+              </Link>
+            </div>
           </CardBody>
         </Card>
       </div>

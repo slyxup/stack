@@ -649,6 +649,155 @@ export const CSS = `
 .slx-btn-accent:focus-visible { outline: none; box-shadow: 0 0 0 3.5px var(--slx-accent-soft); }
 .slx-btn-accent .slx-spinner { border-color: rgba(255,255,255,.35); border-top-color: #fff; }
 
+/* ── Primary buttons in brand accent (opt-in via data-slyxup-primary='accent') ── */
+.slyxup-root[data-slyxup-primary='accent'] .slx-btn {
+  background: linear-gradient(180deg, var(--slx-accent-hover) 0%, var(--slx-accent) 100%);
+  border-color: var(--slx-accent);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(18, 18, 28, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.slyxup-root[data-slyxup-primary='accent'] .slx-btn:hover { filter: brightness(1.07); }
+.slyxup-root[data-slyxup-primary='accent'] .slx-btn:active { filter: brightness(0.95); }
+.slyxup-root[data-slyxup-primary='accent'] .slx-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3.5px var(--slx-accent-soft);
+}
+.slyxup-root[data-slyxup-primary='accent'] .slx-btn .slx-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+/* ── Auth layouts: centered (default) / split / minimal ── */
+.slx-form-full { display: contents; }
+.slx-card.slx-layout-split {
+  max-width: 780px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  overflow: hidden;
+}
+.slx-split-brand {
+  background: linear-gradient(150deg, var(--slx-accent) 0%, var(--slx-accent-2) 130%);
+  color: #fff;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  position: relative;
+  overflow: hidden;
+}
+.slx-split-brand::after {
+  content: '';
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  right: -90px;
+  bottom: -90px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.09);
+  pointer-events: none;
+}
+.slx-split-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+.slx-split-title {
+  font-family: var(--slx-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin: 0 0 10px;
+}
+.slx-split-sub { font-size: 14px; line-height: 1.6; opacity: 0.85; margin: 0 0 24px; }
+.slx-split-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.slx-split-points li {
+  font-size: 13.5px;
+  font-weight: 500;
+  padding-left: 28px;
+  position: relative;
+  line-height: 1.45;
+}
+.slx-split-points li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slx-split-form { padding: 36px 36px 32px; min-width: 0; }
+.slx-card.slx-layout-minimal {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 10px 6px;
+  max-width: 380px;
+  animation: none;
+}
+.slx-card.slx-layout-minimal .slx-mark { width: 40px; height: 40px; border-radius: 11px; margin-bottom: 16px; }
+.slx-card.slx-layout-minimal .slx-subtitle { margin-bottom: 20px; }
+.slx-card.slx-layout-minimal .slx-input { background: var(--slx-bg); }
+@media (max-width: 680px) {
+  .slx-card.slx-layout-split { grid-template-columns: 1fr; max-width: 440px; }
+  .slx-split-brand { padding: 26px 24px; }
+  .slx-split-brand::after { display: none; }
+  .slx-split-title { font-size: 21px; }
+  .slx-split-sub { margin-bottom: 0; }
+  .slx-split-points { display: none; }
+  .slx-split-form { padding: 26px 22px 24px; }
+}
+
+/* ── Password field with reveal toggle ── */
+.slx-input-wrap { position: relative; }
+.slx-input-wrap .slx-input { padding-right: 42px; }
+.slx-pw-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--slx-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.slx-pw-toggle:hover { color: var(--slx-ink); background: color-mix(in srgb, var(--slx-ink) 5%, transparent); }
+.slx-pw-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft); }
+
+/* ── Compact density (opt-in via data-slyxup-density='compact') ── */
+.slyxup-root[data-slyxup-density='compact'] .slx-card { padding: 24px 24px 20px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-mark { width: 38px; height: 38px; margin-bottom: 14px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-title { font-size: 19px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-subtitle { margin-bottom: 16px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-field { margin-bottom: 10px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-input { padding: 8px 11px; font-size: 13.5px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-btn { padding: 9px 14px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-divider { margin: 14px 0; }
+.slyxup-root[data-slyxup-density='compact'] .slx-footer { margin-top: 16px; }
+.slyxup-root[data-slyxup-density='compact'] .slx-split-form { padding: 24px; }
+
 /* ── Small-screen polish for auth cards & menus ── */
 @media (max-width: 460px) {
   .slx-card { padding: 26px 22px 24px; border-radius: var(--slx-radius-lg); }

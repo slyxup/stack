@@ -10,6 +10,7 @@ import {
 } from 'react-router-dom';
 import { AdminLayout } from './components/AdminLayout';
 import Docs from './pages/Docs';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import ProjectDetail from './pages/ProjectDetail';
 import Projects from './pages/Projects';
@@ -34,34 +35,32 @@ function RequireAuth() {
   return <Outlet />;
 }
 
-function RootRedirect() {
-  const { user, ready, hydrate } = useAuth();
-
-  useEffect(() => {
-    if (!ready) void hydrate();
-  }, [ready, hydrate]);
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="size-8 rounded-full border-2 border-[#e4e6eb] border-t-[#6d28d9] animate-spin" />
-      </div>
-    );
-  }
-  return <Navigate to={user ? '/admin' : '/login'} replace />;
-}
-
 function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-4 text-center">
-      <div className="text-[48px] font-extrabold tracking-tight">404</div>
-      <p className="text-[13.5px] text-[#63666f]">This page does not exist.</p>
-      <a
-        href="/admin"
-        className="text-[13.5px] font-semibold text-[#6d28d9] underline underline-offset-4"
-      >
-        Go to admin
-      </a>
+    <div className="min-h-screen bg-[#0b0b10] text-white flex flex-col items-center justify-center gap-3 px-4 text-center overflow-x-clip">
+      <div className="font-mono text-[12px] font-bold uppercase tracking-[0.2em] text-white/40">
+        404 — lost in the stack
+      </div>
+      <div className="font-display text-[72px] sm:text-[120px] font-extrabold leading-none tracking-tight">
+        4<span className="text-gradient">0</span>4
+      </div>
+      <p className="max-w-[380px] text-[13.5px] leading-relaxed text-white/55">
+        This page does not exist. The admin panel and docs are one click away.
+      </p>
+      <div className="mt-2 flex gap-2">
+        <a
+          href="/admin"
+          className="rounded-full bg-white px-5 py-2.5 text-[13px] font-bold text-[#0b0b10] hover:bg-white/85"
+        >
+          Go to admin
+        </a>
+        <a
+          href="/docs"
+          className="rounded-full border border-white/20 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-white/10"
+        >
+          Docs
+        </a>
+      </div>
     </div>
   );
 }
@@ -70,7 +69,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/docs" element={<DocsStandalone />} />
         <Route path="/ui" element={<UiKit />} />

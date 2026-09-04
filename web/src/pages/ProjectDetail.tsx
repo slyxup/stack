@@ -321,36 +321,49 @@ export default function ProjectDetail() {
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <button
-          type="button"
-          onClick={() => navigate('/admin')}
-          className="rounded-full p-2 hover:bg-[#eceef2]"
-          aria-label="Back"
-        >
-          <ArrowLeft className="size-4" />
-        </button>
-        <div className="min-w-0">
-          <h1 className="text-[20px] font-bold tracking-tight flex items-center gap-2 flex-wrap">
-            {project.name}
-            <span className="font-mono text-[11px] font-medium bg-[#eceef2] px-2 py-0.5 rounded-md text-[#63666f]">
-              {project.slug}
-            </span>
-            {project.environment && (
-              <Badge tone={project.environment === 'live' ? 'green' : 'gray'}>
-                {project.environment}
-              </Badge>
-            )}
-          </h1>
-          <p className="text-[13px] text-[#63666f] truncate">
-            {project.description || 'No description'}
-          </p>
+      <div className="relative overflow-hidden rounded-3xl bg-[#0b0b10] text-white p-5 sm:p-6 mb-5 min-w-0">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(520px 220px at 10% 0%, rgba(109,40,217,0.42), transparent 65%), radial-gradient(420px 200px at 95% 100%, rgba(34,211,238,0.12), transparent 60%)',
+          }}
+        />
+        <div className="relative flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className="rounded-full p-2 text-white/70 hover:bg-white/10 shrink-0"
+            aria-label="Back"
+          >
+            <ArrowLeft className="size-4" />
+          </button>
+          <div className="size-11 rounded-2xl bg-gradient-to-br from-[#6d28d9] to-[#4c1d95] flex items-center justify-center text-[16px] font-extrabold shrink-0">
+            {project.name[0]?.toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-[19px] sm:text-[21px] font-extrabold tracking-tight flex items-center gap-2 flex-wrap">
+              <span className="truncate">{project.name}</span>
+              <span className="font-mono text-[11px] font-medium bg-white/10 px-2 py-0.5 rounded-md text-white/70">
+                {project.slug}
+              </span>
+              {project.environment && (
+                <Badge tone={project.environment === 'live' ? 'green' : 'gray'}>
+                  {project.environment}
+                </Badge>
+              )}
+            </h1>
+            <p className="text-[12.5px] text-white/55 truncate">
+              {project.description || 'No description'} ·{' '}
+              <span className="font-mono text-[11px]">{project.id}</span>
+            </p>
+          </div>
+          <span className="ml-auto hidden sm:inline-flex items-center gap-1.5 rounded-full bg-[#6d28d9]/25 border border-[#6d28d9]/40 px-3 py-1.5 text-[12px] font-bold shrink-0">
+            {total} users
+          </span>
         </div>
-        <Badge tone="violet" className="ml-auto shrink-0">
-          {total} users
-        </Badge>
       </div>
 
       {/* Tabs */}

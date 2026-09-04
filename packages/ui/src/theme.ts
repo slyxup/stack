@@ -15,6 +15,15 @@ import { injectStyles } from './styles';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
+/** Auth page layouts — 3 professional variants, same logic underneath. */
+export type AuthLayout = 'centered' | 'split' | 'minimal';
+
+/** Primary button treatment. 'ink' (default) = near-black/white button, 'accent' = brand gradient. */
+export type PrimaryStyle = 'ink' | 'accent';
+
+/** Spacing density. 'comfortable' (default) or 'compact' for dense dialogs. */
+export type Density = 'comfortable' | 'compact';
+
 export type AccentName =
   | 'violet'
   | 'blue'
@@ -130,6 +139,10 @@ export interface SlyxUpTheme {
   font?: keyof typeof FONTS | CustomFont;
   /** Base corner radius in px — sm/lg scale from it. Default 10. */
   radius?: number;
+  /** Primary buttons: 'ink' (default, near-black/white) or 'accent' (brand gradient). */
+  primary?: PrimaryStyle;
+  /** Spacing density: 'comfortable' (default) or 'compact'. */
+  density?: Density;
 }
 
 const VAR_ACCENT = '--slx-accent';
@@ -168,6 +181,8 @@ export function applyTheme(theme: SlyxUpTheme, root?: HTMLElement): () => void {
   const prev = {
     mode: el.getAttribute('data-slyxup-theme'),
     accent: el.getAttribute('data-slyxup-accent'),
+    primary: el.getAttribute('data-slyxup-primary'),
+    density: el.getAttribute('data-slyxup-density'),
     vars: [
       VAR_ACCENT,
       VAR_ACCENT_HOVER,
@@ -210,6 +225,18 @@ export function applyTheme(theme: SlyxUpTheme, root?: HTMLElement): () => void {
     }
   }
 
+  // ── Primary button style ──
+  if (theme.primary !== undefined) {
+    if (theme.primary === 'accent') el.setAttribute('data-slyxup-primary', 'accent');
+    else el.removeAttribute('data-slyxup-primary');
+  }
+
+  // ── Density ──
+  if (theme.density !== undefined) {
+    if (theme.density === 'compact') el.setAttribute('data-slyxup-density', 'compact');
+    else el.removeAttribute('data-slyxup-density');
+  }
+
   // ── Font ──
   if (theme.font !== undefined) {
     const def: CustomFont =
@@ -235,6 +262,10 @@ export function applyTheme(theme: SlyxUpTheme, root?: HTMLElement): () => void {
     else el.setAttribute('data-slyxup-theme', prev.mode);
     if (prev.accent === null) el.removeAttribute('data-slyxup-accent');
     else el.setAttribute('data-slyxup-accent', prev.accent);
+    if (prev.primary === null) el.removeAttribute('data-slyxup-primary');
+    else el.setAttribute('data-slyxup-primary', prev.primary);
+    if (prev.density === null) el.removeAttribute('data-slyxup-density');
+    else el.setAttribute('data-slyxup-density', prev.density);
     for (const [v, val] of prev.vars) {
       if (!val) el.style.removeProperty(v);
       else el.style.setProperty(v, val);
@@ -252,6 +283,8 @@ export function getTheme(root?: HTMLElement): Required<
   const fallback = {
     mode: 'auto' as const,
     accent: 'violet' as const,
+    primary: 'ink' as const,
+    density: 'comfortable' as const,
     font: '',
     radius: '',
   };
@@ -264,6 +297,9 @@ export function getTheme(root?: HTMLElement): Required<
       (el.getAttribute('data-slyxup-accent') as AccentName) ||
       cs.getPropertyValue(VAR_ACCENT).trim() ||
       'violet',
+    primary:
+      (el.getAttribute('data-slyxup-primary') as PrimaryStyle) || 'ink',
+    density: (el.getAttribute('data-slyxup-density') as Density) || 'comfortable',
     font: cs.getPropertyValue('--slx-font').trim(),
     radius: cs.getPropertyValue('--slx-radius').trim(),
   };

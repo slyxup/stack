@@ -15,7 +15,6 @@ import {
   Empty,
   Input,
   Label,
-  PageHeader,
   Skeleton,
 } from '../components/ui';
 import {
@@ -108,26 +107,49 @@ export default function Projects() {
   };
 
   return (
-    <div>
-      <PageHeader
-        title="Projects"
-        desc="Every project is isolated: its own users, API keys, domains and billing plans."
-        actions={
-          <>
-            <div className="relative">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9da8]" />
-              <Input
+    <div className="min-w-0">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#0b0b10] text-white p-5 sm:p-7 mb-5 min-w-0">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(560px 240px at 12% 0%, rgba(109,40,217,0.42), transparent 65%), radial-gradient(480px 240px at 92% 100%, rgba(34,211,238,0.13), transparent 60%)',
+          }}
+        />
+        <div className="relative flex flex-col gap-4 min-w-0">
+          <div className="min-w-0">
+            <h1 className="font-display text-[22px] sm:text-[26px] font-extrabold tracking-tight">
+              Projects
+            </h1>
+            <p className="mt-1 max-w-[560px] text-[13px] leading-relaxed text-white/60">
+              Every project is isolated: its own users, API keys, domains and
+              billing plans.{' '}
+              <span className="font-mono text-[11.5px] text-white/80">
+                {projects === null ? '…' : `${projects.length} total`}
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <div className="relative min-w-0 flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/40" />
+              <input
                 placeholder="Search projects"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="pl-9 w-[200px] !rounded-full"
+                className="h-9 w-full sm:w-[220px] rounded-full border border-white/15 bg-white/[0.07] pl-9 pr-4 text-[13px] text-white placeholder:text-white/35 focus:border-[#8b5cf6] focus:outline-none"
               />
             </div>
-            <Button variant="outline" size="sm" onClick={() => void load()}>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3.5 text-[12.5px] font-semibold text-white/80 hover:bg-white/[0.12] cursor-pointer"
+            >
               <RefreshCw className="size-3.5" /> Refresh
-            </Button>
+            </button>
             <Button
               size="sm"
+              className="btn-glow !border-0 !bg-[#6d28d9] hover:!bg-[#5b21b6]"
               onClick={() => {
                 setShowNew(true);
                 setMutError(null);
@@ -135,9 +157,9 @@ export default function Projects() {
             >
               <Plus className="size-3.5" /> New project
             </Button>
-          </>
-        }
-      />
+          </div>
+        </div>
+      </div>
 
       {error && (
         <div className="mb-4">
@@ -169,11 +191,17 @@ export default function Projects() {
         />
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((p) => (
-            <Card key={p.id} className="card-hover flex flex-col">
+          {filtered.map((p, i) => (
+            <Card key={p.id} className="card-hover flex flex-col overflow-hidden">
+              <div
+                className="h-1.5"
+                style={{
+                  background: `linear-gradient(90deg, ${['#6d28d9,#a78bfa', '#0891b2,#67e8f9', '#059669,#34d399', '#d97706,#fbbf24', '#e11d48,#fb7185'][i % 5]})`,
+                }}
+              />
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="size-9 rounded-xl bg-[#101014] text-white flex items-center justify-center text-[13px] font-extrabold">
+                  <div className="size-9 rounded-xl bg-gradient-to-br from-[#1a1a22] to-[#0b0b10] text-white flex items-center justify-center text-[13px] font-extrabold ring-1 ring-black/10">
                     {p.name[0]?.toUpperCase()}
                   </div>
                   <Badge tone="violet">{counts[p.id] ?? '…'} users</Badge>

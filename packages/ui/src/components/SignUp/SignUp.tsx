@@ -3,11 +3,21 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { GitHubIcon, GoogleIcon, KeyholeMark } from '../../icons';
 import { useAuth } from '../../react/hooks/useAuth';
 import { injectStyles } from '../../styles';
+import type { AuthLayout } from '../../theme';
+import { PasswordField } from '../PasswordField';
 
 export interface SignUpProps {
   social?: boolean;
   onSuccess?: () => void;
   onSignInClick?: () => void;
+  /** Page layout: 'centered' (default card), 'split' (brand panel + form), 'minimal' (chromeless). */
+  layout?: AuthLayout;
+  /** Show the username field (default true) — passed to signUp when filled. */
+  username?: boolean;
+  /** Brand panel content for the 'split' layout. */
+  brandTitle?: string;
+  brandSubtitle?: string;
+  brandPoints?: string[];
 }
 
 /** Email/password + OAuth sign-up card. */
@@ -15,6 +25,11 @@ export function SignUp({
   social = true,
   onSuccess,
   onSignInClick,
+  layout = 'centered',
+  username: showUsername = true,
+  brandTitle = 'Create your account',
+  brandSubtitle = 'A minute to set up. Sign in forever after.',
+  brandPoints = ['Email + OAuth out of the box', 'HttpOnly sessions, secured by default', 'Billing ready when you are'],
 }: SignUpProps) {
   injectStyles();
   const { signUp, client } = useAuth() as unknown as {
@@ -72,7 +87,25 @@ export function SignUp({
     client.publishableKey.includes('REPLACE');
 
   return (
-    <div ref={cardRef} className={`slx-card${error ? ' slx-card-error' : ''}`}>
+    <div
+      ref={cardRef}
+      className={`slx-card${error ? ' slx-card-error' : ''}${layout === 'centered' ? '' : ` slx-layout-${layout}`}`}
+    >
+      {layout === 'split' && (
+        <div className="slx-split-brand">
+          <div className="slx-split-mark">
+            <KeyholeMark />
+          </div>
+          <h2 className="slx-split-title">{brandTitle}</h2>
+          <p className="slx-split-sub">{brandSubtitle}</p>
+          <ul className="slx-split-points">
+            {brandPoints.map((pt) => (
+              <li key={pt}>{pt}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className={layout === 'split' ? 'slx-split-form' : 'slx-form-full'}>
       {missingKey && (
         <p className="slx-setup-note">
           <strong>Setup:</strong> Add{' '}
@@ -141,10 +174,11 @@ export function SignUp({
             onChange={(e) => setFirstName(e.target.value)}
           />
         </div>
-        <div className="slx-field">
-          <label className="slx-label" htmlFor="slx-signup-username">
-            Username
-          </label>
+        {showUsername && (
+          <div className="slx-field">
+            <label className="slx-label" htmlFor="slx-signup-username">
+              Username
+            </label>
           <input
             id="slx-signup-username"
             className="slx-input"
@@ -157,7 +191,8 @@ export function SignUp({
           <p className="slx-hint">
             Optional — lets you sign in with a username instead of your email.
           </p>
-        </div>
+          </div>
+        )}
         <div className="slx-field">
           <label className="slx-label" htmlFor="slx-signup-email">
             Email
@@ -177,14 +212,12 @@ export function SignUp({
           <label className="slx-label" htmlFor="slx-signup-password">
             Password
           </label>
-          <input
+          <PasswordField
             id="slx-signup-password"
-            className="slx-input"
-            type="password"
+            value={password}
+            onChange={setPassword}
             autoComplete="new-password"
             placeholder="At least 8 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
           />
@@ -206,6 +239,7 @@ export function SignUp({
           </button>
         </p>
       )}
+      </div>
     </div>
   );
 }

@@ -193,6 +193,58 @@ import { AdminPanel } from '@slyxup/ui';
 
 > Requires `@slyxup/core` as a peer dependency. The component creates its own `SlyxupClient` internally.
 
+## Auth page variants
+
+`<SignIn />` and `<SignUp />` render 3 professional layouts with the same logic — pick per page, no CSS needed:
+
+```tsx
+// 1. centered (default) — classic card
+<SignIn />
+
+// 2. split — brand panel + form (stacks on mobile)
+<SignIn
+  layout="split"
+  brandTitle="Acme Inc"
+  brandSubtitle="Team workspace — sign in to continue."
+  brandPoints={["SSO ready", "Audit log included", "99.99% uptime"]}
+/>
+
+// 3. minimal — chromeless, embeds into your own page design
+<SignUp layout="minimal" />
+```
+
+Feature flags on both:
+
+```tsx
+<SignIn
+  social={false}    // hide Google/GitHub buttons (default true)
+  username          // "Username or email" identity field (default false)
+/>
+<SignUp
+  social={false}
+  username={false}  // hide the username field (default true, passed to signUp when filled)
+/>
+```
+
+| Prop | Components | Default |
+|---|---|---|
+| `layout` | SignIn, SignUp | `"centered"` |
+| `social` | SignIn, SignUp | `true` |
+| `username` | SignIn (`false`), SignUp (`true`) | see left |
+| `brandTitle` / `brandSubtitle` / `brandPoints` | SignIn, SignUp (`split` only) | sensible defaults |
+
+Primary buttons follow the theme: `applyTheme({ primary: "accent" })` renders them in your brand gradient instead of ink.
+
+Density for tight spaces: `applyTheme({ density: "compact" })` shrinks card padding, fields and buttons — ideal for modals and sidebars.
+
+Every password field has a reveal toggle built in (hide it per-field with `showToggle={false}`). The standalone `<PasswordField />` is exported for custom forms:
+
+```tsx
+import { PasswordField } from "@slyxup/ui"
+
+<PasswordField id="pw" value={pw} onChange={setPw} required minLength={8} />
+```
+
 ## Theming
 
 Three ways to theme, in order of precedence: `applyTheme()` → data attributes → raw CSS variables (always win).

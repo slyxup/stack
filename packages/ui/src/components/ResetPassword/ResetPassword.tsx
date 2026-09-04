@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { CheckIcon, KeyholeMark } from '../../icons';
 import { injectStyles } from '../../styles';
+import { PasswordField } from '../PasswordField';
 
 export interface ResetPasswordProps {
   /** Reset token (from email link ?token=...) */
@@ -100,14 +101,12 @@ export function ResetPassword({
           <label className="slx-label" htmlFor="slx-reset-password">
             New password
           </label>
-          <input
+          <PasswordField
             id="slx-reset-password"
-            className="slx-input"
-            type="password"
+            value={password}
+            onChange={setPassword}
             autoComplete="new-password"
             placeholder="At least 8 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
           />
