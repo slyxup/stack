@@ -92,7 +92,7 @@ export function signOut() {
 }
 
 export async function currentUser(): Promise<ApiResult<{ user: ApiUser }>> {
-  return auth('/v1/users');
+  return auth('/v1/user');
 }
 
 /* ── Projects ── */

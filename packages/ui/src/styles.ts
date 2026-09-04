@@ -818,6 +818,97 @@ export const CSS = `
 .slyxup-root[data-slyxup-density='compact'] .slx-footer { margin-top: 16px; }
 .slyxup-root[data-slyxup-density='compact'] .slx-split-form { padding: 24px; }
 
+/* ── New primitives: OTP / meter / copy / empty ── */
+.slx-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.slx-otp-wrap { margin: 4px 0 15px; }
+.slx-otp {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.slx-otp-box.slx-input {
+  width: 100%;
+  max-width: 52px;
+  aspect-ratio: 0.86;
+  padding: 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--slx-display);
+}
+.slx-meter-wrap { display: flex; align-items: center; gap: 10px; margin: 8px 0 15px; min-height: 12px; }
+.slx-meter { display: flex; gap: 4px; flex: 1; }
+.slx-meter i {
+  height: 4px;
+  flex: 1;
+  border-radius: 99px;
+  background: var(--slx-border-strong);
+  transition: background 0.2s;
+}
+.slx-meter-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.slx-copyfield-wrap { margin-bottom: 15px; }
+.slx-copyfield {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--slx-bg-subtle);
+  border: 1px solid var(--slx-border);
+  border-radius: var(--slx-radius);
+  padding: 6px 6px 6px 13px;
+  min-width: 0;
+}
+.slx-copyfield-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--slx-mono);
+  font-size: 12.5px;
+  color: var(--slx-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slx-copyfield-btn { flex-shrink: 0; }
+.slx-copyfield-btn svg { width: 14px; height: 14px; }
+.slx-empty {
+  border: 1px dashed var(--slx-border-strong);
+  border-radius: var(--slx-radius-lg);
+  padding: 32px 24px;
+  text-align: center;
+}
+.slx-empty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--slx-accent-soft);
+  color: var(--slx-accent);
+}
+.slx-empty-title { font-size: 14px; font-weight: 650; color: var(--slx-ink-strong); margin: 0 0 4px; }
+.slx-empty-desc { font-size: 13px; color: var(--slx-muted); line-height: 1.55; margin: 0; }
+.slx-empty-action { margin-top: 16px; display: flex; justify-content: center; }
+@media (max-width: 460px) {
+  .slx-otp { gap: 6px; }
+  .slx-otp-box.slx-input { font-size: 17px; }
+  .slx-empty { padding: 24px 18px; }
+}
+
 /* ── Small-screen polish for auth cards & menus ── */
 @media (max-width: 460px) {
   .slx-card { padding: 26px 22px 24px; border-radius: var(--slx-radius-lg); }

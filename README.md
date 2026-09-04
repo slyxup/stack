@@ -30,15 +30,22 @@ slyxup.online/stack/               ← monorepo (here, pnpm + wrangler)
 - **Drizzle** `sqliteTable` + `wrangler d1 migrations apply` both envs, `wrangler types`
 - **Security** `CODEQL`, `SECURITY.md`, `wrangler secret put` only
 
-## Quick Start — Platform (no DB needed)
+## Quick Start — Admin web app (real API, no demo data)
 
 ```bash
-cd slyxup.online/stack/stack.slyxup.online
+cd slyxup.online/stack/web
 pnpm install
-cp .env.example .env        # optional — defaults to admin@slyxup.local / Admin@123
+cp .env.example .env        # VITE_API_URL → https://auth.slyxup.online
 pnpm dev                    # → http://localhost:5173
-# login: admin@slyxup.local / Admin@123 → /change-password → /setup → /dashboard
+# sign in with a real auth.slyxup.online account → /admin
 ```
+
+> Single source of truth for the first admin: `auth/src/services/bootstrap.service.ts`
+> (`POST /v1/setup/bootstrap` claims the admin account while the users table
+> is empty; `BOOTSTRAP_ADMIN_EMAIL` in `auth/wrangler.jsonc`). There are no
+> other seed credentials anywhere — `VITE_SEED_*` is retired, and forced
+> password rotation lives in `auth/src/services/auth.service.ts`
+> (`mustChangePassword`).
 
 **Full CF (auth + billing) — Dev First**
 

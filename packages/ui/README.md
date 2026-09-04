@@ -311,6 +311,27 @@ Or go fully manual with CSS variables on any wrapper — light/dark is automatic
 
 Extra classes: `.slx-btn-accent` renders the primary button in your accent instead of ink — `<button className="slx-btn slx-btn-accent">`.
 
+## Form primitives
+
+Small building blocks for custom auth screens — same tokens, same theme:
+
+```tsx
+import { OtpInput, PasswordStrength, CopyField, EmptyState, passwordScore } from "@slyxup/ui"
+
+// 6-box authenticator / verification code (paste + arrow-key support)
+<OtpInput length={6} onComplete={(code) => verify(code)} />
+
+// Strength meter — pair with any password field
+<PasswordStrength password={pw} />
+if (passwordScore(pw) < 2) return "Pick something stronger"
+
+// Masked value + copy button (API keys, secrets)
+<CopyField label="Secret key" value="sk_live_abc..." />
+
+// Friendly placeholder for empty lists
+<EmptyState title="No keys yet" desc="Create one to get started." action={<button>Create key</button>} />
+```
+
 Responsive + accessible by default: auth cards reflow under 460px, UserProfile nav collapses to a horizontal strip under 680px, labeled fields, visible focus rings, `prefers-reduced-motion` respected, semantic buttons throughout.
 
 Contrast is engineered, not eyeballed: body/secondary/link/error/success text pass WCAG AA (≥4.5) in both modes, and every gradient surface (avatars, marks, badges, split panels, accent buttons) deepens automatically so white text stays readable under **any** accent — including custom hex colors.

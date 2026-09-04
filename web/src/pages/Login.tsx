@@ -45,7 +45,7 @@ export default function Login() {
           </span>
           <span className="text-[14px] font-semibold">SlyxUp</span>
         </Link>
-        <div className="relative my-8 lg:my-0 min-w-0">
+        <div className="relative my-8 lg:my-0 min-w-0 rise rise-1">
           <h1 className="font-display text-[30px] sm:text-[46px] font-bold leading-[1.0] text-balance">
             Run every project from one chair.
           </h1>
@@ -77,7 +77,7 @@ export default function Login() {
 
       {/* Form panel */}
       <div className="relative flex items-center justify-center bg-[#fafafa] px-4 sm:px-8 py-10 lg:py-0 min-w-0">
-        <div className="w-full max-w-[380px] min-w-0">
+        <div className="w-full max-w-[380px] min-w-0 rise rise-2">
           <h2 className="font-display text-[24px] font-bold">Welcome back</h2>
           <p className="mt-1 text-[13.5px] text-[#71717a]">
             Sign in to open your projects.{' '}

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CodeBlock } from '../components/CodeBlock';
+import { Reveal } from '../components/Reveal';
 import { PublicNav, SectionHead, SiteFooter } from '../components/marketing';
 import { Button } from '../components/ui';
 import { AUTH_URL } from '../lib/api';
@@ -53,7 +54,7 @@ const FEATURES = [
   },
   {
     icon: Blocks,
-    title: '11 components, 3 auth layouts',
+    title: '15 components, 3 auth layouts',
     desc: 'The same @slyxup/ui kit — centered, split, minimal. Six accents plus mono, dark mode, custom fonts, compact density.',
     span: 'sm:col-span-2',
   },
@@ -110,7 +111,7 @@ export default function Landing() {
                 <Link to="/login">
                   <Button
                     size="lg"
-                    className="!bg-white !text-black hover:!bg-white/85"
+                    className="bg-white! text-black! hover:bg-white/85!"
                   >
                     Open admin <ArrowRight className="size-4" />
                   </Button>
@@ -119,7 +120,7 @@ export default function Landing() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="!border-white/15 !bg-transparent !text-white hover:!bg-white/10"
+                    className="border-white/15! bg-transparent! text-white! hover:bg-white/10!"
                   >
                     Live UI kit
                   </Button>
@@ -168,18 +169,23 @@ applyTheme({ accent: "mono", radius: 10 })
             </div>
           </div>
 
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-1.5 min-w-0">
-            <span className="mr-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30">
+          <div className="mt-12 min-w-0">
+            <div className="mb-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-white/30">
               Built on
-            </span>
-            {STACK.map((s) => (
-              <span
-                key={s}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11.5px] font-medium text-white/60 whitespace-nowrap"
-              >
-                {s}
-              </span>
-            ))}
+            </div>
+            <div className="marquee" aria-hidden="true">
+              <div className="marquee-track">
+                {[...STACK, ...STACK].map((s, i) => (
+                  <span
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static duplicated list for the seamless loop
+                    key={`${s}-${i}`}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-[11.5px] font-medium text-white/60 whitespace-nowrap"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -192,18 +198,20 @@ applyTheme({ accent: "mono", radius: 10 })
           desc="The admin panel and your product read the same live API. What you see here is what your users get."
         />
         <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
-          {FEATURES.map((f) => (
-            <div key={f.title} className={`bento p-6 min-w-0 ${f.span}`}>
-              <div className="size-9 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center">
-                <f.icon className="size-4 text-white" />
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 4) * 70} className={f.span}>
+              <div className="bento p-6 min-w-0 h-full">
+                <div className="size-9 rounded-lg border border-white/10 bg-white/[0.05] flex items-center justify-center">
+                  <f.icon className="size-4 text-white" />
+                </div>
+                <div className="mt-4 text-[14.5px] font-semibold text-white">
+                  {f.title}
+                </div>
+                <div className="mt-1.5 text-[13px] leading-relaxed text-white/50">
+                  {f.desc}
+                </div>
               </div>
-              <div className="mt-4 text-[14.5px] font-semibold text-white">
-                {f.title}
-              </div>
-              <div className="mt-1.5 text-[13px] leading-relaxed text-white/50">
-                {f.desc}
-              </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -212,7 +220,7 @@ applyTheme({ accent: "mono", radius: 10 })
       <section className="border-y border-white/[0.08] bg-white/[0.015]">
         <div className="mx-auto max-w-[1120px] px-4 sm:px-8 py-10 grid grid-cols-2 gap-6 sm:grid-cols-4 min-w-0">
           {[
-            { k: '11', v: 'Drop-in components' },
+            { k: '15', v: 'Drop-in components' },
             { k: '3', v: 'Auth page layouts' },
             { k: '7', v: 'Accent presets' },
             { k: '19', v: 'Documented endpoints' },
@@ -263,7 +271,7 @@ applyTheme({ accent: "mono", radius: 10 })
             <Link to="/ui" className="shrink-0 lg:justify-self-end">
               <Button
                 size="lg"
-                className="!bg-white !text-black hover:!bg-white/85"
+                className="bg-white! text-black! hover:bg-white/85!"
               >
                 Explore the kit <ArrowRight className="size-4" />
               </Button>
@@ -292,18 +300,20 @@ applyTheme({ accent: "mono", radius: 10 })
       <section className="mx-auto max-w-[1120px] px-4 sm:px-8 pb-14 sm:pb-20 min-w-0">
         <SectionHead eyebrow="How it works" title={<>Live in three moves.</>} />
         <div className="mt-10 grid gap-3 md:grid-cols-3 min-w-0">
-          {STEPS.map((s) => (
-            <div key={s.n} className="bento p-6 min-w-0">
-              <div className="font-mono text-[12px] font-semibold text-white/40">
-                {s.n}
+          {STEPS.map((s, i) => (
+            <Reveal key={s.n} delay={i * 90}>
+              <div className="bento p-6 min-w-0 h-full">
+                <div className="font-mono text-[12px] font-semibold text-white/40">
+                  {s.n}
+                </div>
+                <div className="mt-3 text-[15px] font-semibold text-white">
+                  {s.title}
+                </div>
+                <div className="mt-1.5 text-[13px] leading-relaxed text-white/50">
+                  {s.desc}
+                </div>
               </div>
-              <div className="mt-3 text-[15px] font-semibold text-white">
-                {s.title}
-              </div>
-              <div className="mt-1.5 text-[13px] leading-relaxed text-white/50">
-                {s.desc}
-              </div>
-            </div>
+            </Reveal>
           ))}
         </div>
         <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-4 min-w-0">
@@ -317,14 +327,14 @@ applyTheme({ accent: "mono", radius: 10 })
           </div>
           <div className="flex gap-2 sm:ml-auto shrink-0">
             <Link to="/login">
-              <Button className="!bg-white !text-black hover:!bg-white/85">
+              <Button className="bg-white! text-black! hover:bg-white/85!">
                 Sign in
               </Button>
             </Link>
             <Link to="/docs">
               <Button
                 variant="outline"
-                className="!border-white/15 !bg-transparent !text-white hover:!bg-white/10"
+                className="border-white/15! bg-transparent! text-white! hover:bg-white/10!"
               >
                 Docs
               </Button>

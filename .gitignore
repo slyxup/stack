@@ -57,3 +57,8 @@ pnpm-debug.log*
 .tmp
 temp
 .open-next/
+
+# TS build info
+*.tsbuildinfo
+# Next static export
+out/

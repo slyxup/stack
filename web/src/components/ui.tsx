@@ -154,26 +154,6 @@ export function Badge({
   );
 }
 
-/* ── Page header (light admin) ── */
-
-export function PageHeader({
-  title,
-  desc,
-  actions,
-}: { title: string; desc?: string; actions?: ReactNode }) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
-      <div className="min-w-0">
-        <h1 className="font-display text-[22px] font-bold">{title}</h1>
-        {desc && <p className="text-[13px] text-[#71717a] mt-1">{desc}</p>}
-      </div>
-      {actions && (
-        <div className="flex items-center gap-2 shrink-0">{actions}</div>
-      )}
-    </div>
-  );
-}
-
 /* ── Alert ── */
 
 export function Alert({
@@ -312,8 +292,4 @@ export function Td({
       {children}
     </td>
   );
-}
-
-export function cn(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(' ');
 }

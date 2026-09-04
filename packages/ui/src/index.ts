@@ -14,7 +14,14 @@ export {
   type PrimaryStyle,
   type Density,
 } from './theme';
-export { KeyholeMark, GoogleIcon, GitHubIcon, CheckIcon, EyeIcon, EyeOffIcon } from './icons';
+export {
+  KeyholeMark,
+  GoogleIcon,
+  GitHubIcon,
+  CheckIcon,
+  EyeIcon,
+  EyeOffIcon,
+} from './icons';
 // All React lives here now (2-SDK model) — provider, context, hooks.
 export {
   SlyxUpProvider,
@@ -40,7 +47,19 @@ export {
 } from './react/hooks/useBilling';
 
 export { SignIn, type SignInProps } from './components/SignIn/SignIn';
-export { PasswordField, type PasswordFieldProps } from './components/PasswordField';
+export {
+  PasswordField,
+  type PasswordFieldProps,
+} from './components/PasswordField';
+export { OtpInput, type OtpInputProps } from './components/OtpInput';
+export {
+  PasswordStrength,
+  passwordScore,
+  type PasswordStrengthProps,
+  type StrengthScore,
+} from './components/PasswordStrength';
+export { CopyField, type CopyFieldProps } from './components/CopyField';
+export { EmptyState, type EmptyStateProps } from './components/EmptyState';
 export { SignUp, type SignUpProps } from './components/SignUp/SignUp';
 export {
   UserButton,

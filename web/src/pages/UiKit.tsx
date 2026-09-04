@@ -3,9 +3,15 @@ import {
   type AccentName,
   type AuthLayout,
   BillingPortal,
+  CopyField,
+  type Density,
   EmailVerification,
+  EmptyState,
   FONTS,
   ForgotPassword,
+  OtpInput,
+  PasswordField,
+  PasswordStrength,
   PricingTable,
   type PrimaryStyle,
   ResetPassword,
@@ -21,9 +27,10 @@ import { Blocks, BookOpen } from 'lucide-react';
 import { Component, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CodeBlock } from '../components/CodeBlock';
+import { Input } from '../components/ui';
 import { AUTH_URL } from '../lib/api';
 
-const UI_VERSION = '2.2.0';
+const UI_VERSION = '2.5.0';
 
 const DEMO_PLANS = [
   {
@@ -83,17 +90,25 @@ const DEMO_INVOICES = [
 
 class DemoBoundary extends Component<
   { children: ReactNode; label: string },
-  { failed: boolean }
+  { failed: boolean; message: string }
 > {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+  state = { failed: false, message: '' };
+  static getDerivedStateFromError(e: unknown) {
+    return {
+      failed: true,
+      message: e instanceof Error ? e.message : String(e),
+    };
   }
   render() {
     if (this.state.failed) {
       return (
-        <div className="rounded-xl border border-dashed p-6 text-center text-xs text-[#63666f]">
-          {this.props.label} preview unavailable — see code.
+        <div className="rounded-xl border border-dashed border-red-300 bg-red-50/50 p-6 text-center">
+          <div className="text-[12.5px] font-bold text-red-700">
+            {this.props.label} failed to render
+          </div>
+          <div className="mt-1 font-mono text-[11px] text-red-600 break-all">
+            {this.state.message}
+          </div>
         </div>
       );
     }
@@ -101,55 +116,382 @@ class DemoBoundary extends Component<
   }
 }
 
-/** Single-column section: title, demo (centered, width-capped), code below. Nothing overflows. */
-function Section({
-  title,
-  desc,
-  demo,
-  code,
-  wide,
-}: {
-  title: string;
-  desc: string;
-  demo: ReactNode;
-  code: string;
-  wide?: boolean;
-}) {
+/* ── Interactive demos (module level so hooks stay legal) ── */
+
+function PasswordStrengthDemo() {
+  const [pw, setPw] = useState('slyxup-2026!');
   return (
-    <section className="min-w-0">
-      <h2 className="font-mono text-[14px] font-bold text-white">{`<${title} />`}</h2>
-      <p className="text-[13px] text-white/55 mt-1 mb-4 max-w-2xl leading-relaxed">
-        {desc}
-      </p>
-      <div className="demo-frame min-w-0">
-        <div className="demo-frame-inner min-w-0">
-          <div className="demo-bar">
-            <span className="flex gap-1.5">
-              <i className="block size-2 rounded-full bg-[#ff5f56]" />
-              <i className="block size-2 rounded-full bg-[#ffbd2e]" />
-              <i className="block size-2 rounded-full bg-[#27c93f]" />
-            </span>
-            <span className="ml-1 truncate">live preview — {title}</span>
-            <span className="ml-auto flex items-center gap-1.5 shrink-0">
-              <span className="size-1.5 rounded-full bg-emerald-500 pulse-dot" />{' '}
-              interactive
-            </span>
-          </div>
-          <div className="p-4 sm:p-8 overflow-x-auto">
-            <div
-              className={`mx-auto min-w-0 ${wide ? 'max-w-3xl' : 'max-w-[400px]'}`}
-            >
-              <DemoBoundary label={title}>{demo}</DemoBoundary>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 min-w-0">
-        <CodeBlock title={`${title}.tsx`} lang="tsx" code={code} />
-      </div>
-    </section>
+    <div className="mx-auto max-w-[360px] space-y-1">
+      <Input
+        type="password"
+        value={pw}
+        onChange={(e) => setPw(e.target.value)}
+        placeholder="Type a password"
+      />
+      <PasswordStrength password={pw} />
+    </div>
   );
 }
+
+function OtpDemo() {
+  const [done, setDone] = useState<string | null>(null);
+  return (
+    <div className="mx-auto max-w-[360px]">
+      <OtpInput onComplete={(c) => setDone(c)} />
+      <div className="mt-3 text-center font-mono text-[12px] text-[#63666f] h-4">
+        {done ? `completed: ${done}` : 'fill all 6 boxes'}
+      </div>
+    </div>
+  );
+}
+
+function StandalonePasswordDemo() {
+  const [pw, setPw] = useState('');
+  return (
+    <div className="mx-auto max-w-[360px]">
+      <PasswordField
+        id="demo-pw"
+        value={pw}
+        onChange={setPw}
+        placeholder="••••••••"
+      />
+    </div>
+  );
+}
+
+/* ── Registry ── */
+
+interface Item {
+  id: string;
+  name: string;
+  desc: string;
+  code: string;
+  props: Array<[string, string, string]>;
+  demo?: ReactNode;
+  demoNote?: string;
+  wide?: boolean;
+}
+
+const GROUPS: Array<{ label: string; items: Item[] }> = [
+  {
+    label: 'Auth pages',
+    items: [
+      {
+        id: 'signin',
+        name: 'SignIn',
+        desc: 'Email/password + optional OAuth + 2FA challenge. Submitting here talks to the real API, so a random email shows a genuine error state.',
+        code: 'import { SignIn } from "@slyxup/ui"\n\n<SignIn layout="split" social username\n  onSuccess={() => router.push("/dashboard")} />',
+        props: [
+          ['social', 'boolean', 'true'],
+          ['layout', 'centered | split | minimal', 'centered'],
+          ['username', 'boolean', 'false'],
+          ['onSuccess', '() => void', '—'],
+          ['brandTitle/Sub/Points', 'split panel', 'defaults'],
+        ],
+        demo: null,
+        wide: false,
+      },
+      {
+        id: 'signup',
+        name: 'SignUp',
+        desc: 'Registration with verification states. The username field is real — passed to signUp when filled.',
+        code: 'import { SignUp } from "@slyxup/ui"\n\n<SignUp layout="split" username\n  onSuccess={() => router.push("/verify")} />',
+        props: [
+          ['social', 'boolean', 'true'],
+          ['layout', 'centered | split | minimal', 'centered'],
+          ['username', 'boolean', 'true'],
+          ['onSuccess / onSignInClick', 'callbacks', '—'],
+        ],
+        demo: null,
+        wide: false,
+      },
+    ],
+  },
+  {
+    label: 'Password flows',
+    items: [
+      {
+        id: 'forgot',
+        name: 'ForgotPassword',
+        desc: 'Reset-email request with cooldown handling.',
+        code: 'import { ForgotPassword } from "@slyxup/ui"\n\n<ForgotPassword onBackToSignIn={() => router.push("/sign-in")} />',
+        props: [
+          ['apiUrl?', 'string', 'provider url'],
+          ['onSuccess?', '() => void', '—'],
+          ['onBackToSignIn?', '() => void', '—'],
+        ],
+        demo: <ForgotPassword />,
+      },
+      {
+        id: 'reset',
+        name: 'ResetPassword',
+        desc: 'Token-based reset (token comes from the email link). Demo token shows the validation flow.',
+        code: 'import { ResetPassword } from "@slyxup/ui"\n\n<ResetPassword token={searchParams.token} />',
+        props: [
+          ['token*', 'string', '—'],
+          ['apiUrl?', 'string', '—'],
+          ['onSuccess?', '() => void', '—'],
+        ],
+        demo: <ResetPassword token="demo-token" />,
+      },
+      {
+        id: 'verify',
+        name: 'EmailVerification',
+        desc: 'Without a token it shows the resend form; with ?token it verifies.',
+        code: 'import { EmailVerification } from "@slyxup/ui"\n\n<EmailVerification token={searchParams.token} />',
+        props: [
+          ['token?', 'string', '—'],
+          ['apiUrl?', 'string', '—'],
+          ['onSuccess?', '() => void', '—'],
+        ],
+        demo: <EmailVerification />,
+      },
+      {
+        id: 'pwfield',
+        name: 'PasswordField',
+        desc: 'Password input with reveal toggle. Drop into any custom form.',
+        code: 'import { PasswordField } from "@slyxup/ui"\n\n<PasswordField id="pw" value={pw} onChange={setPw}\n  required minLength={8} />',
+        props: [
+          ['id* / value* / onChange*', 'string', '—'],
+          ['showToggle', 'boolean', 'true'],
+          [
+            'autoComplete / placeholder / required / minLength',
+            'input attrs',
+            '—',
+          ],
+        ],
+        demo: <StandalonePasswordDemo />,
+      },
+      {
+        id: 'pwstrength',
+        name: 'PasswordStrength',
+        desc: '5-segment meter scored by length + variety. Try typing above — plus a pure passwordScore() helper.',
+        code: 'import { PasswordStrength, passwordScore } from "@slyxup/ui"\n\n<PasswordStrength password={pw} />\nif (passwordScore(pw) < 2) return "Pick something stronger"',
+        props: [
+          ['password*', 'string', '—'],
+          ['showLabel', 'boolean', 'true'],
+        ],
+        demo: <PasswordStrengthDemo />,
+      },
+      {
+        id: 'otp',
+        name: 'OtpInput',
+        desc: 'One-time-code boxes with paste + arrow-key navigation. Fill all six to fire onComplete.',
+        code: 'import { OtpInput } from "@slyxup/ui"\n\n<OtpInput length={6} onComplete={(code) => verify(code)} />',
+        props: [
+          ['length', 'number', '6'],
+          ['value? / onChange?', 'controlled', '—'],
+          ['onComplete?', '(code) => void', '—'],
+          ['autoFocus? / disabled? / label?', '—', '—'],
+        ],
+        demo: <OtpDemo />,
+      },
+    ],
+  },
+  {
+    label: 'Form primitives',
+    items: [
+      {
+        id: 'pwfield',
+        name: 'PasswordField',
+        desc: 'Password input with reveal toggle. Drop into any custom form.',
+        code: 'import { PasswordField } from "@slyxup/ui"\n\n<PasswordField id="pw" value={pw} onChange={setPw}\n  required minLength={8} />',
+        props: [
+          ['id* / value* / onChange*', 'string', '—'],
+          ['showToggle', 'boolean', 'true'],
+          [
+            'autoComplete / placeholder / required / minLength',
+            'input attrs',
+            '—',
+          ],
+        ],
+        demo: <StandalonePasswordDemo />,
+      },
+      {
+        id: 'pwstrength',
+        name: 'PasswordStrength',
+        desc: 'Live meter scored by length + variety. Type above — plus a pure passwordScore() helper for validation.',
+        code: 'import { PasswordStrength, passwordScore } from "@slyxup/ui"\n\n<PasswordStrength password={pw} />\nif (passwordScore(pw) < 2) return "Pick something stronger"',
+        props: [
+          ['password*', 'string', '—'],
+          ['showLabel', 'boolean', 'true'],
+        ],
+        demo: <PasswordStrengthDemo />,
+      },
+      {
+        id: 'otp',
+        name: 'OtpInput',
+        desc: 'One-time-code boxes with paste + arrow-key navigation. Fill all six to fire onComplete.',
+        code: 'import { OtpInput } from "@slyxup/ui"\n\n<OtpInput length={6} onComplete={(code) => verify(code)} />',
+        props: [
+          ['length', 'number', '6'],
+          ['value? / onChange?', 'controlled', '—'],
+          ['onComplete?', '(code) => void', '—'],
+          ['autoFocus? / disabled? / label?', '—', '—'],
+        ],
+        demo: <OtpDemo />,
+      },
+      {
+        id: 'copy',
+        name: 'CopyField',
+        desc: 'Masked value + copy button. Built for API keys, tokens, webhook secrets.',
+        code: 'import { CopyField } from "@slyxup/ui"\n\n<CopyField label="Secret key" value="sk_live_abc123..." />',
+        props: [
+          ['value*', 'string', '—'],
+          ['label?', 'string', '—'],
+          ['masked', 'boolean', 'true'],
+        ],
+        demo: (
+          <div className="mx-auto max-w-[360px]">
+            <CopyField
+              label="Secret key"
+              value="sk_live_9f2c7d4a1b5e8f0a3c6d"
+            />
+          </div>
+        ),
+      },
+      {
+        id: 'empty',
+        name: 'EmptyState',
+        desc: 'Friendly placeholder for empty lists and results.',
+        code: 'import { EmptyState } from "@slyxup/ui"\n\n<EmptyState title="No keys yet"\n  desc="Create one to get started."\n  action={<button>Create key</button>} />',
+        props: [
+          ['title*', 'string', '—'],
+          ['desc?', 'string', '—'],
+          ['action? / icon?', 'ReactNode', '—'],
+        ],
+        demo: (
+          <EmptyState title="No keys yet" desc="Create one to get started." />
+        ),
+      },
+    ],
+  },
+  {
+    label: 'Social & billing',
+    items: [
+      {
+        id: 'social',
+        name: 'SocialButtons',
+        desc: 'Google / GitHub OAuth redirect buttons. Clicking leaves for the OAuth start URL.',
+        code: 'import { SocialButtons } from "@slyxup/ui"\n\n<SocialButtons providers={["google", "github"]} />',
+        props: [
+          ['providers', 'google | github[]', 'both'],
+          ['basePath?', 'string', 'provider url'],
+        ],
+        demo: <SocialButtons />,
+      },
+      {
+        id: 'pricing',
+        name: 'PricingTable',
+        desc: 'Plans grid with popular badge. Same shape as GET /v1/billing/plans.',
+        code: 'import { PricingTable } from "@slyxup/ui"\n\nconst { plans } = await client.billing.plans.list()\n<PricingTable plans={plans} onSelect={(p) => checkout(p.id)} />',
+        props: [
+          ['plans*', 'Plan[]', '—'],
+          ['onSelect?', '(plan) => void', '—'],
+          ['loading?', 'boolean', '—'],
+        ],
+        demo: <PricingTable plans={DEMO_PLANS} />,
+        wide: true,
+      },
+      {
+        id: 'portal',
+        name: 'BillingPortal',
+        desc: 'Current plan + invoices + cancel. Pure props — no session needed.',
+        code: 'import { BillingPortal } from "@slyxup/ui"\n\nconst { subscription, invoices } = await client.billing.get()\n<BillingPortal subscription={subscription} invoices={invoices} />',
+        props: [
+          ['subscription', 'Subscription | null', '—'],
+          ['invoices', 'Invoice[]', '—'],
+          ['onCancel?', '() => void', '—'],
+        ],
+        demo: (
+          <BillingPortal subscription={DEMO_SUB} invoices={DEMO_INVOICES} />
+        ),
+        wide: true,
+      },
+    ],
+  },
+  {
+    label: 'Account & admin',
+    items: [
+      {
+        id: 'userbutton',
+        name: 'UserButton',
+        desc: 'Avatar + dropdown (profile, sign out). Signed out here, so it shows the fallback initial.',
+        code: 'import { UserButton } from "@slyxup/ui"\n\n<UserButton onProfileClick={() => setProfileOpen(true)} />',
+        props: [['onProfileClick?', '() => void', '—']],
+        demo: (
+          <div className="flex justify-center py-4">
+            <UserButton />
+          </div>
+        ),
+      },
+      {
+        id: 'copy',
+        name: 'CopyField',
+        desc: 'Masked value + copy button. Built for API keys, tokens, webhook secrets.',
+        code: 'import { CopyField } from "@slyxup/ui"\n\n<CopyField label="Secret key" value="sk_live_abc123..." />',
+        props: [
+          ['value*', 'string', '—'],
+          ['label?', 'string', '—'],
+          ['masked', 'boolean', 'true'],
+        ],
+        demo: (
+          <div className="mx-auto max-w-[360px]">
+            <CopyField
+              label="Secret key"
+              value="sk_live_9f2c7d4a1b5e8f0a3c6d"
+            />
+          </div>
+        ),
+      },
+      {
+        id: 'empty',
+        name: 'EmptyState',
+        desc: 'Friendly placeholder for empty lists and results.',
+        code: 'import { EmptyState } from "@slyxup/ui"\n\n<EmptyState title="No keys yet"\n  desc="Create one to get started."\n  action={<button>Create key</button>} />',
+        props: [
+          ['title*', 'string', '—'],
+          ['desc?', 'string', '—'],
+          ['action? / icon?', 'ReactNode', '—'],
+        ],
+        demo: (
+          <EmptyState title="No keys yet" desc="Create one to get started." />
+        ),
+      },
+      {
+        id: 'profile',
+        name: 'UserProfile',
+        desc: 'Full account modal (profile, security, 2FA, billing) — needs a signed-in session, so it renders nothing on this public page. Code below works in any authenticated app.',
+        code: 'import { UserProfile } from "@slyxup/ui"\n\n<UserProfile modal={false} onClose={() => setOpen(false)} />',
+        props: [
+          ['modal', 'boolean', 'true'],
+          ['onClose?', '() => void', '—'],
+          ['onDeleted?', '() => void', '—'],
+        ],
+      },
+      {
+        id: 'admin',
+        name: 'AdminPanel',
+        desc: 'Users, sessions, keys, audit — secret key only, server-rendered pages. Code-only here by design.',
+        code: 'import { AdminPanel } from "@slyxup/ui"\n\n<AdminPanel secretKey={process.env.SLYXUP_SECRET_KEY!} />',
+        props: [
+          ['secretKey*', 'sk_…', '—'],
+          ['apiUrl?', 'string', '—'],
+          ['fullPage?', 'boolean', 'true'],
+        ],
+      },
+    ],
+  },
+];
+
+const ALL_IDS = GROUPS.flatMap((g) => g.items.map((i) => i.id));
+
+function findItem(id: string) {
+  for (const g of GROUPS) for (const i of g.items) if (i.id === id) return i;
+  return GROUPS[0].items[0];
+}
+
+/* ── Small controls ── */
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
@@ -189,11 +531,13 @@ export default function UiKit() {
   const [font, setFont] = useState<FontKey>('default');
   const [radius, setRadius] = useState(10);
   const [primary, setPrimary] = useState<PrimaryStyle>('accent');
+  const [density, setDensity] = useState<Density>('comfortable');
 
   const [layout, setLayout] = useState<AuthLayout>('centered');
   const [social, setSocial] = useState(true);
   const [username, setUsername] = useState(true);
 
+  const [selected, setSelected] = useState('signin');
   const galleryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -205,11 +549,19 @@ export default function UiKit() {
         font,
         radius,
         primary,
+        density,
       },
       galleryRef.current
     );
     return cleanup;
-  }, [mode, accent, customColor, font, radius, primary]);
+  }, [mode, accent, customColor, font, radius, primary, density]);
+
+  const item = findItem(selected);
+
+  const authCode = `import { SignIn, SignUp } from "@slyxup/ui"
+
+<SignIn layout="${layout}" social={${social}}} username={${username}}} />
+<SignUp layout="${layout}" social={${social}}} username={${username}}} />`;
 
   const themeCode = `import { applyTheme } from "@slyxup/ui"
 
@@ -219,18 +571,23 @@ applyTheme({
   font: "${font}",
   radius: ${radius},
   primary: "${primary}",
+  density: "${density}",
 })`;
 
-  const authCode = `import { SignIn, SignUp } from "@slyxup/ui"
-
-<SignIn layout="${layout}" social={${social}}} username={${username}}} />
-<SignUp layout="${layout}" social={${social}}} username={${username}}} />`;
+  function renderDemo(it: Item): ReactNode {
+    if (it.id === 'signin')
+      return <SignIn layout={layout} social={social} username={username} />;
+    if (it.id === 'signup')
+      return <SignUp layout={layout} social={social} username={username} />;
+    return it.demo;
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0b10] text-white overflow-x-clip">
+      {/* Topbar */}
       <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0b10]/85 backdrop-blur">
-        <div className="mx-auto max-w-[1000px] px-4 sm:px-8 py-3 flex items-center gap-2 min-w-0">
-          <div className="size-8 rounded-lg bg-gradient-to-br from-[#3f3f46] to-black flex items-center justify-center text-white shrink-0">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-3 flex items-center gap-2 min-w-0">
+          <div className="size-8 rounded-lg bg-white text-black flex items-center justify-center shrink-0">
             <Blocks className="size-4" />
           </div>
           <span className="text-[14px] font-bold truncate">SlyxUp UI Kit</span>
@@ -260,52 +617,42 @@ applyTheme({
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1000px] px-4 sm:px-8 py-8 sm:py-12 space-y-8 min-w-0">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 p-6 sm:p-10 min-w-0">
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10 min-w-0">
+        {/* Hero */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 p-6 sm:p-8 min-w-0">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
               background:
-                'radial-gradient(640px 300px at 12% 0%, rgba(255,255,255,0.1), transparent 65%), radial-gradient(520px 280px at 95% 100%, rgba(255,255,255,0.05), transparent 60%)',
+                'radial-gradient(640px 300px at 12% 0%, rgba(255,255,255,0.09), transparent 65%)',
             }}
           />
-          <div className="relative max-w-2xl min-w-0">
+          <div className="relative min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11.5px] font-bold uppercase tracking-[0.12em] text-white/70">
-              11 components · 3 layouts · live
+              {GROUPS.reduce((n, g) => n + g.items.length, 0)} components · live
             </div>
-            <h1 className="font-display mt-4 text-[30px] sm:text-[44px] font-extrabold leading-[1.02] text-balance">
+            <h1 className="font-display mt-4 text-[28px] sm:text-[40px] font-extrabold leading-[1.02] text-balance">
               Every component, <span className="text-gradient">live.</span>
             </h1>
-            <p className="text-[14px] text-white/60 mt-3 leading-relaxed">
-              The full{' '}
-              <span className="font-mono text-[12.5px] bg-white/10 px-1.5 py-0.5 rounded-md text-white/85">
-                @slyxup/ui
-              </span>{' '}
-              kit rendered on this page — not screenshots. Tune the playgrounds
-              and watch everything follow.
+            <p className="text-[14px] text-white/60 mt-3 leading-relaxed max-w-2xl">
+              Pick a component on the left, see it on the right. Tune the theme
+              — fonts, accents, density — and watch everything follow.
             </p>
-            <div className="mt-5 max-w-xl min-w-0">
-              <CodeBlock
-                title="install"
-                lang="bash"
-                code={'pnpm add @slyxup/ui'}
-              />
-            </div>
           </div>
         </div>
 
         {/* Theme playground */}
-        <section className="rounded-2xl border border-[#e4e6eb] bg-white p-5 sm:p-6 min-w-0">
+        <section className="mt-4 rounded-2xl border border-[#e4e6eb] bg-white p-5 sm:p-6 min-w-0 text-black">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-[16px] font-bold tracking-tight">
+            <h2 className="text-[15px] font-bold tracking-tight">
               Theme playground
             </h2>
             <span className="text-[12px] text-[#63666f]">
-              Applies to the gallery via{' '}
+              Applies to the preview via{' '}
               <span className="font-mono">applyTheme()</span>
             </span>
           </div>
-          <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
             <div className="min-w-0">
               <FieldLabel>Mode</FieldLabel>
               <div className="flex rounded-full border border-[#e4e6eb] p-1">
@@ -322,18 +669,32 @@ applyTheme({
               </div>
             </div>
             <div className="min-w-0">
-              <FieldLabel>Primary buttons</FieldLabel>
-              <div className="flex rounded-full border border-[#e4e6eb] p-1">
-                {(['ink', 'accent'] as PrimaryStyle[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPrimary(p)}
-                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${primary === p ? 'bg-black text-white' : 'text-[#63666f]'}`}
-                  >
-                    {p}
-                  </button>
-                ))}
+              <FieldLabel>Density + Primary</FieldLabel>
+              <div className="flex gap-2">
+                <div className="flex flex-1 rounded-full border border-[#e4e6eb] p-1">
+                  {(['comfortable', 'compact'] as Density[]).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDensity(d)}
+                      className={`flex-1 min-w-0 rounded-full px-2 py-1.5 text-[11.5px] font-semibold capitalize cursor-pointer truncate ${density === d ? 'bg-black text-white' : 'text-[#63666f]'}`}
+                    >
+                      {d === 'comfortable' ? 'Comfy' : 'Compact'}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-1 rounded-full border border-[#e4e6eb] p-1">
+                  {(['ink', 'accent'] as PrimaryStyle[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPrimary(p)}
+                      className={`flex-1 min-w-0 rounded-full px-2 py-1.5 text-[11.5px] font-semibold capitalize cursor-pointer truncate ${primary === p ? 'bg-black text-white' : 'text-[#63666f]'}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="min-w-0">
@@ -406,21 +767,11 @@ applyTheme({
               <FieldLabel>Your theme, copy-paste</FieldLabel>
               <CodeBlock title="theme.ts" lang="ts" code={themeCode} />
             </div>
-          </div>
-        </section>
-
-        {/* Auth variants playground + gallery */}
-        <SlyxUpProvider publishableKey="pk_test_preview" apiUrl={AUTH_URL}>
-          <div ref={galleryRef} className="space-y-10 min-w-0">
-            <section className="rounded-2xl border border-[#e4e6eb] bg-white p-5 sm:p-6 min-w-0">
-              <h2 className="text-[16px] font-bold tracking-tight">
-                Auth pages playground
-              </h2>
-              <p className="text-[12.5px] text-[#63666f] mt-1 mb-4">
-                Three professional variants. Toggle OAuth and username, pick a
-                layout — previews and code update together.
-              </p>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="min-w-0 sm:col-span-2 xl:col-span-2">
+              <FieldLabel>
+                Auth pages (applies to SignIn + SignUp below)
+              </FieldLabel>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
                 <div className="flex rounded-full border border-[#e4e6eb] p-1 min-w-0">
                   {(['centered', 'split', 'minimal'] as AuthLayout[]).map(
                     (l) => (
@@ -428,7 +779,7 @@ applyTheme({
                         key={l}
                         type="button"
                         onClick={() => setLayout(l)}
-                        className={`rounded-full px-4 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer whitespace-nowrap ${layout === l ? 'bg-black text-white' : 'text-[#63666f]'}`}
+                        className={`rounded-full px-4 py-1.5 text-[12px] font-semibold capitalize cursor-pointer whitespace-nowrap ${layout === l ? 'bg-black text-white' : 'text-[#63666f]'}`}
                       >
                         {l}
                       </button>
@@ -452,135 +803,128 @@ applyTheme({
                   Username
                 </span>
               </div>
-              <div className="mt-4 min-w-0">
-                <CodeBlock
-                  title="auth.tsx — your config, copy-paste"
-                  lang="tsx"
-                  code={authCode}
-                />
-              </div>
-            </section>
-
-            <Section
-              title="SignIn"
-              desc="Email/password + optional OAuth + 2FA challenge. Submitting here talks to the real API, so a random email shows a genuine error state."
-              wide={layout === 'split'}
-              demo={
-                <SignIn
-                  layout={layout}
-                  social={social}
-                  username={username && social ? true : username}
-                />
-              }
-              code={
-                'import { SignIn } from "@slyxup/ui"\n\n<SignIn onSuccess={() => router.push("/dashboard")} />'
-              }
-            />
-
-            <Section
-              title="SignUp"
-              desc="Registration with verification states. The username field is real — passed to signUp when filled."
-              wide={layout === 'split'}
-              demo={
-                <SignUp layout={layout} social={social} username={username} />
-              }
-              code={
-                'import { SignUp } from "@slyxup/ui"\n\n<SignUp onSuccess={() => router.push("/verify")} />'
-              }
-            />
-
-            <Section
-              title="PricingTable"
-              desc="Plans grid with popular badge. Pass real plans from billing — same shape as GET /v1/billing/plans."
-              wide
-              demo={<PricingTable plans={DEMO_PLANS} />}
-              code={
-                'import { PricingTable } from "@slyxup/ui"\n\nconst { plans } = await client.billing.plans.list()\n<PricingTable plans={plans} onSelect={(p) => checkout(p.id)} />'
-              }
-            />
-
-            <Section
-              title="SocialButtons"
-              desc="Google / GitHub OAuth redirect buttons. Clicking leaves for the OAuth start URL."
-              demo={<SocialButtons />}
-              code={
-                'import { SocialButtons } from "@slyxup/ui"\n\n<SocialButtons providers={["google", "github"]} />'
-              }
-            />
-
-            <Section
-              title="ForgotPassword"
-              desc="Reset-email request with cooldown handling."
-              demo={<ForgotPassword />}
-              code={
-                'import { ForgotPassword } from "@slyxup/ui"\n\n<ForgotPassword onBackToSignIn={() => router.push("/sign-in")} />'
-              }
-            />
-
-            <Section
-              title="ResetPassword"
-              desc="Token-based reset (token comes from the email link). Demo token shows the validation flow."
-              demo={<ResetPassword token="demo-token" />}
-              code={
-                'import { ResetPassword } from "@slyxup/ui"\n\n<ResetPassword token={searchParams.token} />'
-              }
-            />
-
-            <Section
-              title="EmailVerification"
-              desc="Without a token it shows the resend form; with ?token it verifies."
-              demo={<EmailVerification />}
-              code={
-                'import { EmailVerification } from "@slyxup/ui"\n\n<EmailVerification token={searchParams.token} />'
-              }
-            />
-
-            <Section
-              title="UserButton"
-              desc="Avatar + dropdown (profile, sign out). Signed out here, so it shows the fallback initial."
-              demo={
-                <div className="flex justify-center py-4">
-                  <UserButton />
-                </div>
-              }
-              code={
-                'import { UserButton } from "@slyxup/ui"\n\n<UserButton onProfileClick={() => setProfileOpen(true)} />'
-              }
-            />
-
-            <Section
-              title="BillingPortal"
-              desc="Current plan + invoices + cancel. Pure props — no session needed."
-              demo={
-                <BillingPortal
-                  subscription={DEMO_SUB}
-                  invoices={DEMO_INVOICES}
-                />
-              }
-              code={
-                'import { BillingPortal } from "@slyxup/ui"\n\nconst { subscription, invoices } = await client.billing.get()\n<BillingPortal subscription={subscription} invoices={invoices} />'
-              }
-            />
-
-            <Section
-              title="UserProfile + AdminPanel"
-              desc="UserProfile renders the full account modal but needs a signed-in session, so it renders nothing here. AdminPanel needs a secret key and makes privileged calls, so it stays code-only on this public page."
-              demo={
-                <div className="text-[12.5px] text-[#63666f] leading-relaxed text-center">
-                  Drop the snippets into an authenticated app to see them live.
-                </div>
-              }
-              code={
-                'import { UserProfile, AdminPanel } from "@slyxup/ui"\n\n<UserProfile modal={false} onClose={() => setOpen(false)} />\n\n<AdminPanel secretKey={process.env.SLYXUP_SECRET_KEY!} />'
-              }
-            />
+            </div>
           </div>
-        </SlyxUpProvider>
+        </section>
 
-        <p className="text-center text-[12px] text-white/45">
-          All components self-inject styles (no CSS import), respect{' '}
-          <span className="font-mono">prefers-reduced-motion</span>, and reflow
-          down to 360px viewports.
+        {/* Sidebar + preview */}
+        <div className="mt-4 flex flex-col lg:flex-row gap-4 items-start min-w-0">
+          <aside className="w-full lg:w-[240px] shrink-0 lg:sticky lg:top-[68px] min-w-0">
+            <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1 min-w-0">
+              {GROUPS.map((g) => (
+                <div key={g.label} className="min-w-0 shrink-0 lg:shrink">
+                  <div className="hidden lg:block px-3 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[0.14em] text-white/35 first:pt-1">
+                    {g.label}
+                  </div>
+                  <div className="flex lg:flex-col gap-1">
+                    {g.items.map((i) => (
+                      <button
+                        key={i.id}
+                        type="button"
+                        onClick={() => setSelected(i.id)}
+                        className={`shrink-0 lg:w-full text-left rounded-lg px-3.5 py-2 text-[13px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+                          selected === i.id
+                            ? 'bg-white text-black'
+                            : 'text-white/55 hover:text-white hover:bg-white/[0.07]'
+                        }`}
+                      >
+                        <span className="font-mono text-[12px]">{i.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+
+          <SlyxUpProvider publishableKey="pk_test_preview" apiUrl={AUTH_URL}>
+            <div ref={galleryRef} className="flex-1 min-w-0 w-full">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-7 min-w-0">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="font-mono text-[15px] font-bold text-white">{`<${item.name} />`}</h2>
+                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-white/55">
+                    {
+                      GROUPS.find((g) => g.items.some((i) => i.id === item.id))
+                        ?.label
+                    }
+                  </span>
+                </div>
+                <p className="text-[13px] text-white/55 mt-1.5 mb-5 leading-relaxed max-w-2xl">
+                  {item.desc}
+                </p>
+                {(item.id === 'signin' || item.id === 'signup') && (
+                  <div className="mb-4 min-w-0">
+                    <CodeBlock
+                      title="auth.tsx — current playground config"
+                      lang="tsx"
+                      code={authCode}
+                    />
+                  </div>
+                )}
+                <div className="demo-frame min-w-0">
+                  <div className="demo-frame-inner min-w-0">
+                    <div className="demo-bar">
+                      <span className="flex gap-1.5">
+                        <i className="block size-2 rounded-full bg-[#ff5f56]" />
+                        <i className="block size-2 rounded-full bg-[#ffbd2e]" />
+                        <i className="block size-2 rounded-full bg-[#27c93f]" />
+                      </span>
+                      <span className="ml-1 truncate">
+                        live preview — {item.name}
+                      </span>
+                      <span className="ml-auto flex items-center gap-1.5 shrink-0">
+                        <span className="size-1.5 rounded-full bg-emerald-500 pulse-dot" />{' '}
+                        interactive
+                      </span>
+                    </div>
+                    <div className="p-4 sm:p-8 overflow-x-auto">
+                      <div
+                        className={`mx-auto min-w-0 ${item.wide || ((item.id === 'signin' || item.id === 'signup') && layout === 'split') ? 'max-w-3xl' : 'max-w-[400px]'}`}
+                      >
+                        <DemoBoundary label={item.name}>
+                          {renderDemo(item)}
+                        </DemoBoundary>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2 min-w-0">
+                  <div className="min-w-0">
+                    <CodeBlock
+                      title={`${item.name}.tsx`}
+                      lang="tsx"
+                      code={item.code}
+                    />
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 min-w-0">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2">
+                      Props
+                    </div>
+                    <dl className="space-y-1.5">
+                      {item.props.map(([n, t, d]) => (
+                        <div key={n} className="flex gap-2 text-[12px] min-w-0">
+                          <dt className="font-mono text-white/85 shrink-0">
+                            {n}
+                          </dt>
+                          <dd className="font-mono text-white/40 truncate">
+                            {t}
+                          </dd>
+                          <dd className="ml-auto font-mono text-white/40 shrink-0">
+                            {d}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </SlyxUpProvider>
+        </div>
+
+        <p className="text-center text-[12px] text-white/40">
+          {ALL_IDS.length} components · self-injecting styles · 360px-safe ·
+          motion-respecting
         </p>
       </div>
     </div>

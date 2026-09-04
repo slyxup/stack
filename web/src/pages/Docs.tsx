@@ -32,6 +32,26 @@ const SECTIONS = [
     label: 'API reference',
     keys: 'endpoints rest users keys projects domains oauth',
   },
+  {
+    id: 'sessions',
+    label: 'Sessions & 2FA',
+    keys: 'cookie session totp authenticator authorize login',
+  },
+  {
+    id: 'webhooks',
+    label: 'Webhooks',
+    keys: 'events paddle user created billing notify endpoint',
+  },
+  {
+    id: 'selfhost',
+    label: 'Self-hosting',
+    keys: 'deploy wrangler d1 secrets dev vars cloudflare',
+  },
+  {
+    id: 'trouble',
+    label: 'Troubleshooting',
+    keys: 'error 401 403 cors faq debug fix',
+  },
   { id: 'cli', label: 'CLI', keys: 'terminal commands shorten' },
   {
     id: 'security',
@@ -178,8 +198,9 @@ await slyxup.billing.checkout({ planId: plans[0].id })
         <>
           <h2>UI kit — @slyxup/ui</h2>
           <p>
-            Eleven drop-in components plus hooks. Styles self-inject; theme with
-            CSS variables on <code className="inline">.slyxup-root</code> (
+            Fifteen drop-in components plus hooks. Styles self-inject; theme
+            with <code className="inline">applyTheme()</code> or CSS variables
+            on <code className="inline">.slyxup-root</code> (
             <code className="inline">--slx-accent</code>,{' '}
             <code className="inline">--slx-radius</code>).
           </p>
@@ -219,6 +240,26 @@ await slyxup.billing.checkout({ planId: plans[0].id })
               <code className="inline">AdminPanel</code> — users, sessions,
               keys, audit (secret key only).
             </li>
+            <li>
+              <code className="inline">PasswordField</code> — password input
+              with reveal toggle.
+            </li>
+            <li>
+              <code className="inline">PasswordStrength</code> (+{' '}
+              <code className="inline">passwordScore()</code>) — strength meter.
+            </li>
+            <li>
+              <code className="inline">OtpInput</code> — one-time-code boxes
+              with paste support.
+            </li>
+            <li>
+              <code className="inline">CopyField</code> — masked value + copy
+              button for keys and secrets.
+            </li>
+            <li>
+              <code className="inline">EmptyState</code> — placeholder for empty
+              lists.
+            </li>
           </ul>
         </>
       )}
@@ -248,12 +289,40 @@ await slyxup.billing.checkout({ planId: plans[0].id })
                 <td>Email + password sign-in, returns session token.</td>
               </tr>
               <tr>
-                <td>GET /v1/users</td>
+                <td>POST /v1/auth/sign-up</td>
+                <td>Register (email, password, optional name/username).</td>
+              </tr>
+              <tr>
+                <td>POST /v1/auth/sign-out</td>
+                <td>End session + clear cookies.</td>
+              </tr>
+              <tr>
+                <td>GET /v1/auth/session</td>
+                <td>Inspect the current session.</td>
+              </tr>
+              <tr>
+                <td>GET /v1/user</td>
                 <td>Current user profile.</td>
               </tr>
               <tr>
-                <td>PATCH /v1/users</td>
+                <td>PATCH /v1/user</td>
                 <td>Update own profile.</td>
+              </tr>
+              <tr>
+                <td>GET /v1/sessions · DELETE /v1/sessions/:id</td>
+                <td>List / revoke my sessions.</td>
+              </tr>
+              <tr>
+                <td>POST /v1/verification/password/forgot</td>
+                <td>Request a password-reset email.</td>
+              </tr>
+              <tr>
+                <td>POST /v1/verification/password/reset</td>
+                <td>Reset with token + new password.</td>
+              </tr>
+              <tr>
+                <td>POST /v1/verification/verify · /resend</td>
+                <td>Verify email / resend the link.</td>
               </tr>
               <tr>
                 <td>GET /v1/projects</td>
@@ -369,6 +438,239 @@ slyxup domains add app.example.com --project-id <id>`}
               <b>Blocked users</b> have all sessions revoked immediately.
             </li>
           </ul>
+        </>
+      )}
+
+      {section === 'sessions' && (
+        <>
+          <h2>Sessions & 2FA</h2>
+          <p>
+            Sessions live in two cookies:{' '}
+            <code className="inline">slyxup_session</code> plus the host-only{' '}
+            <code className="inline">__Host-slyxup_session</code> (preferred —
+            it cannot leak across subdomains). SDKs may also send the token as{' '}
+            <code className="inline">Authorization: Bearer</code>, which wins
+            over cookies.
+          </p>
+          <h3>Session endpoints</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Method + path</th>
+                <th>What it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>POST /v1/auth/sign-in</td>
+                <td>
+                  Start a session. Step-up accounts get a challenge token
+                  instead.
+                </td>
+              </tr>
+              <tr>
+                <td>POST /v1/auth/sign-in/2fa</td>
+                <td>Complete sign-in with the 6-digit authenticator code.</td>
+              </tr>
+              <tr>
+                <td>POST /v1/auth/sign-out</td>
+                <td>End the current session + clear cookies.</td>
+              </tr>
+              <tr>
+                <td>GET /v1/auth/session</td>
+                <td>Inspect the current session (id, expiry, user).</td>
+              </tr>
+              <tr>
+                <td>GET /v1/sessions</td>
+                <td>List my active sessions across devices.</td>
+              </tr>
+              <tr>
+                <td>DELETE /v1/sessions/:id</td>
+                <td>Revoke one session (log out that device).</td>
+              </tr>
+            </tbody>
+          </table>
+          <h3>Two-factor (TOTP)</h3>
+          <p>
+            Users enable 2FA from{' '}
+            <code className="inline">UserProfile → Security</code> or via API:{' '}
+            <code className="inline">GET /v1/user/2fa/setup</code> returns a
+            secret + provisioning URI,{' '}
+            <code className="inline">POST /v1/user/2fa/enable</code> confirms it
+            with a code and returns recovery codes.{' '}
+            <code className="inline">/v1/user/2fa/verify</code> checks a code
+            without changing state;{' '}
+            <code className="inline">/v1/user/2fa/disable</code> turns it off.
+          </p>
+          <CodeBlock
+            title="2fa.ts"
+            lang="ts"
+            code={`// after POST /v1/auth/sign-in returns { challengeToken }
+await client.auth.completeSignIn({ challengeToken, code: "123456" })`}
+          />
+        </>
+      )}
+
+      {section === 'webhooks' && (
+        <>
+          <h2>Webhooks</h2>
+          <p>
+            Two webhook streams exist — don't mix them up. <b>Auth events</b>{' '}
+            fire from the identity worker when users change;{' '}
+            <b>Paddle events</b> land on the billing worker and update
+            subscriptions.
+          </p>
+          <h3>Auth events</h3>
+          <ul>
+            <li>
+              <code className="inline">user.created</code> — after sign-up +
+              verification
+            </li>
+            <li>
+              <code className="inline">user.updated</code> — profile, role or
+              block-state change
+            </li>
+            <li>
+              <code className="inline">user.deleted</code> — user removed from a
+              project
+            </li>
+            <li>
+              <code className="inline">user.signed_in</code> /{' '}
+              <code className="inline">user.signed_out</code> — session
+              lifecycle
+            </li>
+            <li>
+              <code className="inline">session.revoked</code> — a session was
+              revoked
+            </li>
+            <li>
+              <code className="inline">password.changed</code> /{' '}
+              <code className="inline">password.reset</code> — credential
+              changes
+            </li>
+            <li>
+              <code className="inline">email.verified</code> — address confirmed
+            </li>
+            <li>
+              <code className="inline">oauth.linked</code> /{' '}
+              <code className="inline">oauth.unlinked</code> — provider
+              connections
+            </li>
+            <li>
+              <code className="inline">2fa.enabled</code> /{' '}
+              <code className="inline">2fa.disabled</code> — two-factor changes
+            </li>
+          </ul>
+          <p>
+            Configure a project webhook URL and each event POSTs a signed JSON
+            payload. Always verify the signature with your{' '}
+            <code className="inline">sk_…</code> secret, respond{' '}
+            <code className="inline">200</code> fast, and do heavy work after
+            responding.
+          </p>
+          <h3>Billing (Paddle) events</h3>
+          <p>
+            Paddle sends subscription lifecycle events to{' '}
+            <code className="inline">billing.slyxup.online</code>, which is the
+            sole owner of plans, subscriptions and invoices. The auth database
+            is never written by billing — it only reads sessions through a
+            read-only binding.
+          </p>
+        </>
+      )}
+
+      {section === 'selfhost' && (
+        <>
+          <h2>Self-hosting</h2>
+          <p>
+            Everything runs on Cloudflare: Workers for compute, D1 (SQLite) for
+            data, KV for sessions/cache, R2 for blobs. You need a Cloudflare
+            account and <code className="inline">wrangler</code>.
+          </p>
+          <h3>1. Backend (auth worker)</h3>
+          <CodeBlock
+            title="bash"
+            lang="bash"
+            code={`cd auth
+cp .env.example .dev.vars
+# put your D1/KV ids in wrangler.jsonc (wrangler d1 create slyxup_auth)
+pnpm db:generate && pnpm db:migrate:local
+wrangler secret put SESSION_SECRET
+wrangler dev    # or: wrangler deploy`}
+          />
+          <h3>2. First admin</h3>
+          <p>
+            With an empty users table, claim the admin via{' '}
+            <code className="inline">POST /v1/setup/bootstrap</code> (optionally
+            gated by <code className="inline">BOOTSTRAP_SECRET</code> and
+            restricted to <code className="inline">BOOTSTRAP_ADMIN_EMAIL</code>
+            ). Check <code className="inline">GET /v1/setup/status</code> first.
+          </p>
+          <h3>3. This admin panel (web)</h3>
+          <CodeBlock
+            title="bash"
+            lang="bash"
+            code={`cd web
+cp .env.example .env   # VITE_API_URL → your auth worker URL
+pnpm install && pnpm build
+wrangler pages deploy dist --project-name=my-panel --branch main`}
+          />
+          <h3>Secrets, never files</h3>
+          <p>
+            <code className="inline">SESSION_SECRET</code>,{' '}
+            <code className="inline">BILLING_ADMIN_SECRET</code> and Paddle keys
+            go through <code className="inline">wrangler secret put</code> only
+            — never into <code className="inline">wrangler.jsonc</code>,{' '}
+            <code className="inline">.env</code> or git. Local dev uses
+            gitignored <code className="inline">.dev.vars</code>.
+          </p>
+        </>
+      )}
+
+      {section === 'trouble' && (
+        <>
+          <h2>Troubleshooting</h2>
+          <h3>401 Unauthorized on every call</h3>
+          <p>
+            No session token sent. Sign in again — the SDK stores it as{' '}
+            <code className="inline">slyxup_session_token</code> (or the
+            HttpOnly cookie). Expired sessions return 401: refresh by signing
+            in, then retry once.
+          </p>
+          <h3>403 Forbidden on a project route</h3>
+          <p>
+            Your developer account is not a member of that project. Ask the
+            project owner to add you, or use a key created inside the project.
+          </p>
+          <h3>Browser calls rejected (CORS / origin)</h3>
+          <p>
+            The origin must be listed under Project → Domains, and browser calls
+            must use a <code className="inline">pk_…</code> key —{' '}
+            <code className="inline">sk_…</code> keys are rejected from browsers
+            by design.
+          </p>
+          <h3>“Invalid or expired link” (verify / reset)</h3>
+          <p>
+            Tokens are single-use and expire. Request a fresh link (resend),
+            open it in the same browser, and complete it within the window shown
+            in the email.
+          </p>
+          <h3>Password change forced at login</h3>
+          <p>
+            First-login admins carry{' '}
+            <code className="inline">mustChangePassword</code>. Complete{' '}
+            <code className="inline">POST /v1/auth/password/force-change</code>{' '}
+            once — the flag clears and normal sign-in resumes.
+          </p>
+          <h3>Still stuck?</h3>
+          <p>
+            Reproduce with <code className="inline">curl -v</code> and check the
+            status + <code className="inline">error</code> field. Every API
+            error returns{' '}
+            <code className="inline">{`{ ok: false, error: "..." }`}</code> —
+            paste it into an issue at{' '}
+            <code className="inline">github.com/slyxup/stack</code>.
+          </p>
         </>
       )}
     </div>
