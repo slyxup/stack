@@ -228,6 +228,7 @@ Build your own UI on live data (no components required):
 import {
   usePlans,         // plans for a project
   useSubscription,  // active subscription (pass YOUR projectId!)
+  useSubscriptions, // all subscriptions when projectId is unknown
   useInvoices,      // invoice history
   useCheckout,      // checkout(planId, { origin }) → opens Paddle
   useTransaction,   // verify a transaction: { paid, status }
@@ -240,7 +241,23 @@ await checkout(plan.id, { origin: 'https://your-app.com/billing/done' });
 ```
 
 > Always pass your own `projectId` to `useSubscription` — subscriptions are
-> scoped per project, and omitting it returns `null`.
+> scoped per project, and omitting it returns `null`. No single projectId?
+> Use `useSubscriptions()` and pick the active one.
+
+### `<CheckoutButton />` — one-line subscribe
+
+```tsx
+import { CheckoutButton } from '@slyxup/ui';
+
+<CheckoutButton
+  planId={plan.id}
+  origin="https://your-app.com/billing/done"
+  theme={{ accent: '#7c3aed' }}
+  onSuccess={({ transactionId }) => verify(transactionId)}
+>
+  Upgrade to Pro
+</CheckoutButton>
+```
 
 ### `<AdminPanel />` — admin dashboard with sk key
 

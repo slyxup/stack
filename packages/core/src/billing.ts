@@ -219,6 +219,23 @@ export class BillingClient {
     await this.req(`/v1/billing/subscription/cancel${qs}`, { method: 'POST' });
   }
 
+  /** Undo a scheduled cancellation so the subscription renews normally. */
+  async resumeSubscription(projectId?: string): Promise<void> {
+    const qs = projectId ? `?projectId=${projectId}` : '';
+    await this.req(`/v1/billing/subscription/resume${qs}`, { method: 'POST' });
+  }
+
+  /**
+   * All non-canceled subscriptions for the session user, across projects.
+   * Use this when the UI doesn't know a single projectId upfront.
+   */
+  async listSubscriptions(): Promise<Subscription[]> {
+    const res = await this.req<{ ok: true; subscriptions: Subscription[] }>(
+      '/v1/billing/subscription'
+    );
+    return res.subscriptions;
+  }
+
   async listInvoices(): Promise<Invoice[]> {
     const res = await this.req<{ ok: true; invoices: Invoice[] }>(
       '/v1/billing/invoices'

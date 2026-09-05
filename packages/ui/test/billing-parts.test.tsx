@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import React from 'react';
 
 import { PlanCard } from '../src/components/PlanCard/PlanCard';
@@ -8,6 +9,8 @@ import { InvoicesTable } from '../src/components/InvoicesTable/InvoicesTable';
 import { SubscriptionStatus } from '../src/components/SubscriptionStatus/SubscriptionStatus';
 import { PricingTable } from '../src/components/PricingTable/PricingTable';
 import { BillingPortal } from '../src/components/BillingPortal/BillingPortal';
+import { CheckoutButton } from '../src/components/CheckoutButton/CheckoutButton';
+import { useSubscriptions } from '../src/react/hooks/useBilling';
 
 const plan = {
   id: 'plan_free',
@@ -123,8 +126,7 @@ describe('PricingTable', () => {
   });
 });
 
-describe('BillingPortal', () => {
-  it('shows empty state and no invoices', () => {
+describe('BillingPortal', () => {  it('shows empty state and no invoices', () => {
     render(<BillingPortal subscription={null} invoices={[]} />);
     expect(screen.getByText(/no active subscription/i)).toBeTruthy();
   });
@@ -142,5 +144,46 @@ describe('BillingPortal', () => {
       />
     );
     expect(screen.getByText('active')).toBeTruthy();
+  });
+});
+
+describe('CheckoutButton', () => {
+  it('renders default and custom labels', () => {
+    const { unmount } = render(<CheckoutButton planId="plan_1" />);
+    expect(
+      screen.getByRole('button', { name: /subscribe/i })
+    ).toBeTruthy();
+    unmount();
+    render(<CheckoutButton planId="plan_1">Buy Pro</CheckoutButton>);
+    expect(screen.getByRole('button', { name: /buy pro/i })).toBeTruthy();
+  });
+
+  it('respects disabled', () => {
+    render(
+      <CheckoutButton planId="plan_1" disabled>
+        Buy
+      </CheckoutButton>
+    );
+    expect(
+      (screen.getByRole('button', { name: /buy/i }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+  });
+});
+
+describe('useSubscriptions', () => {
+  it('returns empty list when billing is unreachable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      () => Promise.reject(new Error('offline')) as Promise<Response>
+    );
+    try {
+      const { result } = renderHook(() => useSubscriptions());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.subscriptions).toEqual([]);
+      expect(typeof result.current.error).toBe('string');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

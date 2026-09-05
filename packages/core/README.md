@@ -125,8 +125,10 @@ try {
 | `billing.checkout(planId, { origin })` | POST | `/v1/billing/checkout` |
 | `billing.getTransaction(txnId)` | GET | `/v1/billing/transactions/:id` |
 | `billing.getSubscription(projectId?)` | GET | `/v1/billing/subscription` |
+| `billing.listSubscriptions()` | GET | `/v1/billing/subscription` (all) |
 | `billing.getEntitlements(projectId)` | GET | `/v1/billing/entitlements` |
 | `billing.cancelSubscription(projectId?)` | POST | `/v1/billing/subscription/cancel` |
+| `billing.resumeSubscription(projectId?)` | POST | `/v1/billing/subscription/resume` |
 | `billing.listInvoices()` | GET | `/v1/billing/invoices` |
 
 ## Framework wrappers

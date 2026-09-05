@@ -130,6 +130,36 @@ export interface TransactionStatus {
 }
 
 /**
+ * All non-canceled subscriptions for the session user, across projects.
+ * Prefer this over useSubscription when the UI doesn't know a single
+ * projectId upfront (multi-project platforms).
+ */
+export function useSubscriptions(apiUrl?: string) {
+  const { client } = useBilling(apiUrl);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const list = await client.listSubscriptions();
+      setSubscriptions(list);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { subscriptions, loading, error, reload };
+}
+
+/**
  * Verify a checkout transaction with Paddle — headless building block for
  * custom success screens. `paid` is true only for completed transactions.
  */
