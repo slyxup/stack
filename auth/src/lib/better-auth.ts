@@ -11,9 +11,10 @@ export function createBetterAuth(env: {
   DB: D1Database;
   KV: KVNamespace;
   BETTER_AUTH_SECRET?: string;
+  SESSION_SECRET?: string;
   APP_URL?: string;
 }) {
-  const db = getDb(env as any);
+  const db = getDb(env);
 
   return betterAuth({
     database: drizzleAdapter(db, {
@@ -31,7 +32,7 @@ export function createBetterAuth(env: {
         maxAge: 7 * 24 * 60 * 60, // 7 days
       },
     },
-    secret: env.BETTER_AUTH_SECRET || (env as any).SESSION_SECRET,
+    secret: env.BETTER_AUTH_SECRET || env.SESSION_SECRET,
     baseURL: env.APP_URL || 'http://localhost:8787',
     plugins: [
       twoFactor({

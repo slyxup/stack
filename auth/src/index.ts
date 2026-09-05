@@ -27,6 +27,7 @@ import * as ProjectService from './services/project.service';
 
 type Bindings = {
   DB: D1Database;
+  BILLING_DB: D1Database;
   KV: KVNamespace;
   SESSION_SECRET: string;
   ENCRYPTION_KEY: string;
@@ -190,7 +191,7 @@ app.get('/v1/health', (c) =>
 
 // Better-auth handler (audited, Argon2id, 2FA, admin) — mounted at /api/auth/*
 app.all('/api/auth/*', async (c) => {
-  const auth = createBetterAuth(c.env as any);
+  const auth = createBetterAuth(c.env);
   return auth.handler(c.req.raw);
 });
 
