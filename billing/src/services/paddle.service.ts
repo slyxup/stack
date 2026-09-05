@@ -141,7 +141,9 @@ export async function createPaddleProduct(
   });
 }
 
-/** Create a recurring price in Paddle for a product */
+/** Create a recurring price in Paddle for a product.
+ *  Quantity is locked to exactly 1 — subscriptions are per-seat; the
+ *  checkout stepper must never let buyers multiply their bill. */
 export async function createPaddlePrice(
   config: PaddleConfig,
   productId: string,
@@ -160,6 +162,7 @@ export async function createPaddlePrice(
       interval: interval === 'month' ? 'month' : 'year',
       frequency: 1,
     },
+    quantity: { minimum: 1, maximum: 1 },
     tax_mode: 'account_setting',
   });
 }
