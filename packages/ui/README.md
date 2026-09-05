@@ -184,8 +184,19 @@ import {
 <CurrentPlanCard
   subscription={subscription}   // null = free tier empty state
   onCancel={cancelSubscription}
+  onResume={resumeSubscription} // shown when cancellation is scheduled
   theme={{ accent: 'emerald' }}
 />
+
+// subscription display fields (status required, rest optional):
+// { planName?, status, currentPeriodEnd, currentPeriodStart?,
+//   cancelAtPeriodEnd, amount? (cents), currency?, interval?,
+//   paymentMethod? ("Visa •••• 4242") }
+// → price line, days-left progress, renew/billed meta, trial note,
+//   scheduled-cancellation warning + Resume render automatically.
+
+// Invoices with paid total + status pills:
+<InvoicesTable invoices={invoices} showTotal />   // null when empty
 
 // Fully custom pricing section:
 {plans.map((p) => (

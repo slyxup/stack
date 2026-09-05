@@ -84,6 +84,35 @@ describe('CurrentPlanCard', () => {
     );
     expect(screen.queryByRole('button', { name: /cancel/i })).toBeNull();
   });
+
+  it('shows price, progress and resume when scheduled', () => {
+    const start = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const end = new Date(Date.now() + 25 * 86_400_000).toISOString();
+    const onResume = () => {};
+    render(
+      <CurrentPlanCard
+        subscription={{
+          planName: 'Scale',
+          status: 'active',
+          currentPeriodStart: start,
+          currentPeriodEnd: end,
+          cancelAtPeriodEnd: true,
+          amount: 1900,
+          currency: 'USD',
+          interval: 'month',
+          paymentMethod: 'Visa •••• 4242',
+        }}
+        onCancel={() => {}}
+        onResume={onResume}
+      />
+    );
+    expect(screen.getByText(/cancellation scheduled/i)).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /resume plan/i })
+    ).toBeTruthy();
+    expect(screen.getByText(/visa/i)).toBeTruthy();
+    expect(screen.getByText(/days left in this period/i)).toBeTruthy();
+  });
 });
 
 describe('InvoicesTable', () => {
@@ -108,6 +137,25 @@ describe('InvoicesTable', () => {
     );
     expect(screen.getByText(/invoices/i)).toBeTruthy();
     expect(screen.getByText('paid')).toBeTruthy();
+    expect(screen.getByText(/total paid/i)).toBeTruthy();
+  });
+
+  it('hides total when showTotal is false', () => {
+    render(
+      <InvoicesTable
+        showTotal={false}
+        invoices={[
+          {
+            id: 'in_1',
+            amount: 1900,
+            currency: 'USD',
+            status: 'paid',
+            billedAt: null,
+          },
+        ]}
+      />
+    );
+    expect(screen.queryByText(/total paid/i)).toBeNull();
   });
 });
 

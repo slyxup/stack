@@ -26,10 +26,24 @@ function toneFor(status: string): {
         color: '#34d399',
         live: true,
       };
+    case 'paid':
+      return {
+        background: 'rgba(52,211,153,.12)',
+        color: '#34d399',
+        live: false,
+      };
     case 'past_due':
+    case 'overdue':
+    case 'failed':
       return {
         background: 'rgba(214,69,80,.1)',
         color: 'var(--slx-danger)',
+        live: false,
+      };
+    case 'pending':
+      return {
+        background: 'rgba(217,119,6,.12)',
+        color: '#d97706',
         live: false,
       };
     default:
