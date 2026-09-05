@@ -220,6 +220,13 @@ Three levels, weakest first:
 />
 ```
 
+Shared utility classes (auto-injected stylesheet, theme-aware):
+`slx-card-hover` (lift on hover) · `slx-card-featured` (accent ring glow) ·
+`slx-badge-float` / `slx-badge-current` (floating pills) · `slx-skeleton`
+(shimmer loading block) · `slx-dot` + `slx-dot-live` (pulsing status dot) ·
+`slx-spinner` · `slx-rise-1/2/3` (staggered entrances) · `slx-row-hover` ·
+`slx-price` (gradient display price). Honor `prefers-reduced-motion`.
+
 ### Headless billing hooks — real data for custom designs
 
 Build your own UI on live data (no components required):

@@ -51,14 +51,34 @@ export function PricingTable({
     return (
       <>
         <style>{PRICING_GRID_CSS}</style>
-        <div ref={ref} className={gridClass} style={style}>
+        <div ref={ref} className={gridClass} style={style} aria-busy="true">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="slx-card"
-              style={{ minHeight: 320 }}
-              aria-busy="true"
-            />
+            <div key={i} className="slx-card" style={{ minHeight: 320 }}>
+              <div
+                className="slx-skeleton"
+                style={{ height: 18, width: '45%' }}
+              />
+              <div
+                className="slx-skeleton"
+                style={{ height: 40, width: '60%', marginTop: 14 }}
+              />
+              <div
+                className="slx-skeleton"
+                style={{ height: 12, width: '80%', marginTop: 18 }}
+              />
+              <div
+                className="slx-skeleton"
+                style={{ height: 12, width: '70%', marginTop: 10 }}
+              />
+              <div
+                className="slx-skeleton"
+                style={{ height: 12, width: '75%', marginTop: 10 }}
+              />
+              <div
+                className="slx-skeleton"
+                style={{ height: 40, marginTop: 26 }}
+              />
+            </div>
           ))}
         </div>
       </>
@@ -69,7 +89,7 @@ export function PricingTable({
     <>
       <style>{PRICING_GRID_CSS}</style>
       <div ref={ref} className={gridClass} style={style}>
-        {plans.map((plan) => (
+        {plans.map((plan, i) => (
           <PlanCard
             key={plan.id}
             plan={plan}
@@ -78,6 +98,7 @@ export function PricingTable({
             ctaLabel={ctaLabel}
             onSelect={onSelect}
             loading={loading}
+            className={i < 3 ? `slx-rise-${i + 1}` : undefined}
           />
         ))}
       </div>

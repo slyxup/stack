@@ -16,22 +16,32 @@ export interface SubscriptionStatusProps {
 function toneFor(status: string): {
   background: string;
   color: string;
+  live: boolean;
 } {
   switch (status) {
     case 'active':
     case 'trialing':
-      return { background: 'rgba(52,211,153,.12)', color: '#34d399' };
+      return {
+        background: 'rgba(52,211,153,.12)',
+        color: '#34d399',
+        live: true,
+      };
     case 'past_due':
-      return { background: 'rgba(214,69,80,.1)', color: 'var(--slx-danger)' };
+      return {
+        background: 'rgba(214,69,80,.1)',
+        color: 'var(--slx-danger)',
+        live: false,
+      };
     default:
       return {
         background: 'var(--slx-accent-soft)',
         color: 'var(--slx-muted)',
+        live: false,
       };
   }
 }
 
-/** Tiny status pill — use anywhere you show plan state. */
+/** Tiny status pill with a (pulsing, when live) dot. */
 export function SubscriptionStatus({
   status,
   theme,
@@ -55,6 +65,7 @@ export function SubscriptionStatus({
         ...style,
       }}
     >
+      <span className={`slx-dot${tone.live ? ' slx-dot-live' : ''}`} />
       {status}
     </span>
   );

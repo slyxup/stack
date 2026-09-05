@@ -57,6 +57,7 @@ export function InvoicesTable({
           {invoices.map((inv) => (
             <tr
               key={inv.id}
+              className="slx-row-hover"
               style={{ borderBottom: '1px solid var(--slx-border)' }}
             >
               <td style={{ padding: '8px 0' }}>

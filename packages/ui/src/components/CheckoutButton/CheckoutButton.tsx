@@ -68,7 +68,14 @@ export function CheckoutButton({
           );
         }}
       >
-        {loading ? 'Opening checkout…' : (children ?? 'Subscribe')}
+        {loading ? (
+          <>
+            <span className="slx-spinner" aria-hidden="true" />
+            Opening checkout…
+          </>
+        ) : (
+          (children ?? 'Subscribe')
+        )}
       </button>
       {error && !loading && (
         <p

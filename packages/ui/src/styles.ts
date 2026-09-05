@@ -921,6 +921,93 @@ export const CSS = `
   .slx-profile-head { padding: 12px 12px 10px; }
   .slx-profile-title { font-size: 16px; }
 }
+
+/* ── Modern richness layer: motion, shimmer, glow, status ── */
+@keyframes slx-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes slx-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .55; transform: scale(.82); }
+}
+@keyframes slx-pop-in {
+  from { opacity: 0; transform: scale(.92) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+/* Shimmer skeleton block — loading states that feel alive. */
+.slx-skeleton {
+  border-radius: var(--slx-radius);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--slx-ink) 7%, transparent) 25%,
+    color-mix(in srgb, var(--slx-ink) 13%, transparent) 37%,
+    color-mix(in srgb, var(--slx-ink) 7%, transparent) 63%
+  );
+  background-size: 800px 100%;
+  animation: slx-shimmer 1.4s ease-in-out infinite;
+}
+/* Lift-on-hover for interactive cards (pricing, plans). */
+.slx-card-hover {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.slx-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--slx-shadow-pop);
+}
+/* Accent ring glow for featured/popular cards. */
+.slx-card-featured {
+  border: 1.5px solid var(--slx-accent);
+  box-shadow:
+    0 0 0 3px var(--slx-accent-soft),
+    var(--slx-shadow-card);
+}
+/* Floating badge (popular / current-plan). */
+.slx-badge-float {
+  position: absolute; top: -11px; right: 20px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  font-family: var(--slx-mono);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12), color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12));
+  color: #fff; padding: 3px 10px; border-radius: 999px;
+  box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--slx-accent) 55%, transparent);
+  animation: slx-pop-in .3s cubic-bezier(.22,.9,.32,1.2) both;
+}
+/* Current-plan badge (success tint). */
+.slx-badge-current {
+  position: absolute; top: -11px; right: 20px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  font-family: var(--slx-mono);
+  background: linear-gradient(135deg, #059669, #34d399);
+  color: #fff; padding: 3px 10px; border-radius: 999px;
+  box-shadow: 0 4px 12px -2px rgba(5,150,105,.5);
+  animation: slx-pop-in .3s cubic-bezier(.22,.9,.32,1.2) both;
+}
+/* Pulsing status dot. */
+.slx-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor; margin-right: 6px; vertical-align: 1px;
+}
+.slx-dot-live { animation: slx-pulse-dot 1.8s ease-in-out infinite; }
+/* Inline spinner for buttons. */
+.slx-spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: slx-spin .7s linear infinite; flex-shrink: 0;
+}
+/* Staggered entrances for grids. */
+.slx-rise-1 { animation: slx-rise .38s cubic-bezier(.22,.9,.32,1) both; animation-delay: .04s; }
+.slx-rise-2 { animation: slx-rise .38s cubic-bezier(.22,.9,.32,1) both; animation-delay: .1s; }
+.slx-rise-3 { animation: slx-rise .38s cubic-bezier(.22,.9,.32,1) both; animation-delay: .16s; }
+/* Table row hover. */
+.slx-row-hover { transition: background .12s ease; }
+.slx-row-hover:hover { background: var(--slx-bg-subtle); }
+/* Gradient display price. */
+.slx-price {
+  font-size: 38px; font-weight: 750; letter-spacing: -0.03em;
+  font-family: var(--slx-display);
+  background: linear-gradient(180deg, var(--slx-ink-strong), var(--slx-ink));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 `;
 
 let injected = false;

@@ -49,47 +49,23 @@ export function PlanCard({
   return (
     <div
       ref={ref}
-      className={`slx-card${plan.isPopular ? ' slx-card-popular' : ''} ${className ?? ''}`}
+      className={`slx-card slx-card-hover${plan.isPopular && !current ? ' slx-card-featured' : ''} ${className ?? ''}`}
       style={{
-        position: plan.isPopular ? 'relative' : undefined,
-        borderColor: plan.isPopular ? 'var(--slx-accent)' : undefined,
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         ...style,
       }}
     >
-      {plan.isPopular && (
-        <span
-          style={{
-            position: 'absolute',
-            top: -11,
-            right: 20,
-            fontSize: 10.5,
-            fontFamily: 'var(--slx-mono)',
-            background:
-              'linear-gradient(135deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12), color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12))',
-            color: '#fff',
-            padding: '3px 10px',
-            borderRadius: 999,
-          }}
-        >
-          {popularBadgeText}
-        </span>
+      {plan.isPopular && !current && (
+        <span className="slx-badge-float">{popularBadgeText}</span>
       )}
+      {current && <span className="slx-badge-current">{currentLabel}</span>}
       <h3 style={{ fontSize: 15, fontWeight: 550, color: 'var(--slx-muted)' }}>
         {plan.name}
       </h3>
       <div style={{ margin: '8px 0 2px' }}>
-        <span
-          style={{
-            fontSize: 38,
-            fontWeight: 750,
-            letterSpacing: '-0.03em',
-            fontFamily: 'var(--slx-display)',
-          }}
-        >
-          ${(plan.amount / 100).toFixed(0)}
-        </span>
+        <span className="slx-price">${(plan.amount / 100).toFixed(0)}</span>
         <span style={{ fontSize: 14, color: 'var(--slx-muted)' }}>
           /{plan.interval}
         </span>
