@@ -6,7 +6,7 @@ const mockSignIn = vi.fn().mockResolvedValue({ ok: true });
 const mockSignUp = vi.fn().mockResolvedValue({ ok: true });
 const mockSignOut = vi.fn().mockResolvedValue({ ok: true });
 
-vi.mock('@slyxup/react', () => ({
+vi.mock('../src/react/hooks/useAuth', () => ({
   useAuth: () => ({
     isLoaded: true,
     isSignedIn: false,
@@ -16,6 +16,8 @@ vi.mock('@slyxup/react', () => ({
     signUp: mockSignUp,
     signOut: mockSignOut,
   }),
+}));
+vi.mock('../src/react/hooks/useUser', () => ({
   useUser: () => ({
     isLoaded: true,
     isSignedIn: false,
@@ -47,7 +49,7 @@ describe('SignIn', () => {
   it('renders email and password inputs', () => {
     render(<SignIn />);
     expect(screen.getByLabelText(/email/i)).toBeTruthy();
-    expect(screen.getByLabelText(/password/i)).toBeTruthy();
+    expect(screen.getByLabelText(/^password$/i)).toBeTruthy();
   });
 
   it('renders submit button', () => {
@@ -70,7 +72,7 @@ describe('SignIn', () => {
   it('calls signIn on form submit', async () => {
     render(<SignIn />);
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'a@b.com' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: '12345678' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: '12345678' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
     await waitFor(() => expect(mockSignIn).toHaveBeenCalledWith({ email: 'a@b.com', password: '12345678' }));
   });
@@ -94,7 +96,7 @@ describe('SignUp', () => {
     render(<SignUp />);
     expect(screen.getByLabelText(/first name/i)).toBeTruthy();
     expect(screen.getByLabelText(/email/i)).toBeTruthy();
-    expect(screen.getByLabelText(/password/i)).toBeTruthy();
+    expect(screen.getByLabelText(/^password$/i)).toBeTruthy();
   });
 
   it('shows social buttons by default', () => {
