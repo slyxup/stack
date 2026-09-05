@@ -167,6 +167,81 @@ const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' }
 
 Shows current plan, status, renewal date, invoice history, and an optional cancel action.
 
+### Granular billing parts — compose your own layouts
+
+Don't need the whole portal? Use the parts directly (same props style on each:
+`theme?`, `style?`, `className?`):
+
+```tsx
+import {
+  PlanCard,            // single pricing card (PricingTable renders these)
+  CurrentPlanCard,     // "your plan" card, incl. free-tier empty state
+  InvoicesTable,       // invoice history (renders null when empty)
+  SubscriptionStatus,  // tiny status pill
+} from '@slyxup/ui';
+
+// Settings page with only the current plan:
+<CurrentPlanCard
+  subscription={subscription}   // null = free tier empty state
+  onCancel={cancelSubscription}
+  theme={{ accent: 'emerald' }}
+/>
+
+// Fully custom pricing section:
+{plans.map((p) => (
+  <PlanCard
+    key={p.id}
+    plan={p}
+    current={p.id === currentPlanId}
+    onSelect={(plan) => checkout(plan.id)}
+  />
+))}
+```
+
+### Theming every component
+
+Three levels, weakest first:
+
+1. **Global** — `applyTheme({ accent: 'violet', mode: 'dark', radius: 12 })`
+   (or raw `--slx-*` CSS variables on `:root`).
+2. **Per-component** — `theme={{ accent: '#7c3aed', mode: 'dark' }}` on any
+   billing component. Scoped to that subtree via `slyxup-root`; siblings and
+   the host app are untouched. `accent` accepts a preset name (`mono`,
+   `violet`, `blue`, `emerald`, `amber`, `rose`, `cyan`) or any CSS color.
+3. **Escape hatches** — every component also takes `style?` and `className?`
+   (e.g. `style={{ background: '#0a0a0f' }}` for full background control).
+
+```tsx
+// Dark dashboard card matching your brand:
+<CurrentPlanCard
+  subscription={subscription}
+  theme={{ accent: '#7c3aed', mode: 'dark', radius: 14 }}
+  style={{ background: '#0a0a0f', border: '1px solid #1f1f2a' }}
+/>
+```
+
+### Headless billing hooks — real data for custom designs
+
+Build your own UI on live data (no components required):
+
+```tsx
+import {
+  usePlans,         // plans for a project
+  useSubscription,  // active subscription (pass YOUR projectId!)
+  useInvoices,      // invoice history
+  useCheckout,      // checkout(planId, { origin }) → opens Paddle
+  useTransaction,   // verify a transaction: { paid, status }
+} from '@slyxup/ui';
+
+const { plans } = usePlans(projectId);
+const { subscription, reload } = useSubscription(projectId);
+const { checkout } = useCheckout();
+await checkout(plan.id, { origin: 'https://your-app.com/billing/done' });
+```
+
+> Always pass your own `projectId` to `useSubscription` — subscriptions are
+> scoped per project, and omitting it returns `null`.
+
 ### `<AdminPanel />` — admin dashboard with sk key
 
 A full-featured, responsive admin panel for managing users, sessions, and API keys using a **secret key** (`sk_test_xxx` / `sk_live_xxx`).

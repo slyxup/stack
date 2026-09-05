@@ -31,7 +31,7 @@
     "react": "^18 || ^19"
   },
   "dependencies": {
-    "@slyxup/core": "^2.0.0"
+    "@slyxup/core": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.0",

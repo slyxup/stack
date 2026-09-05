@@ -44,6 +44,9 @@ export {
   useSubscription,
   useInvoices,
   useCheckout,
+  useTransaction,
+  type CheckoutHookOptions,
+  type TransactionStatus,
 } from './react/hooks/useBilling';
 
 export { SignIn, type SignInProps } from './components/SignIn/SignIn';
@@ -88,11 +91,34 @@ export {
 export {
   BillingPortal,
   type BillingPortalProps,
+  type PortalSubscription,
 } from './components/BillingPortal/BillingPortal';
 export {
   PricingTable,
   type PricingTableProps,
+  type PricingPlan,
 } from './components/PricingTable/PricingTable';
+// Granular billing parts — compose your own layouts without the full portal.
+export {
+  PlanCard,
+  type PlanCardProps,
+  type PlanCardPlan,
+} from './components/PlanCard/PlanCard';
+export {
+  CurrentPlanCard,
+  type CurrentPlanCardProps,
+  type CurrentPlanSubscription,
+  type CurrentPlanCardLabels,
+} from './components/CurrentPlanCard/CurrentPlanCard';
+export {
+  InvoicesTable,
+  type InvoicesTableProps,
+  type InvoiceRow,
+} from './components/InvoicesTable/InvoicesTable';
+export {
+  SubscriptionStatus,
+  type SubscriptionStatusProps,
+} from './components/SubscriptionStatus/SubscriptionStatus';
 export {
   AdminPanel,
   type AdminPanelProps,

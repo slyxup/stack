@@ -52,8 +52,13 @@ export function useSubscription(
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!projectId) {
+      setSubscription(null);
+      setLoading(false);
+      return;
+    }
     try {
-      const sub = await client.getSubscription();
+      const sub = await client.getSubscription(projectId);
       setSubscription(sub);
       setError(null);
     } catch (e) {
@@ -61,7 +66,7 @@ export function useSubscription(
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, [client, projectId]);
 
   useEffect(() => {
     void reload();
@@ -86,19 +91,27 @@ export function useInvoices(apiUrl?: string) {
   return { invoices, loading };
 }
 
+export interface CheckoutHookOptions {
+  /** Return target carried through payment → success page. */
+  origin?: string;
+  openIn?: '_blank' | '_self';
+  manualOpen?: boolean;
+}
+
 export function useCheckout(apiUrl?: string) {
   const { client } = useBilling(apiUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const checkout = useCallback(
-    async (planId: string) => {
+    async (planId: string, opts?: CheckoutHookOptions) => {
       setLoading(true);
       setError(null);
       try {
-        await client.checkout(planId); // redirects to Paddle
+        return await client.checkout(planId, opts);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Checkout failed');
+        throw e;
       } finally {
         setLoading(false);
       }
@@ -107,4 +120,49 @@ export function useCheckout(apiUrl?: string) {
   );
 
   return { checkout, loading, error };
+}
+
+export interface TransactionStatus {
+  id: string;
+  status: string;
+  paid: boolean;
+  checkoutUrl: string | null;
+}
+
+/**
+ * Verify a checkout transaction with Paddle — headless building block for
+ * custom success screens. `paid` is true only for completed transactions.
+ */
+export function useTransaction(
+  transactionId: string | undefined,
+  apiUrl?: string
+) {
+  const { client } = useBilling(apiUrl);
+  const [data, setData] = useState<TransactionStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    if (!transactionId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await client.getTransaction(transactionId);
+      setData(res);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [client, transactionId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  return { transaction: data, loading, error, reload };
 }
