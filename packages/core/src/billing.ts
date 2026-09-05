@@ -1,6 +1,7 @@
-// Merged from @slyxup/billing — now part of core (2-SDK model).
-// Import from '@slyxup/core'. Old '@slyxup/billing' re-exports this.
-declare const process: any;
+// Billing client — import from '@slyxup/core'.
+
+// Minimal ambient declarations (no @types/node dependency in browsers).
+declare const process: { env?: Record<string, string | undefined> } | undefined;
 
 export interface Plan {
   id: string;
@@ -34,6 +35,29 @@ export interface Invoice {
   billedAt: string | null;
 }
 
+export interface CheckoutResult {
+  transactionId: string;
+  checkoutUrl: string;
+}
+
+export interface CheckoutOptions {
+  /** Return target carried through payment → success page (e.g. your app URL).
+   *  Without it the buyer lands on the SlyxUp dashboard after paying. */
+  origin?: string;
+  /** Open the payment page in a new tab (default) or the same tab. */
+  openIn?: '_blank' | '_self';
+  /** Skip auto-opening the payment page (you open checkoutUrl yourself,
+   *  or use the transactionId with Paddle.js overlay). */
+  manualOpen?: boolean;
+}
+
+export interface TransactionStatus {
+  id: string;
+  status: string;
+  paid: boolean;
+  checkoutUrl: string | null;
+}
+
 export interface BillingClientOptions {
   apiUrl?: string;
   publishableKey?: string;
@@ -41,26 +65,28 @@ export interface BillingClientOptions {
 
 function getEnvApiUrl(): string | undefined {
   try {
-    // @ts-ignore — process may not exist in browser
-    if (
-      typeof process !== 'undefined' &&
-      (process as any).env?.NEXT_PUBLIC_SLYXUP_BILLING_URL
-    )
-      return (process as any).env.NEXT_PUBLIC_SLYXUP_BILLING_URL;
+    const billingUrl =
+      typeof process !== 'undefined'
+        ? process?.env?.NEXT_PUBLIC_SLYXUP_BILLING_URL
+        : undefined;
+    if (billingUrl) return billingUrl;
   } catch {}
   try {
-    // @ts-ignore
-    const env = (import.meta as any)?.env;
-    if (env?.VITE_SLYXUP_BILLING_URL) return env.VITE_SLYXUP_BILLING_URL;
+    const viteEnv = (
+      import.meta as unknown as {
+        env?: Record<string, string | undefined>;
+      }
+    )?.env;
+    if (viteEnv?.VITE_SLYXUP_BILLING_URL)
+      return viteEnv.VITE_SLYXUP_BILLING_URL;
   } catch {}
   try {
-    // @ts-ignore — process may not exist in browser
-    const authUrl = (process as any)?.env?.NEXT_PUBLIC_SLYXUP_API_URL;
+    const authUrl =
+      typeof process !== 'undefined'
+        ? process?.env?.NEXT_PUBLIC_SLYXUP_API_URL
+        : undefined;
     if (authUrl)
-      return (authUrl as string).replace(
-        'auth.slyxup.online',
-        'billing.slyxup.online'
-      );
+      return authUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
   } catch {}
   return undefined;
 }
@@ -148,16 +174,44 @@ export class BillingClient {
     return { planId: res.planId, status: res.status, features: res.features };
   }
 
-  async checkout(planId: string, successUrl?: string): Promise<void> {
-    const res = await this.req<{ ok: true; checkoutUrl?: string }>(
-      '/v1/billing/checkout',
-      {
-        method: 'POST',
-        body: JSON.stringify({ planId, ...(successUrl ? { successUrl } : {}) }),
+  /**
+   * Create a checkout transaction and open the real Paddle payment page.
+   * Returns the transaction id + payment URL. The buyer pays on the opened
+   * page; the subscription activates via webhook — never trust a redirect
+   * URL alone, verify with getTransaction() before gating features.
+   */
+  async checkout(
+    planId: string,
+    opts?: CheckoutOptions & { successUrl?: string }
+  ): Promise<CheckoutResult> {
+    const res = await this.req<CheckoutResult>('/v1/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({
+        planId,
+        ...(opts?.origin ? { origin: opts.origin } : {}),
+        // successUrl is legacy/ignored by the server for link building.
+        ...(opts?.successUrl ? { successUrl: opts.successUrl } : {}),
+      }),
+    });
+    if (!opts?.manualOpen && res.checkoutUrl && typeof window !== 'undefined') {
+      const target = opts?.openIn ?? '_blank';
+      if (target === '_blank') {
+        window.open(res.checkoutUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        window.location.assign(res.checkoutUrl);
       }
+    }
+    return res;
+  }
+
+  /**
+   * Verify a checkout transaction with Paddle (public, capability-token).
+   * `paid === true` only when Paddle reports the transaction `completed`.
+   */
+  async getTransaction(transactionId: string): Promise<TransactionStatus> {
+    return this.req<TransactionStatus>(
+      `/v1/billing/transactions/${encodeURIComponent(transactionId)}`
     );
-    if (res.checkoutUrl)
-      window.open(res.checkoutUrl, '_blank', 'noopener,noreferrer');
   }
 
   async cancelSubscription(projectId?: string): Promise<void> {

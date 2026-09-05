@@ -88,6 +88,30 @@ export async function createPaddleCustomer(
   }
 }
 
+/**
+ * B8: Find an existing Paddle customer by email (returns null when not found).
+ * Used in checkout.ts to avoid duplicate paddle_customer_id inserts.
+ */
+export async function findPaddleCustomerByEmail(
+  config: PaddleConfig,
+  email: string
+): Promise<PaddleCustomer | null> {
+  try {
+    const list = await paddleFetch<{ data: PaddleCustomer[] }>(
+      config,
+      'GET',
+      `/customers?email=${encodeURIComponent(email)}`
+    );
+    const found =
+      (list as unknown as { data: PaddleCustomer[] })?.data?.[0] ??
+      (Array.isArray(list) ? (list as unknown as PaddleCustomer[])[0] : null);
+    return found ?? null;
+  } catch {
+    // Paddle returns 404 for no-match — not an error we need to surface
+    return null;
+  }
+}
+
 // ── Products & Prices ──
 
 interface PaddleProduct {
@@ -150,37 +174,83 @@ export interface CheckoutCustomData {
 
 interface PaddleTransaction {
   id: string;
+  status?: string;
   checkout?: { url?: string };
+  custom_data?: Record<string, unknown> | null;
+}
+
+/** Fetch a transaction by id — used to VERIFY payment before celebrating. */
+export async function getTransaction(
+  config: PaddleConfig,
+  transactionId: string
+): Promise<PaddleTransaction> {
+  return paddleFetch<PaddleTransaction>(
+    config,
+    'GET',
+    `/transactions/${encodeURIComponent(transactionId)}`
+  );
 }
 
 /** Create a checkout transaction; returns hosted checkout URL + transaction id.
- *  Pass successUrl only for domains approved in Paddle (Checkout > Website approval);
- *  otherwise Paddle falls back to the account's default payment link. */
+ *  `paymentLinkUrl` MUST be a page that hosts Paddle.js (our /pay page) on a
+ *  Paddle-approved domain — Paddle appends `?_ptxn=<id>` and returns it as
+ *  `checkout.url`. Never pass a non-Paddle.js page here: the buyer would land
+ *  on it with no way to pay (this caused the "instant success without payment"
+ *  bug — billing GET / forwarded straight to /checkout/success).
+ *  Post-payment redirect is configured client-side via
+ *  Paddle.Checkout.open({ settings: { successUrl } }), NOT here. */
 export async function createCheckout(
   config: PaddleConfig,
   priceId: string,
   customerId: string,
-  successUrl: string | undefined,
+  paymentLinkUrl: string,
   customData: CheckoutCustomData
 ): Promise<{ checkoutUrl: string; transactionId: string }> {
   const body = {
     items: [{ price_id: priceId, quantity: 1 }],
     customer_id: customerId,
     custom_data: customData,
-    ...(successUrl ? { checkout: { url: successUrl } } : {}),
+    checkout: { url: paymentLinkUrl },
   };
+
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      msg: 'paddle_create_transaction',
+      environment: config.environment,
+      priceId,
+      customerId,
+      paymentLinkUrl,
+      body: JSON.stringify(body),
+    })
+  );
+
   const tx = await paddleFetch<PaddleTransaction>(
     config,
     'POST',
     '/transactions',
     body
   );
-  return {
-    checkoutUrl:
-      tx.checkout?.url ??
-      `https://buy.paddle.com/product?transaction_id=${tx.id}`,
-    transactionId: tx.id,
-  };
+
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      msg: 'paddle_transaction_response',
+      transactionId: tx.id,
+      checkoutUrl: tx.checkout?.url ?? null,
+      hasCheckout: !!tx.checkout,
+    })
+  );
+
+  // checkout.url is ALWAYS our /pay payment-link page (+ ?_ptxn=) when Paddle
+  // accepts the approved domain. If Paddle ever omits it, fall back to our
+  // /pay page with an explicit transaction id — NEVER to a page that cannot
+  // collect payment.
+  const sep = paymentLinkUrl.includes('?') ? '&' : '?';
+  const checkoutUrl =
+    tx.checkout?.url ?? `${paymentLinkUrl}${sep}_ptxn=${tx.id}`;
+
+  return { checkoutUrl, transactionId: tx.id };
 }
 
 // ── Subscription lifecycle ──

@@ -23,4 +23,7 @@ export const planUpdateSchema = planCreateSchema
 export const checkoutSchema = z.object({
   planId: z.string().min(1),
   successUrl: z.string().url().optional(),
+  // Where the user came from — carried through redirect so the success page
+  // can send them back to their originating platform (defaults to web app).
+  origin: z.string().max(500).optional(),
 });

@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { getDb } from '../lib/db';
-import { conflict, notConfigured, notFound } from '../lib/http';
+import { badRequest, conflict, notConfigured, notFound } from '../lib/http';
 import { checkRateLimit } from '../lib/rate-limit';
 import { customers, plans, subscriptions } from '../lib/schema';
 import type { Env } from '../middleware/auth';
@@ -42,7 +42,7 @@ app.post(
 
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
-    const { planId, successUrl } = c.req.valid('json');
+    const { planId, origin } = c.req.valid('json');
 
     const db = getDb(c.env);
     let plan = await db.select().from(plans).where(eq(plans.id, planId)).get();
@@ -88,67 +88,143 @@ app.post(
         : 'sandbox') as 'sandbox' | 'production',
     };
 
-    // B8: Lookup our customer row by userId, not Paddle by email.
-    const existingCustomer = await db
+    // B8: Lookup our customer row by userId first, then by paddleCustomerId.
+    const existingByUser = await db
       .select()
       .from(customers)
       .where(eq(customers.userId, userId))
       .get();
 
     let paddleCustomerId: string;
-    if (existingCustomer) {
-      paddleCustomerId = existingCustomer.paddleCustomerId ?? '';
+    if (existingByUser) {
+      paddleCustomerId = existingByUser.paddleCustomerId ?? '';
     } else {
-      const { createPaddleCustomer } = await import(
-        '../services/paddle.service'
-      );
+      // Paddle may return an existing customer if the email matches — check
+      // whether that paddleCustomerId is already owned by a different user
+      // before creating a new one.
       try {
-        const customer = await createPaddleCustomer(config, userEmail);
-        paddleCustomerId = customer.id;
+        const { createPaddleCustomer, findPaddleCustomerByEmail } =
+          await import('../services/paddle.service');
+
+        const existingPaddle = await findPaddleCustomerByEmail(
+          config,
+          userEmail
+        );
+        if (existingPaddle) {
+          paddleCustomerId = existingPaddle.id;
+        } else {
+          const customer = await createPaddleCustomer(config, userEmail);
+          paddleCustomerId = customer.id;
+        }
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         console.error(
           JSON.stringify({
             level: 'error',
             msg: 'createPaddleCustomer failed',
             userId,
             email: userEmail,
-            err: err instanceof Error ? err.message : String(err),
+            err: msg,
           })
         );
-        throw err;
+        return c.json(
+          {
+            ok: false,
+            code: 'PADDLE_ERROR',
+            error: `Failed to create customer: ${msg}`,
+          },
+          502
+        );
       }
     }
 
-    // B3: Set updatedAt on conflict
-    await db
-      .insert(customers)
-      .values({
-        userId,
-        email: userEmail,
-        paddleCustomerId,
-      })
-      .onConflictDoUpdate({
-        target: customers.userId,
-        set: {
-          email: userEmail,
-          paddleCustomerId,
-          updatedAt: new Date(),
-        },
-      });
+    // Check if this paddleCustomerId is already owned by a different user
+    const existingByPaddle = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.paddleCustomerId, paddleCustomerId))
+      .get();
 
-    // Only send successUrl if provided — unapproved domains (e.g. localhost) make
-    // Paddle reject the transaction; without it Paddle uses the default payment link.
-    const { createCheckout } = await import('../services/paddle.service');
-    let checkout: { checkoutUrl: string; transactionId: string };
+    // B3: Upsert — handle both userId and paddleCustomerId unique constraints
     try {
-      checkout = await createCheckout(
+      if (existingByPaddle && existingByPaddle.userId !== userId) {
+        // Another user already owns this Paddle customer — just reference it
+        // by linking this userId to the existing row (merge).
+        await db
+          .update(customers)
+          .set({
+            userId,
+            email: userEmail,
+            paddleCustomerId,
+            updatedAt: new Date(),
+          })
+          .where(eq(customers.id, existingByPaddle.id));
+      } else {
+        await db
+          .insert(customers)
+          .values({
+            userId,
+            email: userEmail,
+            paddleCustomerId,
+          })
+          .onConflictDoUpdate({
+            target: customers.userId,
+            set: {
+              email: userEmail,
+              paddleCustomerId,
+              updatedAt: new Date(),
+            },
+          });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'customer upsert failed',
+          userId,
+          paddleCustomerId,
+          err: msg,
+        })
+      );
+      return c.json(
+        {
+          ok: false,
+          code: 'DB_ERROR',
+          error: `Failed to save customer: ${msg}`,
+        },
+        500
+      );
+    }
+
+    // The payment-link page MUST host Paddle.js (our /pay page on the approved
+    // billing domain). Paddle appends ?_ptxn=<id> and returns it as
+    // checkout.url. The buyer's post-payment landing is set inside /pay via
+    // Paddle.Checkout.open({ settings: { successUrl } }); `origin` is the
+    // return target carried through /pay → billing GET / → success page.
+    // NOTE: client `successUrl` is intentionally NOT used as the payment link
+    // (a non-Paddle.js page there strands the buyer with no way to pay).
+    try {
+      const { createCheckout } = await import('../services/paddle.service');
+      const payBase = 'https://billing.slyxup.online/pay';
+      const payParams = new URLSearchParams({ project_id: plan.projectId });
+      if (origin) payParams.set('origin', origin);
+      const checkout = await createCheckout(
         config,
         plan.paddlePriceId,
         paddleCustomerId,
-        successUrl,
+        `${payBase}?${payParams}`,
         { userId, projectId: plan.projectId, planId: plan.id }
       );
+      // Subscription row is created by the `subscription.created` webhook (source of truth).
+      // transactionId drives Paddle.js overlay checkout on the client.
+      return c.json({
+        ok: true,
+        transactionId: checkout.transactionId,
+        checkoutUrl: checkout.checkoutUrl,
+      });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(
         JSON.stringify({
           level: 'error',
@@ -156,14 +232,18 @@ app.post(
           planId: plan.id,
           paddlePriceId: plan.paddlePriceId,
           paddleCustomerId,
-          err: err instanceof Error ? err.message : String(err),
+          err: msg,
         })
       );
-      throw err;
+      return c.json(
+        {
+          ok: false,
+          code: 'PADDLE_CHECKOUT_ERROR',
+          error: `Checkout failed: ${msg}`,
+        },
+        502
+      );
     }
-
-    // Subscription row is created by the `subscription.created` webhook (source of truth).
-    return c.json({ ok: true, checkoutUrl: checkout.checkoutUrl });
   }
 );
 

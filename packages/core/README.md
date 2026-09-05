@@ -56,6 +56,18 @@ await client.accounts.unlink(accountId, 'google');
 const me = await client.users.me();       // full profile (includes username, twoFactorEnabled)
 await client.users.update({ firstName: 'Ada', username: 'ada' });
 await client.users.delete();              // GDPR delete
+
+// ── Billing ── (import { createBillingClient } from '@slyxup/core')
+import { createBillingClient } from '@slyxup/core';
+const billing = createBillingClient({ publishableKey: 'pk_live_xxx' });
+const plans = await billing.listPlans(projectId);
+const { transactionId, checkoutUrl } = await billing.checkout(planId, {
+  origin: 'https://your-app.com/billing/done', // return target after payment
+  openIn: '_blank',                              // or '_self' / manualOpen: true
+});
+// After payment, verify server-side before gating features:
+const { paid, status } = await billing.getTransaction(transactionId);
+const sub = await billing.getSubscription(projectId); // null when none
 ```
 
 The client keeps an internal cookie jar, so sign-in state persists across calls in **Node/SSR too** (browsers manage cookies natively).
@@ -109,11 +121,16 @@ try {
 | `users.me()` | GET | `/v1/user` |
 | `users.update(patch)` | PATCH | `/v1/user` |
 | `users.delete()` | DELETE | `/v1/user` |
+| `billing.listPlans(projectId)` | GET | `/v1/billing/plans` |
+| `billing.checkout(planId, { origin })` | POST | `/v1/billing/checkout` |
+| `billing.getTransaction(txnId)` | GET | `/v1/billing/transactions/:id` |
+| `billing.getSubscription(projectId?)` | GET | `/v1/billing/subscription` |
+| `billing.getEntitlements(projectId)` | GET | `/v1/billing/entitlements` |
+| `billing.cancelSubscription(projectId?)` | POST | `/v1/billing/subscription/cancel` |
+| `billing.listInvoices()` | GET | `/v1/billing/invoices` |
 
 ## Framework wrappers
 
-- React hooks/components: [`@slyxup/react`](../react)
-- Next.js server helpers + middleware: [`@slyxup/nextjs`](../nextjs)
 - Prebuilt UI cards: [`@slyxup/ui`](../ui)
 
 ## License

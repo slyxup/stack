@@ -80,7 +80,17 @@ async function applySubscriptionEvent(
   data: SubData
 ): Promise<void> {
   const priceId = data.items?.[0]?.price?.id;
-  if (!data.id || !priceId) return;
+  if (!data.id || !priceId) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'subscription webhook missing id/priceId',
+        subId: data.id,
+        priceId,
+      })
+    );
+    return;
+  }
 
   // Resolve plan by Paddle price id
   const plan = await db
@@ -100,7 +110,37 @@ async function applySubscriptionEvent(
   const projectId =
     data.custom_data?.projectId ?? plan?.projectId ?? existing?.projectId;
   const planId = data.custom_data?.planId ?? plan?.id ?? existing?.planId;
-  if (!userId || !projectId || !planId) return; // unknown plan/user — ignore
+  if (!userId || !projectId || !planId) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'subscription webhook could not attribute',
+        subId: data.id,
+        priceId,
+        customData: data.custom_data,
+        resolvedPlanId: plan?.id,
+        resolvedProjectId: plan?.projectId,
+        existingUserId: existing?.userId,
+        existingProjectId: existing?.projectId,
+        existingPlanId: existing?.planId,
+      })
+    );
+    return; // unknown plan/user — ignore
+  }
+
+  if (!plan && !data.custom_data?.planId) {
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'subscription webhook: price not mapped to a plan row',
+        subId: data.id,
+        priceId,
+        planId,
+        projectId,
+        userId,
+      })
+    );
+  }
 
   const canceled = mapSubStatus(data.status) === 'canceled';
   const values = {
@@ -244,6 +284,33 @@ const app = new Hono<{
     PADDLE_WEBHOOK_SECRET?: string;
   };
 }>();
+
+// GET /v1/webhooks/status — check if webhooks have been received (diagnostic)
+app.get('/status', async (c) => {
+  const db = getDb(c.env);
+  const hasSecret = !!c.env.PADDLE_WEBHOOK_SECRET;
+  const recentEvents = await db
+    .select({
+      eventType: webhookEvents.eventType,
+      status: webhookEvents.status,
+      occurredAt: webhookEvents.occurredAt,
+    })
+    .from(webhookEvents)
+    .orderBy(webhookEvents.occurredAt)
+    .limit(5)
+    .all();
+  const totalEvents = await db
+    .select({ count: webhookEvents.id })
+    .from(webhookEvents)
+    .all();
+  return c.json({
+    ok: true,
+    webhookConfigured: hasSecret,
+    totalEvents: totalEvents.length,
+    recentEvents,
+    webhookUrl: 'https://billing.slyxup.online/v1/webhooks/paddle',
+  });
+});
 
 app.post('/paddle', async (c) => {
   const secret = c.env.PADDLE_WEBHOOK_SECRET;

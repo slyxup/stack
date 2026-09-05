@@ -1,11 +1,11 @@
 # @slyxup/ui
 
-Prebuilt, themeable auth + billing components — sign-in cards, user button, password flows, pricing table. Built on [`@slyxup/react`](../react). **Zero CSS dependencies** — styles are self-contained and injected once.
+Prebuilt, themeable auth + billing components — sign-in cards, user button, password flows, pricing table. Built on [`@slyxup/core`](../core). **Zero CSS dependencies** — styles are self-contained and injected once.
 
 ## Install
 
 ```bash
-npm install @slyxup/ui @slyxup/react @slyxup/core
+npm install @slyxup/ui @slyxup/core
 ```
 
 > Peer: `react ^18 || ^19`
@@ -15,13 +15,13 @@ npm install @slyxup/ui @slyxup/react @slyxup/core
 Inject the stylesheet once at your app root:
 
 ```tsx
-import { SlyxUpProvider } from '@slyxup/react';
+import { SlyxupClient } from '@slyxup/core';
 import { SlyxUpStyles } from '@slyxup/ui';
 
-<SlyxUpProvider publishableKey="pk_test_xxx">
-  <SlyxUpStyles />
-  <App />
-</SlyxUpProvider>
+const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
+
+<SlyxUpStyles />
+<App />
 ```
 
 (Components also auto-inject on first mount if you skip this.)
@@ -89,7 +89,7 @@ const [open, setOpen] = useState(false);
 | `onClose` | no | — | Modal close callback |
 | `onDeleted` | no | — | Fired after the account is deleted |
 
-Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GET/DELETE /v1/sessions`, `GET/POST /v1/user/2fa/*`, `GET/DELETE /v1/user/accounts`) and `@slyxup/react >= auth hooks`.
+Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GET/DELETE /v1/sessions`, `GET/POST /v1/user/2fa/*`, `GET/DELETE /v1/user/accounts`).
 
 ### Password flows
 
@@ -116,19 +116,24 @@ Redirects to the hosted OAuth flow.
 
 ```tsx
 import { PricingTable } from '@slyxup/ui';
-import { usePlans, useCheckout } from '@slyxup/react';
+import { SlyxupClient } from '@slyxup/core';
 
-const { plans, loading } = usePlans(projectId);
-const { checkout } = useCheckout();
+const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
 
+// Fetch plans via client API and handle checkout with Paddle
 <PricingTable
   plans={plans}
   loading={loading}
-  onSelect={(plan) => checkout(plan.id)}   // → Paddle hosted checkout
+  currentPlanId={subscription?.planId ?? (isFreeTier ? freePlanId : null)}
+  onSelect={(plan) => checkout(plan.id)}
 />
 ```
 
 Clean pricing grid with a "popular" badge driven by `plan.isPopular`.
+
+Pass `currentPlanId` to render that plan's button as a disabled "Current plan"
+(`currentLabel` overrides the text) — e.g. the active subscription's plan, or
+the `$0` plan's id while on the free tier.
 
 You can also drive checkout directly without React hooks:
 
@@ -149,15 +154,14 @@ openPaddleCheckout(priceId, customerEmail?, { userId, planId, projectId });
 
 ```tsx
 import { BillingPortal } from '@slyxup/ui';
-import { useSubscription, useInvoices } from '@slyxup/react';
+import { SlyxupClient } from '@slyxup/core';
 
-const { subscription } = useSubscription(projectId);
-const { invoices } = useInvoices();
+const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
 
 <BillingPortal
   subscription={subscription}
   invoices={invoices}
-  onCancel={cancelSubscription}            // optional; omit to hide button
+  onCancel={cancelSubscription}
 />
 ```
 
