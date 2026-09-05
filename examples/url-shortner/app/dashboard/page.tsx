@@ -1,6 +1,8 @@
 'use client';
 
 import { SlyxUpProvider, useAuth, useUser, usePlans, useSubscription, useCheckout } from '@slyxup/ui';
+import type { CheckoutHookOptions } from '@slyxup/ui';
+import type { CheckoutResult } from '@slyxup/core';
 import { SlyxUpStyles, UserButton, UserProfile, PricingTable, BillingPortal } from '@slyxup/ui';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
@@ -240,7 +242,7 @@ function BillingTab({ plans, plansLoading, subscription, subLoading, checkout }:
   plansLoading: boolean;
   subscription: any;
   subLoading: boolean;
-  checkout: (planId: string) => Promise<void>;
+  checkout: (planId: string, opts?: CheckoutHookOptions) => Promise<CheckoutResult>;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
