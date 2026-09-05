@@ -200,6 +200,27 @@ export const CSS = `
   }
   .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn:hover { filter: brightness(.94); }
 }
+
+/* ── Current plan button (transparent with border) ── */
+.slx-btn-current {
+  width: 100%; box-sizing: border-box;
+  font-family: var(--slx-font); font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--slx-accent); background: transparent;
+  border: 2px solid var(--slx-accent); border-radius: var(--slx-radius);
+  padding: 11px 14px; cursor: default;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.slx-btn-current:hover { background: var(--slx-accent-soft); }
+.slx-btn-current:focus-visible { outline: none; box-shadow: 0 0 0 3.5px var(--slx-accent-soft); }
+@media (prefers-color-scheme: dark) {
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn-current {
+    color: var(--slx-accent); border-color: var(--slx-accent);
+  }
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn-current:hover {
+    background: var(--slx-accent-soft);
+  }
+}
 .slx-spinner {
   width: 15px; height: 15px; flex: none;
   border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;

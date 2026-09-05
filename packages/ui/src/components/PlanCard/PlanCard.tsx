@@ -112,10 +112,10 @@ export function PlanCard({
       </ul>
       <button
         type="button"
-        className="slx-btn"
+        className={current ? 'slx-btn-current' : 'slx-btn'}
         onClick={() => (current ? undefined : onSelect?.(plan))}
         disabled={loading || current}
-        style={current ? { opacity: 0.65, cursor: 'default' } : undefined}
+        style={current ? { opacity: 1, cursor: 'default' } : undefined}
       >
         {current ? currentLabel : ctaLabel}
       </button>

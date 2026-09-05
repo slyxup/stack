@@ -69,7 +69,7 @@ export function SlyxUpProvider({
   const client = useMemo(() => {
     if (!resolvedKey && typeof window !== 'undefined') {
       console.warn(
-        '[SlyxUp] No publishableKey provided. Tried NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY, VITE_SLYXUP_PUBLISHABLE_KEY, REACT_APP_SLYXUP_PUBLISHABLE_KEY, EXPO_PUBLIC_SLYXUP_PUBLISHABLE_KEY, SLYXUP_PUBLISHABLE_KEY. Set one in .env.local or pass publishableKey prop. Get your key: `npx @slyxup/cli keys create --project-id <id> --type publishable`'
+        '[SlyxUp] No publishableKey provided. Tried NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY, VITE_SLYXUP_PUBLISHABLE_KEY, REACT_APP_SLYXUP_PUBLISHABLE_KEY, EXPO_PUBLIC_SLYXUP_PUBLISHABLE_KEY, SLYXUP_PUBLISHABLE_KEY. Set one in .env.local or pass publishableKey prop.'
       );
     }
     return new SlyxupClient({
