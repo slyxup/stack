@@ -1,140 +1,65 @@
-# ENV_GUIDE.md — Dev/Prod Parity (Cloudflare Workers, No Docker)
+# Environment and deployment guide
 
-> Goal: `wrangler dev` (local) and `wrangler deploy` (prod) behave IDENTICALLY. No `.env` drift.
+## Actual workspace layout
 
-## 1. Env layers (CF Workers)
+| Folder / pnpm filter | Runtime | Local URL |
+| --- | --- | --- |
+| `auth` | Hono Cloudflare Worker, D1/KV/R2 | `http://localhost:8787` |
+| `billing` | Hono Cloudflare Worker, separate billing D1; `AUTH_DB` read access | `http://localhost:8788` |
+| `web` | Vite/React, Cloudflare Pages | `http://localhost:5173` |
 
-| Layer | File | Committed? | When used |
-|-------|------|------------|-----------|
-| `vars` | `auth.slyxup.online/wrangler.jsonc` `vars` | YES | Both dev & prod — non-secret, same value |
-| `.dev.vars` | `auth.slyxup.online/.dev.vars` | NO (gitignored) | `wrangler dev` only — local secrets |
-| Secrets | `wrangler secret put NAME` | NO (encrypted in CF) | `wrangler deploy` prod |
-| `D1/KV IDs` | `wrangler.jsonc` bindings | YES | Both — must match `wrangler d1 create` output |
-| `.env.example` | `stack/.env.example` | YES | Template for `.dev.vars` |
+Public hostnames are deployment targets, not directory/package names. Use `pnpm --filter auth`, never `pnpm --filter auth.slyxup.online`.
 
-**Never use**: `process.env`, `.env`, `DATABASE_URL` in Worker — use `env.NAME`.
+## Public configuration versus secrets
 
-## 2. What goes where
+- Worker bindings and non-secret vars live in each service's `wrangler.jsonc`.
+- Local secrets/overrides go in that service's gitignored `.dev.vars`.
+- Production secrets are set through `pnpm --filter auth exec wrangler secret put NAME` (or `billing`). Verify secret **names** with `wrangler secret list`; do not print values.
+- Browser variables are public. Vite substitutes `import.meta.env.VITE_*`; Next.js substitutes `process.env.NEXT_PUBLIC_*`. Pass values explicitly to SDK constructors/providers. Never put `sk_*`, Paddle API keys, webhook secrets or bootstrap tokens in browser variables.
+- Wrangler vars are deployment configuration. Vite public values must be present **at build time**; Pages runtime vars do not rewrite a built JavaScript bundle.
 
-### `wrangler.jsonc` `vars` (non-secret, same dev/prod)
-```jsonc
-{
-  "vars": {
-    "APP_URL": "https://stack.slyxup.online",
-    "API_URL": "https://auth.slyxup.online",
-    "HOSTED_AUTH_URL": "https://auth.slyxup.online",
-    "CORS_ORIGINS": "https://stack.slyxup.online,http://localhost:3000",
-    "ALLOWED_REDIRECT_ORIGINS": "https://myapp.com,http://localhost:3000"
-  }
-}
-```
+Auth configuration includes `APP_URL`, `API_URL`, `HOSTED_AUTH_URL`, `CORS_ORIGINS`, `ALLOWED_REDIRECT_ORIGINS`, OAuth client IDs and email sender settings. Relevant secrets include `SESSION_SECRET`, `ENCRYPTION_KEY`, OAuth client secrets and the configured email provider key. See `.env.example` and `auth/src/lib/better-auth.ts` for exact current requirements.
 
-### `.dev.vars` (local secrets — copy from `.env.example`)
-```
-# auth.slyxup.online/.dev.vars — NEVER commit
-SESSION_SECRET=local-dev-32-char-random-xxxxxxxx
-ENCRYPTION_KEY=local-dev-32-char-random-yyyyyyyy
-GOOGLE_CLIENT_SECRET=local-dev-secret
-GITHUB_CLIENT_SECRET=local-dev-secret
-SMTP_PASSWORD=local-dev
-```
+Billing configuration includes `APP_URL`, `AUTH_URL`, `API_URL`, exact `CORS_ORIGINS`, and `PADDLE_ENVIRONMENT`. Secrets are `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN` and `BILLING_ADMIN_SECRET`. A Paddle client token is safe for Paddle.js, but the API and webhook keys are server secrets. The checked-in environment is sandbox: use matching sandbox prices, credentials and webhook destination.
 
-### Prod secrets (encrypted, set once)
-```bash
-wrangler secret put SESSION_SECRET --config auth.slyxup.online/wrangler.jsonc
-wrangler secret put ENCRYPTION_KEY
-wrangler secret put GOOGLE_CLIENT_SECRET
-wrangler secret put GITHUB_CLIENT_SECRET
-wrangler secret put SMTP_PASSWORD
-# verify
-wrangler secret list
-```
-
-### Bindings (D1/KV) — same file, different IDs per env but same binding name
-```jsonc
-{
-  "d1_databases": [{ "binding": "DB", "database_name": "slyxup_auth", "database_id": "REPLACE_WITH_D1_ID" }],
-  "kv_namespaces": [{ "binding": "KV", "id": "REPLACE_WITH_KV_ID" }]
-}
-```
-Create: `wrangler d1 create slyxup_auth` → copy `database_id` → paste in `wrangler.jsonc`.
-
-## 3. Dev/prod parity — how to keep same
-
-1. **Single `wrangler.jsonc`** — don't maintain `wrangler.dev.jsonc` vs `wrangler.prod.jsonc`. Use same file; `dev` uses `.dev.vars` + `--local` D1, `deploy` uses secrets + remote D1.
-2. **Copy `.env.example` → `.dev.vars`** — no drift:
-   ```bash
-   cp stack/.env.example stack/auth.slyxup.online/.dev.vars
-   # then fill local secrets
-   ```
-3. **Bindings name same** — `env.DB`, `env.KV` in code — never `env.DB_LOCAL`.
-4. **Test both**:
-   ```bash
-   wrangler dev --local          # local D1 + .dev.vars
-   wrangler dev --remote         # remote D1 + prod vars (caution)
-   wrangler deploy --dry-run     # check bindings
-   ```
-5. **No Docker env** — no `DATABASE_URL`, no `docker-compose.yml`.
-
-## 4. Local dev workflow
+## Local setup
 
 ```bash
-cd slyxup.online/stack
-
-# 1. D1 local
-wrangler d1 create slyxup_auth --local
-# 2. Migrate local
-pnpm --filter auth.slyxup.online db:migrate:local
-# 3. Secrets local
-cp .env.example auth.slyxup.online/.dev.vars
-# edit .dev.vars with local values
-# 4. Typegen
-pnpm --filter auth.slyxup.online typegen  # wrangler types
-# 5. Dev
-pnpm --filter auth.slyxup.online dev  # http://localhost:8787
-# test
-curl http://localhost:8787/v1/health
+corepack pnpm install --frozen-lockfile
+# Copy the root template to auth/.dev.vars and fill local-only values.
+# Configure billing/.dev.vars separately for billing secrets.
+pnpm --filter auth db:migrate:local
+pnpm --filter billing db:migrate:local
+pnpm cf:typegen
+pnpm dev:auth
+# Separate terminals:
+pnpm dev:billing
+pnpm dev:web
 ```
 
-## 5. Prod deploy workflow
+Set local URL overrides deliberately, for example `AUTH_URL=http://localhost:8787` in billing's `.dev.vars`, and `HOSTED_AUTH_URL=http://localhost:8787` in auth's `.dev.vars` for local email/OAuth links. Set exact app return origins. Local and production should share contracts and binding names, **not accidentally share production destinations**.
+
+Existing registered D1 bindings can be simulated locally; `wrangler d1 create --local` is not a setup step. `wrangler d1 create NAME` provisions a remote database. Each Worker's default local D1 state is separate; billing's HTTP fallback can reach a local auth Worker when its simulated `AUTH_DB` does not contain the auth tables.
+
+The operator website uses `VITE_API_URL` and `VITE_BILLING_URL` (see `web/src/lib/api.ts`). Consumer SDK examples use the explicitly passed `VITE_SLYXUP_*` / `NEXT_PUBLIC_SLYXUP_*` values described in `INTEGRATION_GUIDE.md`.
+
+## Deployment
+
+First follow `RELEASE_READINESS.md`. Test fresh local migrations, inspect pending remote migrations, review SQL, then apply only intended changes. The 3.0.0 release requires auth migration 0010 and billing migration 0002 before Worker rollout.
 
 ```bash
-# 1. D1 remote
-wrangler d1 create slyxup_auth
-wrangler d1 migrations apply slyxup_auth --remote
-# 2. Secrets prod
-wrangler secret put SESSION_SECRET
-wrangler secret put ENCRYPTION_KEY
-# 3. Deploy
-pnpm --filter auth.slyxup.online deploy
-# verify
-curl https://auth.slyxup.online/v1/health
-wrangler tail  # logs
+pnpm typecheck && pnpm lint && pnpm build && pnpm test
+pnpm audit --prod
+pnpm --filter auth exec wrangler deploy --dry-run
+pnpm --filter billing exec wrangler deploy --dry-run
+# Only when release blockers and consumer migration are resolved:
+pnpm --filter auth deploy
+pnpm --filter billing deploy
+pnpm --filter web deploy
 ```
 
-## 6. Stack marketing (`stack.slyxup.online`) — Pages
+Cloudflare auth must target the intended account and resource IDs. New self-hosted installs must provision their own D1/KV/R2 resources and replace the checked-in IDs/routes. Do not deploy a fork against SlyxUp production resources.
 
-- `wrangler.jsonc` `assets: { directory: ".next" }`
-- Env: `NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online` (public, can be in `vars`)
-- Deploy: `pnpm --filter stack.slyxup.online build && pnpm --filter stack.slyxup.online deploy`
+For OAuth register exact callback URLs at each provider (`/v1/oauth/callback/google`, `/v1/oauth/callback/github`) and the return hostname on the project. Use SDK 3.0.0's proof-key redirect/exchange, not a hand-built project OAuth URL. A domain/CORS allowlist is never a substitute for authenticated resource authorization.
 
-## 7. Common mistakes
-
-- ❌ Putting `SESSION_SECRET` in `wrangler.jsonc` `vars` → leaked in git
-- ❌ Using `.env` instead of `.dev.vars` → `wrangler dev` ignores it
-- ❌ Different `compatibility_date` per domain → unify to `2025-08-24`
-- ❌ Forgetting `wrangler secret put` after changing `.dev.vars` → prod still old
-- ❌ Committing `.dev.vars` → add to `.gitignore`
-- ❌ Using `wrangler.toml` → use `wrangler.jsonc`
-
-## 8. Checklist before `deploy`
-
-- [ ] `wrangler.jsonc` `vars` same as prod?
-- [ ] `wrangler secret list` shows all secrets?
-- [ ] `wrangler d1 migrations apply --remote` done?
-- [ ] `wrangler types` run?
-- [ ] `pnpm typecheck` passes?
-- [ ] `.dev.vars` gitignored?
-
----
-**Parity = same `wrangler.jsonc` + `.dev.vars` locally / secrets in prod, same `env.*` in code.**
+After deployment, check both health endpoints, real verified-user login, session rejection, consumer origins, email delivery and Paddle sandbox lifecycle. Record deployment IDs for rollback. Production SDK publication is separate from Worker deployment; changing a Worker does not update installed consumer packages.

@@ -1,6 +1,6 @@
 'use client';
 
-import { SlyxupClient } from '@slyxup/core';
+import { SlyxupClient, type SlyxupClientOptions } from '@slyxup/core';
 import {
   type ReactNode,
   useCallback,
@@ -13,6 +13,8 @@ import { AuthContext, type AuthContextValue } from '../context/auth-context';
 export interface SlyxUpProviderProps {
   publishableKey?: string;
   apiUrl?: string;
+  billingApiUrl?: string;
+  tokenStorage?: SlyxupClientOptions['tokenStorage'];
   children: ReactNode;
 }
 
@@ -62,21 +64,26 @@ function resolveEnvApiUrl(): string | undefined {
 export function SlyxUpProvider({
   publishableKey,
   apiUrl,
+  billingApiUrl,
+  tokenStorage,
   children,
 }: SlyxUpProviderProps) {
   const resolvedKey = publishableKey ?? resolveEnvKey();
+  const [oauthChallenge, setOAuthChallenge] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const resolvedApiUrl = apiUrl ?? resolveEnvApiUrl();
   const client = useMemo(() => {
     if (!resolvedKey && typeof window !== 'undefined') {
       console.warn(
-        '[SlyxUp] No publishableKey provided. Tried NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY, VITE_SLYXUP_PUBLISHABLE_KEY, REACT_APP_SLYXUP_PUBLISHABLE_KEY, EXPO_PUBLIC_SLYXUP_PUBLISHABLE_KEY, SLYXUP_PUBLISHABLE_KEY. Set one in .env.local or pass publishableKey prop. Get your key: `npx @slyxup/cli keys create --project-id <id> --type publishable`'
+        '[SlyxUp] No publishableKey provided. Tried NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY, VITE_SLYXUP_PUBLISHABLE_KEY, REACT_APP_SLYXUP_PUBLISHABLE_KEY, EXPO_PUBLIC_SLYXUP_PUBLISHABLE_KEY, SLYXUP_PUBLISHABLE_KEY. Set one in .env.local or pass publishableKey prop.'
       );
     }
     return new SlyxupClient({
       publishableKey: resolvedKey ?? 'pk_test_missing',
       apiUrl: resolvedApiUrl,
+      tokenStorage,
     });
-  }, [resolvedKey, resolvedApiUrl]);
+  }, [resolvedKey, resolvedApiUrl, tokenStorage]);
 
   const [state, setState] = useState<{
     isLoaded: boolean;
@@ -94,6 +101,9 @@ export function SlyxUpProvider({
 
   const reload = useCallback(async () => {
     try {
+      const oauth = await client.auth.completeOAuth();
+      if (oauth && 'challengeToken' in oauth)
+        setOAuthChallenge(oauth.challengeToken);
       const res = await client.sessions.get();
       const me = await client.users.me().catch(() => null);
       const sessionUser = res.user;
@@ -118,7 +128,18 @@ export function SlyxUpProvider({
         sessionId: res.session.id,
         sessionExpiresAt: res.session.expiresAt,
       });
-    } catch {
+    } catch (error) {
+      if (
+        !(
+          error &&
+          typeof error === 'object' &&
+          'status' in error &&
+          error.status === 401
+        )
+      )
+        setAuthError(
+          error instanceof Error ? error.message : 'Unable to load session'
+        );
       setState((s) => ({
         ...s,
         isLoaded: true,
@@ -142,6 +163,10 @@ export function SlyxUpProvider({
 
   const value: AuthContextValue = {
     client,
+    billingApiUrl,
+    oauthChallenge,
+    authError,
+    clearOAuthChallenge: () => setOAuthChallenge(null),
     ...state,
     userId: state.user?.id ?? null,
     sessionToken: client.getToken() ?? null,

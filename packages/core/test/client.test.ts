@@ -204,11 +204,32 @@ describe('SlyxupClient', () => {
       await client.sessions.get();
       expect(fn).toHaveBeenCalledTimes(2);
       const secondCall = fn.mock.calls[1] as any[];
-      expect(secondCall[1].headers).toMatchObject({ Cookie: 'slyxup_session=abc123' });
+      expect(new Headers(secondCall[1].headers).get('Cookie')).toBe('slyxup_session=abc123');
     });
   });
 
   describe('error handling', () => {
+    it('preserves sign-in rate limits and actionable server error codes', async () => {
+      const client = new SlyxupClient();
+      mockFetch({ error: 'Slow down' }, { ok: false, status: 429 });
+      await expect(client.auth.signIn({ email: 'a@b.com', password: 'pass' })).rejects.toBeInstanceOf(RateLimitError);
+      mockFetch({ error: 'Verify email', code: 'EMAIL_NOT_VERIFIED' }, { ok: false, status: 403 });
+      await expect(client.auth.signIn({ email: 'a@b.com', password: 'pass' })).rejects.toMatchObject({ status: 403, code: 'EMAIL_NOT_VERIFIED' });
+    });
+
+    it('returns the two-factor challenge without creating a session', async () => {
+      const challenge = { ok: false, code: '2FA_REQUIRED', challengeToken: 'challenge' };
+      mockFetch(challenge, { ok: false, status: 403 });
+      const client = new SlyxupClient();
+      expect(await client.auth.signIn({ email: 'a@b.com', password: 'pass' })).toEqual(challenge);
+      expect(client.getToken()).toBeUndefined();
+    });
+
+    it('supports Headers objects for server integration', async () => {
+      const fn = mockFetch({ ok: true });
+      await new SlyxupClient().request('/v1/custom', { headers: new Headers({ 'X-Trace': 'trace' }) });
+      expect(new Headers(fn.mock.calls[0][1].headers).get('X-Trace')).toBe('trace');
+    });
     it('should throw RateLimitError on 429', async () => {
       mockFetch({ error: 'rate limited' }, { ok: false, status: 429 });
       const client = new SlyxupClient({ apiUrl: 'http://localhost' });
@@ -244,6 +265,35 @@ describe('SlyxupClient', () => {
       });
       const client = new SlyxupClient({ apiUrl: 'http://localhost' });
       await expect(client.sessions.get()).rejects.toThrow(UnauthorizedError);
+    });
+  });
+
+  describe('session isolation', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    it('does not read legacy persistent tokens or share tokens between instances', async () => {
+      const getItem = vi.fn().mockReturnValue('other-project-token');
+      vi.stubGlobal('window', { localStorage: { getItem } });
+      mockFetch({ ok: true, user: { id: 'u' }, sessionToken: 'new-token' });
+      const a = new SlyxupClient({ publishableKey: 'pk_a' });
+      const b = new SlyxupClient({ publishableKey: 'pk_b' });
+      await a.auth.signIn({ email: 'a@b.com', password: 'pass' });
+      expect(a.getToken()).toBe('new-token');
+      expect(b.getToken()).toBeUndefined();
+      expect(getItem).not.toHaveBeenCalled();
+    });
+    it('scopes opt-in tab storage by project and auth server', async () => {
+      const storage = new Map<string, string>();
+      vi.stubGlobal('window', { sessionStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) } });
+      const options = { publishableKey: 'pk_a', tokenStorage: 'sessionStorage' as const };
+      mockFetch({ ok: true, user: { id: 'u' }, sessionToken: 'token-a' });
+      await new SlyxupClient(options).auth.signIn({ email: 'a@b.com', password: 'pass' });
+      expect(new SlyxupClient(options).getToken()).toBe('token-a');
+      expect(new SlyxupClient({ ...options, publishableKey: 'pk_b' }).getToken()).toBeUndefined();
+      expect(new SlyxupClient({ ...options, apiUrl: 'https://other.example' }).getToken()).toBeUndefined();
+    });
+    it('rejects browser secret keys before making requests', () => {
+      vi.stubGlobal('window', {});
+      expect(() => new SlyxupClient({ secretKey: 'sk_test_example' })).toThrow('Secret keys must only be used on the server');
     });
   });
 });

@@ -1,4 +1,11 @@
 // Billing client — import from '@slyxup/core'.
+import {
+  NetworkError,
+  RateLimitError,
+  SlyxupError,
+  UnauthorizedError,
+  ValidationError,
+} from './errors.js';
 
 // Minimal ambient declarations (no @types/node dependency in browsers).
 declare const process: { env?: Record<string, string | undefined> } | undefined;
@@ -61,6 +68,8 @@ export interface TransactionStatus {
 export interface BillingClientOptions {
   apiUrl?: string;
   publishableKey?: string;
+  /** Explicit session source; e.g. () => authClient.getToken(). */
+  getToken?: () => string | undefined;
 }
 
 function getEnvApiUrl(): string | undefined {
@@ -71,38 +80,13 @@ function getEnvApiUrl(): string | undefined {
         : undefined;
     if (billingUrl) return billingUrl;
   } catch {}
-  try {
-    const viteEnv = (
-      import.meta as unknown as {
-        env?: Record<string, string | undefined>;
-      }
-    )?.env;
-    if (viteEnv?.VITE_SLYXUP_BILLING_URL)
-      return viteEnv.VITE_SLYXUP_BILLING_URL;
-  } catch {}
-  try {
-    const authUrl =
-      typeof process !== 'undefined'
-        ? process?.env?.NEXT_PUBLIC_SLYXUP_API_URL
-        : undefined;
-    if (authUrl)
-      return authUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
-  } catch {}
-  return undefined;
-}
-
-function getStoredToken(): string | undefined {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage.getItem('slyxup_session_token') ?? undefined;
-    }
-  } catch {}
   return undefined;
 }
 
 export class BillingClient {
   readonly apiUrl: string;
   readonly publishableKey?: string;
+  private readonly getToken?: () => string | undefined;
 
   constructor(options: BillingClientOptions = {}) {
     const raw = (
@@ -110,52 +94,59 @@ export class BillingClient {
       getEnvApiUrl() ??
       'https://billing.slyxup.online'
     ).replace(/\/$/, '');
-    if (/^https?:\/\/localhost:\d+$/.test(raw) && raw.includes(':8787')) {
-      this.apiUrl = raw.replace(/:8787$/, ':8788');
-    } else {
-      this.apiUrl = raw;
-    }
+    this.apiUrl = raw;
     this.publishableKey = options.publishableKey;
+    this.getToken = options.getToken;
   }
 
   private async req<T>(path: string, init?: RequestInit): Promise<T> {
-    const token = getStoredToken();
+    const token = this.getToken?.();
     const authHeaders: Record<string, string> = {};
     if (token) authHeaders.Authorization = `Bearer ${token}`;
     if (this.publishableKey && this.publishableKey !== 'pk_test_missing')
       authHeaders['X-Publishable-Key'] = this.publishableKey;
-    const res = await fetch(`${this.apiUrl}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders,
-        ...init?.headers,
-      },
-      credentials: 'include',
+    let res: Response;
+    const headers = new Headers({
+      'Content-Type': 'application/json',
+      ...authHeaders,
     });
+    new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+    try {
+      res = await fetch(`${this.apiUrl}${path}`, {
+        ...init,
+        headers,
+        credentials: 'include',
+      });
+    } catch {
+      throw new NetworkError();
+    }
     if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as Record<
-        string,
-        unknown
-      >;
-      throw new Error(
-        typeof data.error === 'string'
+      const body: unknown = await res.json().catch(() => null);
+      const data = body && typeof body === 'object' ? body : {};
+      const message =
+        'error' in data && typeof data.error === 'string'
           ? data.error
-          : `Request failed (${res.status})`
-      );
+          : `Request failed (${res.status})`;
+      if ('code' in data && typeof data.code === 'string')
+        throw new SlyxupError(message, res.status, data.code);
+      if (res.status === 401) throw new UnauthorizedError(message);
+      if (res.status === 429) throw new RateLimitError(message);
+      if (res.status === 400) throw new ValidationError(message);
+      throw new SlyxupError(message, res.status, 'api_error');
     }
     return res.json() as Promise<T>;
   }
 
   async listPlans(projectId: string): Promise<Plan[]> {
     const res = await this.req<{ ok: true; plans: Plan[] }>(
-      `/v1/billing/plans?projectId=${projectId}`
+      `/v1/billing/plans?projectId=${encodeURIComponent(projectId)}`
     );
     return res.plans;
   }
 
   async getSubscription(projectId?: string): Promise<Subscription | null> {
-    const qs = projectId ? `?projectId=${projectId}` : '';
+    if (!projectId) return (await this.listSubscriptions())[0] ?? null;
+    const qs = `?projectId=${encodeURIComponent(projectId)}`;
     const res = await this.req<{ ok: true; subscription: Subscription | null }>(
       `/v1/billing/subscription${qs}`
     );
@@ -170,7 +161,7 @@ export class BillingClient {
       planId: string | null;
       status: string;
       features: string[];
-    }>(`/v1/billing/entitlements?projectId=${projectId}`);
+    }>(`/v1/billing/entitlements?projectId=${encodeURIComponent(projectId)}`);
     return { planId: res.planId, status: res.status, features: res.features };
   }
 
@@ -215,13 +206,13 @@ export class BillingClient {
   }
 
   async cancelSubscription(projectId?: string): Promise<void> {
-    const qs = projectId ? `?projectId=${projectId}` : '';
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
     await this.req(`/v1/billing/subscription/cancel${qs}`, { method: 'POST' });
   }
 
   /** Undo a scheduled cancellation so the subscription renews normally. */
   async resumeSubscription(projectId?: string): Promise<void> {
-    const qs = projectId ? `?projectId=${projectId}` : '';
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
     await this.req(`/v1/billing/subscription/resume${qs}`, { method: 'POST' });
   }
 

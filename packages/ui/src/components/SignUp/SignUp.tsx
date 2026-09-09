@@ -5,6 +5,7 @@ import { useAuth } from '../../react/hooks/useAuth';
 import { injectStyles } from '../../styles';
 import type { AuthLayout } from '../../theme';
 import { PasswordField } from '../PasswordField';
+import { SignIn } from '../SignIn/SignIn';
 
 export interface SignUpProps {
   social?: boolean;
@@ -29,13 +30,14 @@ export function SignUp({
   username: showUsername = true,
   brandTitle = 'Create your account',
   brandSubtitle = 'A minute to set up. Sign in forever after.',
-  brandPoints = ['Email + OAuth out of the box', 'HttpOnly sessions, secured by default', 'Billing ready when you are'],
+  brandPoints = [
+    'Email + OAuth out of the box',
+    'HttpOnly sessions, secured by default',
+    'Billing ready when you are',
+  ],
 }: SignUpProps) {
   injectStyles();
-  const { signUp, client } = useAuth() as unknown as {
-    signUp: ReturnType<typeof useAuth>['signUp'];
-    client: { publishableKey?: string; apiUrl: string };
-  };
+  const { signUp, client, oauthChallenge } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -77,14 +79,24 @@ export function SignUp({
   }
 
   function oauth(provider: 'google' | 'github') {
-    const redirect = encodeURIComponent(window.location.href);
-    window.location.href = `${client.apiUrl}/v1/oauth/${provider}?redirect_url=${redirect}`;
+    void client.auth
+      .startOAuth(provider)
+      .catch((error: unknown) =>
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to start social sign-in'
+        )
+      );
   }
 
   const missingKey =
     !client.publishableKey ||
     client.publishableKey === 'pk_test_missing' ||
     client.publishableKey.includes('REPLACE');
+
+  if (oauthChallenge)
+    return <SignIn social={false} onSuccess={onSuccess} layout={layout} />;
 
   return (
     <div
@@ -106,139 +118,142 @@ export function SignUp({
         </div>
       )}
       <div className={layout === 'split' ? 'slx-split-form' : 'slx-form-full'}>
-      {missingKey && (
-        <p className="slx-setup-note">
-          <strong>Setup:</strong> Add{' '}
-          <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> — run{' '}
-          <code>npx @slyxup/cli keys create</code>
-        </p>
-      )}
-      <div className="slx-mark">
-        <KeyholeMark />
-      </div>
-      <h1 className="slx-title">Create your account</h1>
-      <p className="slx-subtitle">A minute to set up. Sign in forever after.</p>
-
-      {social && (
-        <>
-          <div className="slx-social">
-            <button
-              type="button"
-              className="slx-social-btn"
-              onClick={() => oauth('google')}
-            >
-              <GoogleIcon /> Continue with Google
-            </button>
-            <button
-              type="button"
-              className="slx-social-btn"
-              onClick={() => oauth('github')}
-            >
-              <GitHubIcon /> Continue with GitHub
-            </button>
-          </div>
-          <div className="slx-divider">or</div>
-        </>
-      )}
-
-      {error && (
-        <p className="slx-error-text" role="alert">
-          {error}
-        </p>
-      )}
-
-      {successEmail && (
-        <p
-          className="slx-success-text"
-          aria-live="polite"
-          style={{ color: 'var(--slx-success)' }}
-        >
-          Account created! We sent a verification link to{' '}
-          <strong>{successEmail}</strong>. Check your inbox to verify and sign
-          in.
-        </p>
-      )}
-
-      <form onSubmit={onSubmit}>
-        <div className="slx-field">
-          <label className="slx-label" htmlFor="slx-signup-name">
-            First name
-          </label>
-          <input
-            id="slx-signup-name"
-            className="slx-input"
-            type="text"
-            autoComplete="given-name"
-            placeholder="Ada"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
-        </div>
-        {showUsername && (
-          <div className="slx-field">
-            <label className="slx-label" htmlFor="slx-signup-username">
-              Username
-            </label>
-          <input
-            id="slx-signup-username"
-            className="slx-input"
-            type="text"
-            autoComplete="username"
-            placeholder="ada"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <p className="slx-hint">
-            Optional — lets you sign in with a username instead of your email.
+        {missingKey && (
+          <p className="slx-setup-note">
+            <strong>Setup:</strong> Add{' '}
+            <code>NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY</code> — run{' '}
+            <code>.env.local</code>
           </p>
-          </div>
         )}
-        <div className="slx-field">
-          <label className="slx-label" htmlFor="slx-signup-email">
-            Email
-          </label>
-          <input
-            id="slx-signup-email"
-            className="slx-input"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+        <div className="slx-mark">
+          <KeyholeMark />
         </div>
-        <div className="slx-field">
-          <label className="slx-label" htmlFor="slx-signup-password">
-            Password
-          </label>
-          <PasswordField
-            id="slx-signup-password"
-            value={password}
-            onChange={setPassword}
-            autoComplete="new-password"
-            placeholder="At least 8 characters"
-            required
-            minLength={8}
-          />
-          <p className="slx-hint">
-            Use 8+ characters with a mix of letters and numbers.
-          </p>
-        </div>
-        <button className="slx-btn" type="submit" disabled={busy}>
-          {busy && <span className="slx-spinner" aria-hidden="true" />}
-          {busy ? 'Creating account…' : 'Create account'}
-        </button>
-      </form>
-
-      {onSignInClick && (
-        <p className="slx-footer">
-          Already have an account?{' '}
-          <button type="button" className="slx-link" onClick={onSignInClick}>
-            Sign in
-          </button>
+        <h1 className="slx-title">Create your account</h1>
+        <p className="slx-subtitle">
+          A minute to set up. Sign in forever after.
         </p>
-      )}
+
+        {social && (
+          <>
+            <div className="slx-social">
+              <button
+                type="button"
+                className="slx-social-btn"
+                onClick={() => oauth('google')}
+              >
+                <GoogleIcon /> Continue with Google
+              </button>
+              <button
+                type="button"
+                className="slx-social-btn"
+                onClick={() => oauth('github')}
+              >
+                <GitHubIcon /> Continue with GitHub
+              </button>
+            </div>
+            <div className="slx-divider">or</div>
+          </>
+        )}
+
+        {error && (
+          <p className="slx-error-text" role="alert">
+            {error}
+          </p>
+        )}
+
+        {successEmail && (
+          <p
+            className="slx-success-text"
+            aria-live="polite"
+            style={{ color: 'var(--slx-success)' }}
+          >
+            Account created! We sent a verification link to{' '}
+            <strong>{successEmail}</strong>. Check your inbox to verify and sign
+            in.
+          </p>
+        )}
+
+        <form onSubmit={onSubmit}>
+          <div className="slx-field">
+            <label className="slx-label" htmlFor="slx-signup-name">
+              First name
+            </label>
+            <input
+              id="slx-signup-name"
+              className="slx-input"
+              type="text"
+              autoComplete="given-name"
+              placeholder="Ada"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+          </div>
+          {showUsername && (
+            <div className="slx-field">
+              <label className="slx-label" htmlFor="slx-signup-username">
+                Username
+              </label>
+              <input
+                id="slx-signup-username"
+                className="slx-input"
+                type="text"
+                autoComplete="username"
+                placeholder="ada"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <p className="slx-hint">
+                Optional — lets you sign in with a username instead of your
+                email.
+              </p>
+            </div>
+          )}
+          <div className="slx-field">
+            <label className="slx-label" htmlFor="slx-signup-email">
+              Email
+            </label>
+            <input
+              id="slx-signup-email"
+              className="slx-input"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="slx-field">
+            <label className="slx-label" htmlFor="slx-signup-password">
+              Password
+            </label>
+            <PasswordField
+              id="slx-signup-password"
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              required
+              minLength={8}
+            />
+            <p className="slx-hint">
+              Use 8+ characters with a mix of letters and numbers.
+            </p>
+          </div>
+          <button className="slx-btn" type="submit" disabled={busy}>
+            {busy && <span className="slx-spinner" aria-hidden="true" />}
+            {busy ? 'Creating account…' : 'Create account'}
+          </button>
+        </form>
+
+        {onSignInClick && (
+          <p className="slx-footer">
+            Already have an account?{' '}
+            <button type="button" className="slx-link" onClick={onSignInClick}>
+              Sign in
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

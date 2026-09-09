@@ -170,6 +170,7 @@ export async function createPaddlePrice(
 // ── Checkout ──
 
 export interface CheckoutCustomData {
+  checkoutIntentId?: string;
   userId: string;
   projectId: string;
   planId?: string;
@@ -180,6 +181,9 @@ interface PaddleTransaction {
   status?: string;
   checkout?: { url?: string };
   custom_data?: Record<string, unknown> | null;
+  subscription_id?: string | null;
+  customer_id?: string | null;
+  items?: { price: { id: string } }[];
 }
 
 /** Fetch a transaction by id — used to VERIFY payment before celebrating. */

@@ -27,7 +27,6 @@ import * as ProjectService from './services/project.service';
 
 type Bindings = {
   DB: D1Database;
-  BILLING_DB: D1Database;
   KV: KVNamespace;
   SESSION_SECRET: string;
   ENCRYPTION_KEY: string;
@@ -59,7 +58,9 @@ app.use('*', async (c, next) => {
 
   let allow =
     !!origin &&
-    (allowed.includes(origin) || allowed.includes('*') || isLocalhost);
+    (allowed.includes(origin) ||
+      origin === new URL(c.req.url).origin ||
+      isLocalhost);
 
   // Dynamic: custom domains registered on LIVE projects (KV-cached 60s).
   // Reads BOTH the new project_domains table (scalable) and the legacy
@@ -120,6 +121,9 @@ app.use('*', async (c, next) => {
   }
   if (c.req.method === 'OPTIONS') {
     return new Response('', { status: 204, headers: corsHeaders });
+  }
+  if (origin && !allow && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    return c.json({ ok: false, error: 'Origin is not allowed' }, 403);
   }
   await next();
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);
@@ -274,6 +278,21 @@ app.get('/v1/session', async (c) => {
   if (!token) return c.json({ ok: false, error: 'No session' }, 401);
   const data = await getSession(c.env, token);
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  const key = c.req.header('X-Publishable-Key');
+  if (key) {
+    const project = await ProjectService.verifyApiKey(c.env, key);
+    if (
+      !project ||
+      project.type !== 'publishable' ||
+      project.projectId !== data.session.projectId
+    ) {
+      return c.json(
+        { ok: false, error: 'Session does not belong to this project' },
+        403
+      );
+    }
+  }
+  c.header('Cache-Control', 'no-store');
   return c.json({
     ok: true,
     user: {

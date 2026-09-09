@@ -1,5 +1,4 @@
-// Merged from @slyxup/cli api.ts — same project/keys/domains ops, now callable from web UI.
-// This replaces the CLI: web dashboard calls these directly. Old `slyxup` CLI re-exports this.
+// Project/keys/domains management API — callable from web UI or any client.
 
 export interface ManagedProject {
   id: string;

@@ -2,67 +2,161 @@ import { ArrowRight, BookOpen, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CodeBlock } from '../components/CodeBlock';
+import { IntegrationGuide } from '../components/IntegrationGuide';
 import { Button, Card, CardBody } from '../components/ui';
 import { AUTH_URL, BILLING_URL } from '../lib/api';
 
 const SECTIONS = [
   {
+    id: 'integration-guide',
+    label: 'Complete integration guide',
+    group: 'Start here',
+    keys: 'ai implementation migration sdk server spa cookie billing setup',
+  },
+  {
     id: 'quickstart',
     label: 'Quickstart',
+    group: 'Start here',
     keys: 'start install key domain project setup',
+  },
+  {
+    id: 'concepts',
+    label: 'Core concepts',
+    group: 'Start here',
+    keys: 'project user session key domain environment test live mental model',
   },
   {
     id: 'react',
     label: 'React',
+    group: 'Integrate',
     keys: 'provider hooks signin signup userbutton',
   },
-  { id: 'nextjs', label: 'Next.js', keys: 'middleware server component ssr' },
+  {
+    id: 'nextjs',
+    label: 'Next.js',
+    group: 'Integrate',
+    keys: 'middleware server component ssr',
+  },
   {
     id: 'core',
     label: 'Core SDK',
+    group: 'Integrate',
     keys: 'headless client auth billing checkout',
   },
   {
     id: 'uikit',
     label: 'UI kit',
+    group: 'Integrate',
     keys: 'components theme pricing admin signin',
   },
   {
-    id: 'api',
-    label: 'API reference',
-    keys: 'endpoints rest users keys projects domains oauth',
+    id: 'management',
+    label: 'Management',
+    group: 'Integrate',
+    keys: 'projects keys domains api',
+  },
+  {
+    id: 'auth',
+    label: 'Authentication',
+    group: 'Identity',
+    keys: 'signup signin signout password username email login register',
+  },
+  {
+    id: 'oauth',
+    label: 'OAuth',
+    group: 'Identity',
+    keys: 'google github social redirect state callback link unlink',
+  },
+  {
+    id: 'passwords',
+    label: 'Passwords & verification',
+    group: 'Identity',
+    keys: 'forgot reset verify resend email token ttl',
   },
   {
     id: 'sessions',
-    label: 'Sessions & 2FA',
-    keys: 'cookie session totp authenticator authorize login',
+    label: 'Sessions',
+    group: 'Identity',
+    keys: 'cookie session bearer expiry revoke device authorize login',
+  },
+  {
+    id: 'tfa',
+    label: 'Two-factor auth',
+    group: 'Identity',
+    keys: 'totp authenticator challenge recovery',
+  },
+  {
+    id: 'users',
+    label: 'Users & members',
+    group: 'Identity',
+    keys: 'role admin member block delete paginate',
+  },
+  {
+    id: 'keys',
+    label: 'API keys',
+    group: 'Identity',
+    keys: 'publishable secret pk sk prefix hash rotate environment',
+  },
+  {
+    id: 'domains',
+    label: 'Domains & CORS',
+    group: 'Identity',
+    keys: 'origin allowlist cors browser localhost https',
+  },
+  {
+    id: 'billing',
+    label: 'Billing & subscriptions',
+    group: 'Money',
+    keys: 'plans checkout paddle subscription invoice cancel resume trial',
   },
   {
     id: 'webhooks',
     label: 'Webhooks',
-    keys: 'events paddle user created billing notify endpoint',
+    group: 'Money',
+    keys: 'events paddle user created billing notify endpoint signature',
   },
   {
     id: 'selfhost',
     label: 'Self-hosting',
+    group: 'Run it',
     keys: 'deploy wrangler d1 secrets dev vars cloudflare',
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    group: 'Run it',
+    keys: 'sessions password pbkdf2 keys block https hash',
+  },
+  {
+    id: 'api',
+    label: 'API reference',
+    group: 'Run it',
+    keys: 'endpoints rest users keys projects domains oauth',
   },
   {
     id: 'trouble',
     label: 'Troubleshooting',
+    group: 'Run it',
     keys: 'error 401 403 cors faq debug fix',
   },
-  { id: 'cli', label: 'CLI', keys: 'terminal commands shorten' },
-  {
-    id: 'security',
-    label: 'Security',
-    keys: 'sessions password argon keys block https',
-  },
 ];
+
+const GROUP_ORDER = ['Start here', 'Integrate', 'Identity', 'Money', 'Run it'];
 
 function SectionContent({ section }: { section: string }) {
   return (
     <div className="docs-prose max-w-none">
+      {section === 'integration-guide' && (
+        <>
+          <h2>Auth and billing integration guide</h2>
+          <p>
+            Source-accurate recipes, session transport choices, upgrade
+            instructions, and known limitations. This guide describes this
+            checkout; confirm the installed npm versions before upgrading.
+          </p>
+          <IntegrationGuide />
+        </>
+      )}
       {section === 'quickstart' && (
         <>
           <h2>Quickstart</h2>
@@ -97,6 +191,70 @@ function SectionContent({ section }: { section: string }) {
         </>
       )}
 
+      {section === 'concepts' && (
+        <>
+          <h2>Core concepts</h2>
+          <p>
+            Six nouns explain the whole platform. Learn them once and every
+            page, endpoint and SDK falls into place.
+          </p>
+          <h3>Project</h3>
+          <p>
+            The isolation boundary. A project owns its <b>users</b>,{' '}
+            <b>API keys</b>, <b>domains</b> and <b>billing plans</b> — nothing
+            leaks across projects. Create one per product or per environment
+            (e.g. <code className="inline">acme-web</code>,{' '}
+            <code className="inline">acme-staging</code>). Slugs are lowercase
+            letters, numbers and hyphens, and must be unique.
+          </p>
+          <h3>User</h3>
+          <p>
+            An end-user of <b>your</b> product (not of SlyxUp itself). Users
+            belong to exactly one project and carry{' '}
+            <code className="inline">email</code>, optional{' '}
+            <code className="inline">firstName / lastName / username</code>, a{' '}
+            <code className="inline">role</code> (
+            <code className="inline">user</code> or{' '}
+            <code className="inline">admin</code>), a verified flag and a
+            blocked flag. You are a <b>developer</b> — the human operating
+            projects through this panel, the CLI or a secret key.
+          </p>
+          <h3>Session</h3>
+          <p>
+            A 32-byte random token + 7-day expiry, delivered as an HttpOnly
+            cookie (and optionally a Bearer token). Sessions are what “logged
+            in” means — revoke one and that device is out immediately. Full
+            detail in <b>Sessions</b>.
+          </p>
+          <h3>API key</h3>
+          <p>
+            A long-lived credential for a project:{' '}
+            <code className="inline">pk_…</code> (publishable, browsers) or{' '}
+            <code className="inline">sk_…</code> (secret, servers only), each in{' '}
+            <code className="inline">test</code> or{' '}
+            <code className="inline">live</code> flavor — e.g.{' '}
+            <code className="inline">pk_live_…</code>. Only a SHA-256 hash is
+            stored; the full key exists solely in the create response. Full
+            detail in <b>API keys</b>.
+          </p>
+          <h3>Domain</h3>
+          <p>
+            A browser origin allowed to call the API with this project's
+            publishable key. Browser traffic from anywhere else is rejected
+            before it touches your data. Full detail in <b>Domains & CORS</b>.
+          </p>
+          <h3>Environment: test vs live</h3>
+          <p>
+            Projects start in <code className="inline">test</code>. CORS domain
+            checks, billing enforcement and rate limits treat{' '}
+            <code className="inline">live</code> strictly;{' '}
+            <code className="inline">test</code> is lenient for local
+            development (localhost is always allowed). Flip with Project →
+            Settings → <b>Go live</b> when you ship.
+          </p>
+        </>
+      )}
+
       {section === 'react' && (
         <>
           <h2>React integration</h2>
@@ -109,8 +267,8 @@ function SectionContent({ section }: { section: string }) {
             lang="tsx"
             code={`import { SlyxUpProvider, SignIn, UserButton } from "@slyxup/ui"
 
-<SlyxUpProvider publishableKey="pk_live_..." apiUrl="${AUTH_URL}">
-  <SignIn onSuccess={() => router.push("/dashboard")} />
+<SlyxUpProvider publishableKey="pk_live_..." apiUrl="${AUTH_URL}" billingApiUrl="${BILLING_URL}" tokenStorage="sessionStorage">
+  <SignIn social={false} onSuccess={() => router.push("/dashboard")} />
   <UserButton />
 </SlyxUpProvider>`}
           />
@@ -131,34 +289,42 @@ function SectionContent({ section }: { section: string }) {
         <>
           <h2>Next.js integration</h2>
           <p>
-            Server-side auth via <code className="inline">@slyxup/nextjs</code>:
-            read the session in Server Components and route handlers, protect
-            pages in middleware.
+            Server-side auth via{' '}
+            <code className="inline">@slyxup/core/next</code>: read the session
+            in Server Components and route handlers, protect pages in
+            middleware.
           </p>
           <CodeBlock
             title="middleware.ts"
             lang="ts"
-            code={`import { authMiddleware } from "@slyxup/nextjs"
+            code={`import { slyxupMiddleware } from "@slyxup/core/next"
 
-export default authMiddleware({
-  publishableKey: process.env.NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY!,
-  apiUrl: "${AUTH_URL}",
+export default slyxupMiddleware({
   publicRoutes: ["/", "/sign-in"],
 })
 
 export const config = { matcher: ["/((?!_next|.*\\\\..*).*)"] }`}
           />
           <CodeBlock
-            title="page.tsx"
-            lang="tsx"
-            code={`import { currentUser } from "@slyxup/nextjs"
+            title="app/api/account/route.ts"
+            lang="ts"
+            code={`import { getServerSession } from "@slyxup/core/next"
 
-export default async function Dashboard() {
-  const user = await currentUser()
-  if (!user) redirect("/sign-in")
-  return <h1>Hi, {user.email}</h1>
+export async function GET(request: Request) {
+  const session = await getServerSession(request, {
+    apiUrl: process.env.SLYXUP_AUTH_URL,
+    publishableKey: process.env.SLYXUP_PUBLISHABLE_KEY,
+  })
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 })
+  return Response.json({ user: session.user })
 }`}
           />
+          <p>
+            These helpers require a same-origin sign-in endpoint that sets your
+            application's HttpOnly cookie. Direct cross-origin SPA sign-in does
+            not set that cookie. See Complete integration guide for the required
+            server flow; static-export Next.js apps cannot use middleware.
+          </p>
         </>
       )}
 
@@ -172,9 +338,9 @@ export default async function Dashboard() {
           <CodeBlock
             title="auth.ts"
             lang="ts"
-            code={`import { createClient } from "@slyxup/core"
+            code={`import { SlyxupClient } from "@slyxup/core"
 
-const slyxup = createClient({
+const slyxup = new SlyxupClient({
   publishableKey: "pk_live_...",
   apiUrl: "${AUTH_URL}",
 })
@@ -187,9 +353,17 @@ await slyxup.auth.signOut()`}
           <CodeBlock
             title="billing.ts"
             lang="ts"
-            code={`const { plans } = await slyxup.billing.plans.list()
-await slyxup.billing.checkout({ planId: plans[0].id })
-// server-only: verify with your secret key`}
+            code={`import { createBillingClient } from "@slyxup/core"
+const billing = createBillingClient({
+  apiUrl: "${BILLING_URL}",
+  publishableKey: slyxup.publishableKey,
+  getToken: () => slyxup.getToken(),
+})
+const plans = await billing.listPlans(projectId)
+if (plans[0]) await billing.checkout(plans[0].id)
+// Server-side feature authorization uses the current user's session:
+const access = await billing.getEntitlements(projectId)
+const canExport = access.features.includes("export")`}
           />
         </>
       )}
@@ -261,6 +435,429 @@ await slyxup.billing.checkout({ planId: plans[0].id })
               lists.
             </li>
           </ul>
+        </>
+      )}
+
+      {section === 'auth' && (
+        <>
+          <h2>Authentication</h2>
+          <p>
+            Email + password is the primary method; OAuth and 2FA layer on top.
+            Every flow ends in a <b>session</b> (7-day cookie/Bearer token) —
+            see <b>Sessions</b> for the transport.
+          </p>
+          <h3>Sign up</h3>
+          <p>
+            <code className="inline">POST /v1/auth/sign-up</code> takes{' '}
+            <code className="inline">email</code>,{' '}
+            <code className="inline">password</code> (8–128 chars), optional{' '}
+            <code className="inline">firstName</code> and optional{' '}
+            <code className="inline">username</code> (3–30 chars, letters,
+            numbers, underscores, lowercased). It immediately returns a session
+            <b>and</b> sends a verification email (best-effort, never blocks the
+            response — verification tokens live 24h).
+          </p>
+          <CodeBlock
+            title="signup.ts"
+            lang="ts"
+            code={`const res = await client.auth.signUp({
+  email: "ada@example.com",
+  password: "correct-horse-9",
+  firstName: "Ada",
+  username: "ada",
+});
+// → { userId, sessionToken, expiresAt } + verification email sent`}
+          />
+          <h3>Sign in</h3>
+          <p>
+            <code className="inline">POST /v1/auth/sign-in</code> accepts{' '}
+            <code className="inline">{'{ email, password }'}</code> <b>or</b>{' '}
+            <code className="inline">{'{ username, password }'}</code>. Two
+            outcomes: a normal account gets{' '}
+            <code className="inline">{'{ sessionToken }'}</code>; a 2FA account
+            gets <code className="inline">{'{ challengeToken }'}</code> and must
+            finish via <code className="inline">POST /v1/auth/sign-in/2fa</code>
+            .
+          </p>
+          <h3>Sign out</h3>
+          <p>
+            <code className="inline">POST /v1/auth/sign-out</code> ends the
+            session and clears cookies. To log out <b>every</b> device, delete
+            each session (
+            <code className="inline">DELETE /v1/sessions/:id</code>) or block +
+            unblock the user.
+          </p>
+          <h3>First-login password rotation</h3>
+          <p>
+            Admins created with the default password carry{' '}
+            <code className="inline">mustChangePassword</code>. They cannot use
+            the API until they complete{' '}
+            <code className="inline">POST /v1/auth/password/force-change</code>{' '}
+            (works without a session — that is the point). The flag then clears
+            permanently.
+          </p>
+        </>
+      )}
+
+      {section === 'oauth' && (
+        <>
+          <h2>OAuth (Google + GitHub)</h2>
+          <p>
+            Exactly two providers, fully hosted: your app never sees provider
+            secrets. The flow is standard authorization-code with a server-side
+            state guard.
+          </p>
+          <h3>The flow, step by step</h3>
+          <ul>
+            <li>
+              <b>1. Start</b> — send the browser to{' '}
+              <code className="inline">
+                GET /v1/oauth/:provider?redirect_url=…
+              </code>{' '}
+              (provider is <code className="inline">google</code> or{' '}
+              <code className="inline">github</code>). The server stores a state
+              token for <b>10 minutes</b> and redirects to the provider.
+            </li>
+            <li>
+              <b>2. Callback</b> — the provider returns to{' '}
+              <code className="inline">/v1/oauth/callback/:provider</code>,
+              which validates state (single-use), exchanges the code, and{' '}
+              <b>upserts</b> the user by verified email: new users are created,
+              existing users get the provider <b>linked</b>.
+            </li>
+            <li>
+              <b>3. Land</b> — a session is created and the browser returns to
+              your <code className="inline">redirect_url</code>. Failures land
+              on <code className="inline">/sign-in?error=…</code> (
+              <code className="inline">missing_code</code>,{' '}
+              <code className="inline">invalid_state</code>,{' '}
+              <code className="inline">state_mismatch</code>).
+            </li>
+          </ul>
+          <CodeBlock
+            title="oauth.ts"
+            lang="ts"
+            code={`import { SocialButtons } from "@slyxup/ui";
+
+// one line — redirect handled for you
+<SocialButtons providers={["google", "github"]} />
+
+// manual:
+// window.location.href =
+//   AUTH_URL + "/v1/oauth/google?redirect_url=" + encodeURIComponent(location.href)`}
+          />
+          <h3>Link / unlink</h3>
+          <p>
+            Connected providers live under{' '}
+            <code className="inline">GET /v1/user/accounts</code>. Unlink with{' '}
+            <code className="inline">
+              DELETE /v1/user/accounts/:id?provider=…
+            </code>{' '}
+            — allowed only while the user keeps <b>at least one</b> sign-in
+            method (password or another provider), so accounts can never lock
+            themselves out.
+          </p>
+        </>
+      )}
+
+      {section === 'passwords' && (
+        <>
+          <h2>Passwords & verification</h2>
+          <p>
+            Passwords require <b>8–128 characters</b> and are stored as
+            PBKDF2-HMAC-SHA-256 (100,000 iterations, per-user salt). All three
+            email flows are <b>best-effort and non-enumerating</b>: requesting a
+            link for an unknown address still returns success, so attackers
+            cannot harvest your user list.
+          </p>
+          <h3>Email verification</h3>
+          <ul>
+            <li>
+              Sign-up sends a link with a token valid <b>24 hours</b>.
+            </li>
+            <li>
+              <code className="inline">
+                GET /v1/verification/confirm?token=…
+              </code>{' '}
+              confirms from the email link.
+            </li>
+            <li>
+              <code className="inline">POST /v1/verification/verify</code>{' '}
+              confirms from your UI;{' '}
+              <code className="inline">POST /v1/verification/resend</code> sends
+              a fresh link.
+            </li>
+          </ul>
+          <h3>Password reset</h3>
+          <ul>
+            <li>
+              <code className="inline">
+                POST /v1/verification/password/forgot
+              </code>{' '}
+              with <code className="inline">{'{ email }'}</code> — always
+              succeeds.
+            </li>
+            <li>
+              The emailed link carries a token valid <b>1 hour</b>, single-use.
+            </li>
+            <li>
+              <code className="inline">
+                POST /v1/verification/password/reset
+              </code>{' '}
+              with <code className="inline">{'{ token, password }'}</code> sets
+              the new password (same 8–128 rule).
+            </li>
+          </ul>
+          <h3>Change while signed in</h3>
+          <p>
+            <code className="inline">POST /v1/user/password</code> (current +
+            new password) for normal rotation. First-login admins use{' '}
+            <code className="inline">POST /v1/auth/password/force-change</code>{' '}
+            instead — see <b>Authentication</b>.
+          </p>
+        </>
+      )}
+
+      {section === 'users' && (
+        <>
+          <h2>Users & members</h2>
+          <p>
+            Users belong to one project. Developers (you, operating via this
+            panel, the CLI or a secret key) manage them per project — never
+            globally.
+          </p>
+          <h3>List & search</h3>
+          <p>
+            <code className="inline">GET /v1/projects/:id/users</code> supports{' '}
+            <code className="inline">q</code> (email substring match),{' '}
+            <code className="inline">limit</code> (default 50, max 200) and{' '}
+            <code className="inline">offset</code>, newest first, with a{' '}
+            <code className="inline">total</code> for pagination.{' '}
+            <code className="inline">GET /v1/projects/:id/users/:userId</code>{' '}
+            adds profile, live session count and linked OAuth providers.
+          </p>
+          <h3>Roles</h3>
+          <ul>
+            <li>
+              <b>owner</b> — created the project. Only owners can delete it.
+            </li>
+            <li>
+              <b>admin</b> — manages users, keys and domains.
+            </li>
+            <li>
+              <b>member</b> / <b>user</b> — the default; a regular end-user.
+            </li>
+          </ul>
+          <p>
+            Change role, name or email with{' '}
+            <code className="inline">PATCH /v1/projects/:id/users/:userId</code>
+            .
+          </p>
+          <h3>Block, unblock, delete</h3>
+          <ul>
+            <li>
+              <b>Block</b> (<code className="inline">POST …/block</code>,
+              optional <code className="inline">{'{ reason }'}</code>) flips the
+              flag <b>and deletes every session</b> — the user is out on all
+              devices instantly.
+            </li>
+            <li>
+              <b>Unblock</b> (<code className="inline">POST …/unblock</code>)
+              restores access; the user signs in again.
+            </li>
+            <li>
+              <b>Delete</b> (<code className="inline">DELETE …/:userId</code>)
+              removes profile, sessions and the user row — permanent.
+            </li>
+          </ul>
+        </>
+      )}
+
+      {section === 'keys' && (
+        <>
+          <h2>API keys</h2>
+          <p>
+            Keys identify <b>which project</b> a call belongs to and{' '}
+            <b>how much trust</b> it carries. The name encodes both:{' '}
+            <code className="inline">pk_live_…</code> (publishable, live),{' '}
+            <code className="inline">sk_test_…</code> (secret, test).
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Where it goes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>publishable (pk_)</td>
+                <td>
+                  Browsers and public clients. Origin-checked against your
+                  domains.
+                </td>
+              </tr>
+              <tr>
+                <td>secret (sk_)</td>
+                <td>Your server only. Never ships to browsers — ever.</td>
+              </tr>
+              <tr>
+                <td>test</td>
+                <td>Local development; lenient CORS and billing.</td>
+              </tr>
+              <tr>
+                <td>live</td>
+                <td>Production; strict checks everywhere.</td>
+              </tr>
+            </tbody>
+          </table>
+          <h3>Lifecycle rules</h3>
+          <ul>
+            <li>
+              <b>Created once, shown once</b> —{' '}
+              <code className="inline">POST /v1/keys</code> returns the full
+              key; only a SHA-256 hash is stored. Lose it? Revoke and create
+              another.
+            </li>
+            <li>
+              <b>Listing never leaks</b> —{' '}
+              <code className="inline">GET /v1/keys?projectId=…</code> returns
+              id, name, prefix, type and environment. No hashes, ever.
+            </li>
+            <li>
+              <b>Revocation is instant</b> —{' '}
+              <code className="inline">DELETE /v1/keys/:id</code> deletes the
+              row; in-flight requests with it fail immediately.
+            </li>
+            <li>
+              <b>Rotate like this</b> — create the replacement → deploy it →
+              revoke the old one. Never the reverse order.
+            </li>
+          </ul>
+        </>
+      )}
+
+      {section === 'domains' && (
+        <>
+          <h2>Domains & CORS</h2>
+          <p>
+            Browser calls authenticate with a publishable key — but a key alone
+            is not enough. The request <b>origin</b> must also be allowlisted
+            for the project, otherwise the API answers without CORS headers and
+            the browser blocks the response.
+          </p>
+          <h3>Matching rules (exact, but forgiving where safe)</h3>
+          <ul>
+            <li>
+              Hostnames compare <b>exactly</b> after lowercasing, with a leading{' '}
+              <code className="inline">www.</code> ignored on both sides —{' '}
+              <code className="inline">www.app.com</code> matches{' '}
+              <code className="inline">app.com</code>.
+            </li>
+            <li>
+              Only <code className="inline">https://</code> origins qualify for
+              custom domains. <code className="inline">localhost</code> (any
+              port) is <b>always allowed</b> so local dev just works.
+            </li>
+            <li>
+              Only domains on <code className="inline">live</code> projects
+              participate; lookups are KV-cached for <b>60 seconds</b>, so a
+              freshly added domain can take up to a minute to take effect.
+            </li>
+            <li>
+              Preflights (<code className="inline">OPTIONS</code>) answer{' '}
+              <code className="inline">204</code> with credentials enabled.
+            </li>
+          </ul>
+          <h3>Manage</h3>
+          <p>
+            Project → Domains here, or{' '}
+            <code className="inline">PATCH /v1/projects/:id/domains</code> with{' '}
+            <code className="inline">
+              {'{ action: "add" | "remove", domain }'}
+            </code>
+            . Enter bare hosts (<code className="inline">app.example.com</code>
+            ), never URLs — scheme and path are stripped.
+          </p>
+        </>
+      )}
+
+      {section === 'billing' && (
+        <>
+          <h2>Billing & subscriptions</h2>
+          <p>
+            Money lives in the <b>billing worker</b> (Paddle-backed), completely
+            separate from identity. It never writes to the auth database — it
+            validates your session read-only and owns plans, subscriptions and
+            invoices itself.
+          </p>
+          <h3>Plans</h3>
+          <p>
+            A plan is <code className="inline">name</code>,{' '}
+            <code className="inline">amount</code> (cents),{' '}
+            <code className="inline">currency</code>,{' '}
+            <code className="inline">interval</code> (
+            <code className="inline">month</code>/
+            <code className="inline">year</code>), optional{' '}
+            <code className="inline">trialDays</code>,{' '}
+            <code className="inline">features[]</code> and a{' '}
+            <code className="inline">popular</code> flag, ordered by{' '}
+            <code className="inline">sortOrder</code>. The public endpoint lists{' '}
+            <b>active plans only</b>; creating, editing or deactivating needs
+            the <code className="inline">BILLING_ADMIN_SECRET</code>.
+          </p>
+          <h3>Subscribe (hosted checkout)</h3>
+          <ul>
+            <li>
+              <code className="inline">POST /v1/billing/checkout</code> with{' '}
+              <code className="inline">{'{ planId, successUrl }'}</code> returns{' '}
+              <code className="inline">{'{ checkoutUrl }'}</code> — open it,
+              Paddle takes it from there.
+            </li>
+            <li>
+              Already on an <code className="inline">active</code> or{' '}
+              <code className="inline">trialing</code> plan? Checkout refuses —
+              cancel first.
+            </li>
+            <li>
+              The subscription row itself is created by the{' '}
+              <code className="inline">subscription.created</code> webhook. The
+              webhook is the source of truth, not the checkout call.
+            </li>
+          </ul>
+          <h3>Manage a subscription</h3>
+          <ul>
+            <li>
+              <code className="inline">
+                GET /v1/billing/subscription?projectId=…
+              </code>{' '}
+              — status, current period, cancel flag.
+            </li>
+            <li>
+              <code className="inline">
+                POST …/subscription/cancel?projectId=…
+              </code>{' '}
+              — cancels <b>at period end</b>; access continues until then.
+            </li>
+            <li>
+              <code className="inline">
+                POST …/subscription/resume?projectId=…
+              </code>{' '}
+              — undoes a scheduled cancellation.
+            </li>
+            <li>
+              <code className="inline">
+                GET /v1/billing/invoices?projectId=…
+              </code>{' '}
+              — newest first, limit 50 (max 100).
+            </li>
+          </ul>
+          <p>
+            Without a configured Paddle key these endpoints answer{' '}
+            <code className="inline">501 Billing not configured</code> — plans
+            still list, checkout does not run. That is normal on a fresh
+            self-host.
+          </p>
         </>
       )}
 
@@ -389,22 +986,19 @@ await slyxup.billing.checkout({ planId: plans[0].id })
         </>
       )}
 
-      {section === 'cli' && (
+      {section === 'management' && (
         <>
-          <h2>CLI</h2>
+          <h2>Project Management</h2>
           <p>
-            Same operations from the terminal via{' '}
-            <code className="inline">@slyxup/cli</code>.
+            Manage projects, API keys, and domains via the web dashboard at{' '}
+            <code className="inline">stack.slyxup.online</code> or using the
+            management API directly.
           </p>
           <CodeBlock
-            title="cli"
+            title="API"
             lang="bash"
-            code={`slyxup login -e you@company.com -p '...' --api-url ${AUTH_URL}
-slyxup project list --json
-slyxup project create "Acme" --json
-slyxup keys create --project-id <id> --type publishable --env live
-slyxup keys list --project-id <id>
-slyxup domains add app.example.com --project-id <id>`}
+            code={`curl -H "Authorization: Bearer <session_token>" ${AUTH_URL}/v1/projects
+curl -H "Authorization: Bearer <session_token>" ${AUTH_URL}/v1/keys?projectId=<id>`}
           />
         </>
       )}
@@ -418,7 +1012,8 @@ slyxup domains add app.example.com --project-id <id>`}
               JavaScript never sees the token.
             </li>
             <li>
-              <b>Passwords</b> use Argon2id; tokens use{' '}
+              <b>Passwords</b> use PBKDF2-HMAC-SHA-256 (100,000 iterations,
+              per-user salt); tokens use{' '}
               <code className="inline">crypto.randomUUID()</code> — never{' '}
               <code className="inline">Math.random()</code>.
             </li>
@@ -443,14 +1038,18 @@ slyxup domains add app.example.com --project-id <id>`}
 
       {section === 'sessions' && (
         <>
-          <h2>Sessions & 2FA</h2>
+          <h2>Sessions</h2>
           <p>
-            Sessions live in two cookies:{' '}
+            Every sign-in mints a 32-byte random token stored server-side with a{' '}
+            <b>7-day expiry</b>. The token travels in two cookies:{' '}
             <code className="inline">slyxup_session</code> plus the host-only{' '}
-            <code className="inline">__Host-slyxup_session</code> (preferred —
-            it cannot leak across subdomains). SDKs may also send the token as{' '}
-            <code className="inline">Authorization: Bearer</code>, which wins
-            over cookies.
+            <code className="inline">__Host-slyxup_session</code> (preferred — a
+            host-only cookie cannot leak across subdomains, so logging into two
+            SlyxUp apps in one browser never overwrites anything). SDKs and the
+            CLI may also send the token as{' '}
+            <code className="inline">Authorization: Bearer</code>, which always
+            wins over cookies. All three are{' '}
+            <code className="inline">HttpOnly, Secure, SameSite=Lax</code>.
           </p>
           <h3>Session endpoints</h3>
           <table>
@@ -464,7 +1063,7 @@ slyxup domains add app.example.com --project-id <id>`}
               <tr>
                 <td>POST /v1/auth/sign-in</td>
                 <td>
-                  Start a session. Step-up accounts get a challenge token
+                  Start a session. Step-up (2FA) accounts get a challenge token
                   instead.
                 </td>
               </tr>
@@ -490,24 +1089,89 @@ slyxup domains add app.example.com --project-id <id>`}
               </tr>
             </tbody>
           </table>
-          <h3>Two-factor (TOTP)</h3>
+          <h3>Rules that always hold</h3>
+          <ul>
+            <li>
+              <b>Blocked users lose everything instantly</b> — blocking deletes
+              all of their sessions, so the next request fails.
+            </li>
+            <li>
+              <b>Sessions are single-token</b> — there is no separate refresh
+              token. When a session expires (or is revoked), sign in again.
+            </li>
+            <li>
+              <b>Cookies are scoped per host</b> — auth, billing and your apps
+              each keep their own cookie; Bearer tokens isolate platforms
+              further.
+            </li>
+          </ul>
+        </>
+      )}
+
+      {section === 'tfa' && (
+        <>
+          <h2>Two-factor auth (TOTP)</h2>
           <p>
-            Users enable 2FA from{' '}
-            <code className="inline">UserProfile → Security</code> or via API:{' '}
-            <code className="inline">GET /v1/user/2fa/setup</code> returns a
-            secret + provisioning URI,{' '}
-            <code className="inline">POST /v1/user/2fa/enable</code> confirms it
-            with a code and returns recovery codes.{' '}
-            <code className="inline">/v1/user/2fa/verify</code> checks a code
-            without changing state;{' '}
-            <code className="inline">/v1/user/2fa/disable</code> turns it off.
+            Any user can attach an authenticator app (Google Authenticator,
+            1Password, …). Afterwards every password sign-in returns a{' '}
+            <code className="inline">challengeToken</code> instead of a session
+            — the client must complete the second step within minutes.
           </p>
+          <h3>Enable flow (do it in this order)</h3>
+          <ul>
+            <li>
+              <b>1. Setup</b> —{' '}
+              <code className="inline">GET /v1/user/2fa/setup</code> returns a
+              fresh secret + provisioning URI. Nothing is persisted yet — render
+              it as a QR code.
+            </li>
+            <li>
+              <b>2. Confirm</b> —{' '}
+              <code className="inline">POST /v1/user/2fa/enable</code> with{' '}
+              <code className="inline">{'{ secret, code }'}</code>. The code
+              must match the authenticator app. Returns <b>recovery codes</b> —
+              show them once and tell the user to store them.
+            </li>
+            <li>
+              <b>3. Sign in with 2FA</b> — password sign-in returns{' '}
+              <code className="inline">{'{ challengeToken }'}</code>; finish
+              with <code className="inline">POST /v1/auth/sign-in/2fa</code>{' '}
+              carrying{' '}
+              <code className="inline">{'{ challengeToken, code }'}</code>.
+            </li>
+          </ul>
           <CodeBlock
             title="2fa.ts"
             lang="ts"
-            code={`// after POST /v1/auth/sign-in returns { challengeToken }
-await client.auth.completeSignIn({ challengeToken, code: "123456" })`}
+            code={`// 1. password step returns a challenge instead of a session
+const res = await client.auth.signIn({ email, password });
+if ("challengeToken" in res) {
+  // 2. complete with the 6-digit code
+  await client.auth.completeSignIn({ challengeToken: res.challengeToken, code: "123456" });
+}`}
           />
+          <h3>Manage</h3>
+          <ul>
+            <li>
+              <code className="inline">GET /v1/user/2fa/status</code> — is 2FA
+              on?
+            </li>
+            <li>
+              <code className="inline">POST /v1/user/2fa/verify</code> — check a
+              code <b>without</b> changing state (pre-checks, CLI flows).
+            </li>
+            <li>
+              <code className="inline">POST /v1/user/2fa/disable</code> —
+              requires a valid current code; emits{' '}
+              <code className="inline">2fa.disabled</code>.
+            </li>
+          </ul>
+          <p>
+            The UI kit's <code className="inline">SignIn</code> handles the
+            challenge screen automatically, and{' '}
+            <code className="inline">UserProfile → Security</code> walks users
+            through setup, recovery codes and disable.
+          </p>
         </>
       )}
 
@@ -632,10 +1296,11 @@ wrangler pages deploy dist --project-name=my-panel --branch main`}
           <h2>Troubleshooting</h2>
           <h3>401 Unauthorized on every call</h3>
           <p>
-            No session token sent. Sign in again — the SDK stores it as{' '}
-            <code className="inline">slyxup_session_token</code> (or the
-            HttpOnly cookie). Expired sessions return 401: refresh by signing
-            in, then retry once.
+            Check the session transport. Tokens are in memory by default; opt
+            into project-scoped sessionStorage for a client-only SPA or
+            implement a same-origin HttpOnly cookie flow. Standalone billing
+            clients need getToken. Legacy global localStorage tokens are not
+            imported. Expired sessions require sign-in again.
           </p>
           <h3>403 Forbidden on a project route</h3>
           <p>
@@ -678,7 +1343,7 @@ wrangler pages deploy dist --project-name=my-panel --branch main`}
 }
 
 export default function Docs() {
-  const [section, setSection] = useState('quickstart');
+  const [section, setSection] = useState('integration-guide');
   const [q, setQ] = useState('');
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -755,26 +1420,39 @@ export default function Docs() {
       </div>
 
       <div className="mt-3 flex gap-6 items-start min-w-0">
-        {/* Side nav */}
-        <aside className="hidden md:block w-[190px] shrink-0 sticky top-6">
+        {/* Side nav with groups */}
+        <aside className="hidden md:block w-[200px] shrink-0 sticky top-6 max-h-[calc(100vh-120px)] overflow-y-auto">
           <Card>
-            <div className="p-2 space-y-0.5">
-              {visible.map((s) => (
-                <button
-                  type="button"
-                  key={s.id}
-                  onClick={() => setSection(s.id)}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] font-semibold cursor-pointer transition-colors ${active === s.id ? 'bg-black text-white' : 'text-[#63666f] hover:bg-[#eceef2] hover:text-black'}`}
-                >
-                  {s.label}
-                  {active === s.id && <ArrowRight className="size-3.5" />}
-                </button>
-              ))}
+            <div className="p-2">
+              {GROUP_ORDER.map((g) => {
+                const items = visible.filter((s) => s.group === g);
+                if (items.length === 0) return null;
+                return (
+                  <div key={g} className="mb-1 last:mb-0">
+                    <div className="px-3 pb-1 pt-2 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#a1a1aa] first:pt-1">
+                      {g}
+                    </div>
+                    {items.map((s) => (
+                      <button
+                        type="button"
+                        key={s.id}
+                        onClick={() => setSection(s.id)}
+                        className={`flex w-full items-center justify-between rounded-lg px-3 py-[7px] text-left text-[13px] font-medium cursor-pointer transition-colors ${active === s.id ? 'bg-black text-white font-semibold' : 'text-[#63666f] hover:bg-black/[0.04] hover:text-black'}`}
+                      >
+                        {s.label}
+                        {active === s.id && (
+                          <ArrowRight className="size-3.5 shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </Card>
           <Link
             to="/ui"
-            className="mt-3 block rounded-2xl bg-gradient-to-br from-[#3f3f46] to-black p-4 text-white"
+            className="mt-3 block rounded-2xl bg-black p-4 text-white"
           >
             <div className="text-[13px] font-bold">Prefer visuals?</div>
             <div className="text-[12px] text-white/70 mt-0.5">

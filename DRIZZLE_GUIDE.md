@@ -1,185 +1,50 @@
-# DRIZZLE_GUIDE.md — D1 + Drizzle Migrations (Generate & Migrate Properly)
+# D1 and Drizzle migrations
 
-> AI must follow this for EVERY schema change. D1 is SQLite with 100 param limit — not Postgres.
+## Sources of truth
 
-## 1. Config (already in `auth.slyxup.online/`)
+| Service | Schema | Config | Migrations | Database |
+| --- | --- | --- | --- | --- |
+| Auth | `auth/src/lib/schema.ts` | `auth/drizzle.config.ts` | `auth/migrations/` | `slyxup_auth` |
+| Billing | `billing/src/lib/schema.ts` | `billing/drizzle.config.ts` | `billing/migrations/` | `slyxup_billing` |
 
-`auth.slyxup.online/drizzle.config.ts`:
+Billing owns billing tables. D1 cannot enforce foreign keys across databases; cross-service user/project references need application validation. A read-only TypeScript helper does not make a D1 binding read-only at the platform level.
 
-```ts
-import type { Config } from 'drizzle-kit';
-export default {
-  schema: './src/lib/schema.ts',
-  out: './migrations',
-  dialect: 'sqlite',
-  driver: 'd1-http',
-  dbCredentials: {
-    accountId: process.env.CLOUDFLARE_ACCOUNT_ID!,
-    databaseId: process.env.CLOUDFLARE_DATABASE_ID!,
-    token: process.env.CLOUDFLARE_D1_TOKEN!,
-  },
-} satisfies Config;
-```
+## D1 conventions
 
-`auth.slyxup.online/package.json`:
+- Use `sqliteTable`, not PostgreSQL tables/drivers.
+- IDs: text primary keys with `crypto.randomUUID()` defaults.
+- Booleans: `integer('enabled', { mode: 'boolean' })`.
+- Timestamps: `integer('created_at', { mode: 'timestamp' })`; pass JavaScript `Date` values, stored as Unix seconds.
+- JSON: `text('settings', { mode: 'json' }).$type<Settings>()`.
+- Explicit foreign-key deletion policies; never assume foreign keys are disabled.
+- Parameterize values; never interpolate user input into SQL or identifiers.
+- Stay within the configured D1 bound-parameter limit; batch bulk rows accordingly.
+- Use D1/Drizzle `batch` for related atomic writes. Do not assume interactive PostgreSQL transactions exist in D1.
 
-```json
-{
-  "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "wrangler d1 migrations apply slyxup_auth --local",
-    "db:migrate:remote": "wrangler d1 migrations apply slyxup_auth --remote"
-  }
-}
-```
-
-Root `stack/package.json`: `"db:generate": "drizzle-kit generate"`, `"db:migrate": "wrangler d1 migrations apply slyxup_auth --remote"`
-
-## 2. Schema patterns — D1 correct (see d1-drizzle-schema skill)
-
-```ts
-import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { relations } from 'drizzle-orm';
-
-export const users = sqliteTable('users', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  email: text('email').notNull().unique(),
-  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
-  role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
-  prefs: text('prefs', { mode: 'json' }).$type<{ theme: string }>(),
-  projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$onUpdate(() => new Date()),
-}, (t) => ({
-  emailIdx: uniqueIndex('users_email_idx').on(t.email),
-  projectIdx: index('users_project_idx').on(t.projectId),
-}));
-
-export const usersRelations = relations(users, ({ one, many }) => ({
-  project: one(projects, { fields: [users.projectId], references: [projects.id] }),
-  sessions: many(sessions),
-}));
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-```
-
-**Rules**:
-- `text('id').$defaultFn(() => crypto.randomUUID())` — no auto-increment
-- `integer({ mode: 'boolean' })` / `integer({ mode: 'timestamp' })` — D1 has no BOOL/DATETIME
-- `text({ mode: 'json' }).$type<T>()` — JSON as TEXT, auto-serialized
-- FK always enforced — explicit `onDelete: 'cascade'` / `set null`
-- Max 100 bound params — bulk insert must batch
-
-## 3. Workflow — AFTER EVERY SCHEMA CHANGE
-
-**Mandatory 4 steps — never skip:**
+## Schema-change workflow
 
 ```bash
-# 1. Edit schema
-#   → auth.slyxup.online/src/lib/schema.ts
-
-# 2. Generate migration (creates migrations/xxxx.sql + journal)
-pnpm --filter auth.slyxup.online db:generate
-# or from stack root:
-pnpm db:generate
-
-# 3. Apply to LOCAL D1 (test first)
-pnpm --filter auth.slyxup.online db:migrate:local
-# wrangler d1 migrations apply slyxup_auth --local
-
-# 4. Apply to REMOTE D1 (only after local passes)
-pnpm --filter auth.slyxup.online db:migrate:remote
-# wrangler d1 migrations apply slyxup_auth --remote
-
-# 5. Verify
-wrangler d1 execute slyxup_auth --local --command "SELECT name FROM sqlite_master WHERE type='table';"
-wrangler d1 execute slyxup_auth --remote --command "SELECT count(*) FROM users;"
+# After an intentional auth schema change:
+pnpm --filter auth db:generate
+pnpm --filter auth db:migrate:local
+pnpm typecheck && pnpm build && pnpm test
+# Review generated SQL and remote pending history before applying:
+pnpm --filter auth exec wrangler d1 migrations list slyxup_auth --remote
+pnpm --filter auth db:migrate:remote
+pnpm cf:typegen
 ```
 
-**Commit BOTH**: `src/lib/schema.ts` + `migrations/*.sql` + `migrations/meta/_journal.json`.
+Use the equivalent `billing` commands for billing schema changes. Commit/review the schema, generated migration SQL and `migrations/meta` together. Generate from the service directory through its pnpm script; paths in Drizzle configs are service-relative. Never hand-edit migration history to make a failed check green.
 
-If you skip generate, DB and schema drift — AI must never edit `migrations/` manually except via `drizzle-kit generate`.
+The current configs use `d1-http` credentials for remote tooling. `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_DATABASE_ID` and `CLOUDFLARE_D1_TOKEN` are tooling environment variables; runtime Workers access bindings through `env.DB`. Do not place tooling tokens in committed files.
 
-## 4. Migrations folder layout
-
-```
-auth.slyxup.online/
-├── src/lib/schema.ts          ← source of truth
-├── drizzle.config.ts
-└── migrations/
-    ├── 0000_initial.sql
-    ├── 0001_add_sessions.sql
-    ├── meta/
-    │   ├── _journal.json
-    │   └── 0000_snapshot.json
-    └── .gitkeep
-```
-
-Root `stack/migrations/` is legacy (Postgres) — D1 migrations live per-domain: `auth.slyxup.online/migrations/`, `billing.slyxup.online/migrations/`.
-
-## 5. D1 runtime usage (Workers)
-
-```ts
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from './lib/schema';
-import { eq } from 'drizzle-orm';
-
-export default {
-  async fetch(req: Request, env: { DB: D1Database }) {
-    const db = drizzle(env.DB, { schema });
-    // select
-    const users = await db.select().from(schema.users).all(); // User[]
-    const user = await db.select().from(schema.users).where(eq(schema.users.id, id)).get(); // User | undefined
-    // insert
-    await db.insert(schema.users).values({ email: 'a@b.com' });
-    // batch (respect 100 param limit)
-    const COLS = 5; // columns per row
-    const BATCH = Math.floor(100 / COLS);
-    for (let i = 0; i < rows.length; i += BATCH) {
-      await db.insert(schema.users).values(rows.slice(i, i + BATCH));
-    }
-    // D1 batch atomic
-    await env.DB.batch([
-      env.DB.prepare('INSERT INTO users (id, email) VALUES (?1, ?2)').bind(id, email),
-    ]);
-  }
-};
-```
-
-`db.query` (relational) needs `defineRelations` on v1 — prefer `db.select()` unless relations defined.
-
-## 6. Common mistakes AI makes
-
-- ❌ Editing `migrations/*.sql` by hand → use `drizzle-kit generate`
-- ❌ Running only `--remote` without `--local` → test local first
-- ❌ Using `pgTable`/`serial`/`boolean` → use `sqliteTable`/`integer({mode:'boolean'})`
-- ❌ Forgetting `pnpm db:generate` after schema edit → DB drift
-- ❌ Bulk insert without batching → `D1_ERROR: too many bound parameters`
-- ❌ Using `Date` string directly → `integer({mode:'timestamp'})` expects `Date` object
-- ❌ Not committing `_journal.json` → next generate fails
-
-## 7. Self-hosting / local dev
+## Existing versus fresh local databases
 
 ```bash
-wrangler d1 create slyxup_auth --local
-# copy id to wrangler.jsonc d1_databases[0].database_id
-pnpm db:generate
-pnpm db:migrate:local
-wrangler dev  # uses local D1 + .dev.vars
+pnpm --filter billing exec wrangler d1 migrations list slyxup_billing --local
+pnpm --filter billing exec wrangler d1 migrations apply slyxup_billing --local --persist-to /tmp/opencode/slyxup-billing-validation
 ```
 
-Production uses same migration files — `db:migrate:remote` ensures dev/prod parity.
+A fresh isolated state validates the migration chain without deleting existing local data. If a table already exists but its creation migration is pending, inspect schema and migration history; resolve the mismatch deliberately rather than dropping the database or blindly marking migrations applied.
 
-## 8. When to regenerate types
-
-After migration: `wrangler types` → `worker-configuration.d.ts` + `pnpm typecheck`.
-
----
-**AI checklist before PR**:
-
-- [ ] `src/lib/schema.ts` edited with D1-correct types?
-- [ ] `pnpm db:generate` run?
-- [ ] `pnpm db:migrate:local` + `db:migrate:remote` both run?
-- [ ] `worker-configuration.d.ts` regenerated?
-- [ ] `pnpm typecheck` passes?
+On 2026-09-09, the existing local billing state had this mismatch, while the full migration chain applied successfully to fresh isolated state. The 3.0.0 release generates auth 0010 (durable challenges and scoped OAuth uniqueness) and billing 0002 (checkout attribution, event ordering and leases). See `DATABASE_SCHEMA.md`.

@@ -91,6 +91,7 @@ export const subscriptions = sqliteTable(
       .notNull()
       .references(() => plans.id, { onDelete: 'restrict' }),
     paddleSubscriptionId: text('paddle_subscription_id').notNull(),
+    lastEventAt: text('last_event_at'),
     paddleCustomerId: text('paddle_customer_id'),
     status: text('status', {
       enum: ['active', 'trialing', 'past_due', 'paused', 'canceled'],
@@ -137,6 +138,7 @@ export const invoices = sqliteTable(
       onDelete: 'set null',
     }),
     paddleTransactionId: text('paddle_transaction_id').notNull(),
+    lastEventAt: text('last_event_at'),
     amount: integer('amount').notNull(), // cents
     currency: text('currency', { length: 3 }).notNull().default('USD'),
     status: text('status', {
@@ -176,6 +178,8 @@ export const webhookEvents = sqliteTable(
     occurredAt: integer('occurred_at', { mode: 'timestamp' }),
     payload: text('payload', { mode: 'json' }).$type<Record<string, unknown>>(),
     processedAt: integer('processed_at', { mode: 'timestamp' }),
+    leaseUntil: integer('lease_until', { mode: 'timestamp' }),
+    leaseToken: text('lease_token'),
     status: text('status', { enum: ['pending', 'completed', 'failed'] })
       .notNull()
       .default('pending'),
@@ -190,6 +194,23 @@ export const webhookEvents = sqliteTable(
 );
 
 // ── Relations ──
+export const checkoutIntents = sqliteTable('checkout_intents', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  projectId: text('project_id').notNull(),
+  planId: text('plan_id')
+    .notNull()
+    .references(() => plans.id, { onDelete: 'restrict' }),
+  paddleCustomerId: text('paddle_customer_id').notNull(),
+  paddleTransactionId: text('paddle_transaction_id').unique(),
+  paddleSubscriptionId: text('paddle_subscription_id').unique(),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 export const plansRelations = relations(plans, ({ many }) => ({
   subscriptions: many(subscriptions),
 }));

@@ -5,6 +5,10 @@ import { createContext, useContext } from 'react';
 
 export interface AuthContextValue {
   client: SlyxupClient;
+  billingApiUrl?: string;
+  oauthChallenge?: string | null;
+  authError?: string | null;
+  clearOAuthChallenge?: () => void;
   isLoaded: boolean;
   isSignedIn: boolean;
   user: SlyxupUser | null;

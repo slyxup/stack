@@ -315,7 +315,7 @@ NEXT_PUBLIC_SLYXUP_PROJECT_ID=...`}
   }
 
   return (
-    <SlyxUpProvider publishableKey={pk} apiUrl={process.env.NEXT_PUBLIC_SLYXUP_API_URL}>
+    <SlyxUpProvider publishableKey={pk} apiUrl={process.env.NEXT_PUBLIC_SLYXUP_API_URL} billingApiUrl={process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL} tokenStorage="sessionStorage">
       <SlyxUpStyles />
       <Dashboard />
     </SlyxUpProvider>

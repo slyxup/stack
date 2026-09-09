@@ -1,10 +1,25 @@
 {
   "name": "@slyxup/core",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "description": "@slyxup/core — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.js"
+    },
+    "./manage": {
+      "types": "./dist/manage.d.ts",
+      "import": "./dist/manage.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],

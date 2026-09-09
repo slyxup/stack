@@ -22,8 +22,8 @@ export interface PricingTableProps {
    *  `currentLabel` disabled instead of "Get started". Pass the active
    *  subscription's planId, or the $0 plan's id when on the free tier. */
   currentPlanId?: string | null;
-  currentLabel?: string;
-  ctaLabel?: string;
+  currentLabel?: string | ((plan: PricingPlan) => string);
+  ctaLabel?: string | ((plan: PricingPlan) => string);
   /** Per-component theme (accent, mode, radius…) — scoped, never global. */
   theme?: SlyxUpTheme;
   style?: CSSProperties;
@@ -89,18 +89,27 @@ export function PricingTable({
     <>
       <style>{PRICING_GRID_CSS}</style>
       <div ref={ref} className={gridClass} style={style}>
-        {plans.map((plan, i) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            current={currentPlanId != null && plan.id === currentPlanId}
-            currentLabel={currentLabel}
-            ctaLabel={ctaLabel}
-            onSelect={onSelect}
-            loading={loading}
-            className={i < 3 ? `slx-rise-${i + 1}` : undefined}
-          />
-        ))}
+        {plans.map((plan, i) => {
+          const isCurrent = currentPlanId != null && plan.id === currentPlanId;
+          const resolvedCurrentLabel =
+            typeof currentLabel === 'function'
+              ? currentLabel(plan)
+              : currentLabel;
+          const resolvedCtaLabel =
+            typeof ctaLabel === 'function' ? ctaLabel(plan) : ctaLabel;
+          return (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              current={isCurrent}
+              currentLabel={resolvedCurrentLabel}
+              ctaLabel={resolvedCtaLabel}
+              onSelect={onSelect}
+              loading={loading}
+              className={i < 3 ? `slx-rise-${i + 1}` : undefined}
+            />
+          );
+        })}
       </div>
     </>
   );

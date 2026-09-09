@@ -200,6 +200,27 @@ export const CSS = `
   }
   .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn:hover { filter: brightness(.94); }
 }
+
+/* ── Current plan button (transparent with border) ── */
+.slx-btn-current {
+  width: 100%; box-sizing: border-box;
+  font-family: var(--slx-font); font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--slx-accent); background: transparent;
+  border: 2px solid var(--slx-accent); border-radius: var(--slx-radius);
+  padding: 11px 14px; cursor: default;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.slx-btn-current:hover { background: var(--slx-accent-soft); }
+.slx-btn-current:focus-visible { outline: none; box-shadow: 0 0 0 3.5px var(--slx-accent-soft); }
+@media (prefers-color-scheme: dark) {
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn-current {
+    color: var(--slx-accent); border-color: var(--slx-accent);
+  }
+  .slyxup-root:not(.slyxup-light):not([data-slyxup-theme='light']) .slx-btn-current:hover {
+    background: var(--slx-accent-soft);
+  }
+}
 .slx-spinner {
   width: 15px; height: 15px; flex: none;
   border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
@@ -1012,20 +1033,13 @@ export const CSS = `
 
 let injected = false;
 
-/** Inject the SlyxUp stylesheet + fonts once per document. Idempotent + SSR-safe. */
+/** Inject the SlyxUp stylesheet once per document. Fonts are an explicit theme opt-in. */
 export function injectStyles(): void {
   if (typeof document === 'undefined') return;
   // Design tokens are scoped to .slyxup-root — apply to <html> so the
   // components work in ANY host app without a wrapper element.
   document.documentElement.classList.add('slyxup-root');
   if (!document.querySelector('style[data-slyxup="styles"]')) {
-    if (!document.querySelector('link[href*="DM+Sans"]')) {
-      const fontLink = document.createElement('link');
-      fontLink.rel = 'stylesheet';
-      fontLink.href =
-        'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Space+Grotesk:wght@400;500;600;700&display=swap';
-      document.head.appendChild(fontLink);
-    }
     const style = document.createElement('style');
     style.setAttribute('data-slyxup', 'styles');
     style.textContent = CSS;

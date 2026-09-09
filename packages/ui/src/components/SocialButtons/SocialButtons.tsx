@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { GitHubIcon, GoogleIcon } from '../../icons';
 import { useAuth } from '../../react/hooks/useAuth';
 import { injectStyles } from '../../styles';
@@ -20,9 +21,8 @@ export function SocialButtons({
   basePath,
 }: SocialButtonsProps) {
   injectStyles();
-  const { client } = useAuth() as unknown as {
-    client?: { apiUrl?: string };
-  };
+  const [error, setError] = useState<string | null>(null);
+  const { client } = useAuth();
   const base = basePath ?? `${client?.apiUrl ?? ''}/v1/oauth`;
   return (
     <div className="slx-social">
@@ -34,14 +34,32 @@ export function SocialButtons({
             type="button"
             className="slx-social-btn"
             onClick={() => {
-              const redirect = encodeURIComponent(window.location.href);
-              window.location.href = `${base}/${p}?redirect_url=${redirect}`;
+              if (basePath && base !== `${client.apiUrl}/v1/oauth`) {
+                setError(
+                  'Configure the provider apiUrl for custom OAuth servers'
+                );
+                return;
+              }
+              void client.auth
+                .startOAuth(p)
+                .catch((error: unknown) =>
+                  setError(
+                    error instanceof Error
+                      ? error.message
+                      : 'Unable to start sign-in'
+                  )
+                );
             }}
           >
             <Icon /> {label}
           </button>
         );
       })}
+      {error && (
+        <p role="alert" className="slx-error-text">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

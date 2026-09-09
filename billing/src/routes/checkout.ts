@@ -5,7 +5,12 @@ import { createMiddleware } from 'hono/factory';
 import { getDb } from '../lib/db';
 import { badRequest, conflict, notConfigured, notFound } from '../lib/http';
 import { checkRateLimit } from '../lib/rate-limit';
-import { customers, plans, subscriptions } from '../lib/schema';
+import {
+  checkoutIntents,
+  customers,
+  plans,
+  subscriptions,
+} from '../lib/schema';
 import type { Env } from '../middleware/auth';
 import { requireUser } from '../middleware/auth';
 import { checkoutSchema } from '../schemas/billing';
@@ -148,34 +153,31 @@ app.post(
     // B3: Upsert — handle both userId and paddleCustomerId unique constraints
     try {
       if (existingByPaddle && existingByPaddle.userId !== userId) {
-        // Another user already owns this Paddle customer — just reference it
-        // by linking this userId to the existing row (merge).
-        await db
-          .update(customers)
-          .set({
-            userId,
+        return c.json(
+          {
+            ok: false,
+            code: 'CUSTOMER_IDENTITY_CONFLICT',
+            error:
+              'This billing customer is already linked to another account. Contact support.',
+          },
+          409
+        );
+      }
+      await db
+        .insert(customers)
+        .values({
+          userId,
+          email: userEmail,
+          paddleCustomerId,
+        })
+        .onConflictDoUpdate({
+          target: customers.userId,
+          set: {
             email: userEmail,
             paddleCustomerId,
             updatedAt: new Date(),
-          })
-          .where(eq(customers.id, existingByPaddle.id));
-      } else {
-        await db
-          .insert(customers)
-          .values({
-            userId,
-            email: userEmail,
-            paddleCustomerId,
-          })
-          .onConflictDoUpdate({
-            target: customers.userId,
-            set: {
-              email: userEmail,
-              paddleCustomerId,
-              updatedAt: new Date(),
-            },
-          });
-      }
+          },
+        });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(
@@ -206,7 +208,17 @@ app.post(
     // (a non-Paddle.js page there strands the buyer with no way to pay).
     try {
       const { createCheckout } = await import('../services/paddle.service');
-      const payBase = 'https://billing.slyxup.online/pay';
+      const payBase = `${c.env.API_URL.replace(/\/$/, '')}/pay`;
+      const intentId = crypto.randomUUID();
+      await db
+        .insert(checkoutIntents)
+        .values({
+          id: intentId,
+          userId,
+          projectId: plan.projectId,
+          planId: plan.id,
+          paddleCustomerId,
+        });
       const payParams = new URLSearchParams({ project_id: plan.projectId });
       if (origin) payParams.set('origin', origin);
       const checkout = await createCheckout(
@@ -214,8 +226,17 @@ app.post(
         plan.paddlePriceId,
         paddleCustomerId,
         `${payBase}?${payParams}`,
-        { userId, projectId: plan.projectId, planId: plan.id }
+        {
+          userId,
+          projectId: plan.projectId,
+          planId: plan.id,
+          checkoutIntentId: intentId,
+        }
       );
+      await db
+        .update(checkoutIntents)
+        .set({ paddleTransactionId: checkout.transactionId })
+        .where(eq(checkoutIntents.id, intentId));
       // Subscription row is created by the `subscription.created` webhook (source of truth).
       // transactionId drives Paddle.js overlay checkout on the client.
       return c.json({
