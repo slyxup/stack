@@ -39,12 +39,6 @@
       "id": "99d2ebe401894b328c75745ffca9eb19"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "STORAGE",
-      "bucket_name": "slyxup-storage"
-    }
-  ],
   "routes": [
     {
       "pattern": "auth.slyxup.online/*",
