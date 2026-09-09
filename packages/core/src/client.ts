@@ -3,6 +3,7 @@ import {
   RateLimitError,
   SlyxupError,
   UnauthorizedError,
+  ValidationError,
 } from './errors.js';
 import type {
   AuthResponse,
@@ -60,8 +61,14 @@ export class SlyxupClient {
   readonly apiUrl: string;
   private _getToken?: () => string | undefined;
   private _request?: <T>(path: string, init?: RequestInit) => Promise<T>;
+  private oauthCompletion?: Promise<SignInResponse | null>;
 
   readonly auth: {
+    startOAuth: (
+      provider: 'google' | 'github',
+      redirectUrl?: string
+    ) => Promise<void>;
+    completeOAuth: () => Promise<SignInResponse | null>;
     signUp: (input: SignUpInput) => Promise<AuthResponse>;
     signIn: (input: SignInInput) => Promise<SignInResponse>;
     signOut: () => Promise<{ ok: true }>;
@@ -243,43 +250,56 @@ export class SlyxupClient {
 
   constructor(options: SlyxupClientOptions = {}) {
     const jar = createCookieJar();
-    // Persist token in localStorage so refresh keeps session for cross-origin (auth -> billing) and for dashboard project APIs
-    const STORAGE_KEY = 'slyxup_session_token';
-    let storedToken: string | undefined;
+    this.publishableKey = options.publishableKey;
+    this.secretKey = options.secretKey;
+    this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
+    if (options.secretKey && typeof window !== 'undefined') {
+      throw new SlyxupError(
+        'Secret keys must only be used on the server',
+        400,
+        'server_only'
+      );
+    }
+    const storageKey = `slyxup:session:${this.apiUrl}:${this.publishableKey ?? 'platform'}`;
+    let storedToken = options.sessionToken;
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        storedToken = window.localStorage.getItem(STORAGE_KEY) ?? undefined;
+      if (
+        !storedToken &&
+        options.tokenStorage === 'sessionStorage' &&
+        typeof window !== 'undefined'
+      ) {
+        storedToken = window.sessionStorage.getItem(storageKey) ?? undefined;
       }
     } catch {}
     const persistToken = (t: string | undefined) => {
       storedToken = t;
       try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          if (t) window.localStorage.setItem(STORAGE_KEY, t);
-          else window.localStorage.removeItem(STORAGE_KEY);
+        if (
+          options.tokenStorage === 'sessionStorage' &&
+          typeof window !== 'undefined'
+        ) {
+          if (t) window.sessionStorage.setItem(storageKey, t);
+          else window.sessionStorage.removeItem(storageKey);
         }
       } catch {}
     };
-    this.publishableKey = options.publishableKey;
-    this.secretKey = options.secretKey;
-    this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
     this._getToken = () => storedToken;
     // _request will be assigned after `request` is defined below
 
     const requestInner = async <T>(
       path: string,
       init: RequestInit & { body?: string } = {},
-      opts?: { captureError?: boolean }
+      opts?: { captureError?: boolean; captureChallenge?: boolean }
     ): Promise<Result<T>> => {
       let res: Response;
       try {
         // Build headers: prefer cookie jar (SSR), fall back to stored Bearer token (browser cross-origin)
         const authHeaders: Record<string, string> = {};
         const jarHeader = jar.header();
-        if (Object.keys(jarHeader).length > 0) {
-          Object.assign(authHeaders, jarHeader);
-        } else if (storedToken) {
+        if (storedToken) {
           authHeaders.Authorization = `Bearer ${storedToken}`;
+        } else if (Object.keys(jarHeader).length > 0) {
+          Object.assign(authHeaders, jarHeader);
         }
         // Always send publishable key so server can scope auth to the correct project
         // and reject requests with invalid / missing keys (fixes demo-with-wrong-pk bug).
@@ -287,13 +307,16 @@ export class SlyxupClient {
           authHeaders['X-Publishable-Key'] = this.publishableKey;
         }
 
+        const headers = new Headers({
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        });
+        new Headers(init.headers).forEach((value, key) =>
+          headers.set(key, value)
+        );
         res = await fetch(`${this.apiUrl}${path}`, {
           ...init,
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-            ...init.headers,
-          },
+          headers: Object.fromEntries(headers),
           credentials: 'include',
         });
       } catch {
@@ -301,12 +324,35 @@ export class SlyxupClient {
       }
       jar.capture(res);
 
-      const data = (await res
+      const body: unknown = await res
         .json()
-        .catch(() => ({ ok: false, error: 'Invalid response' }))) as object;
+        .catch(() => ({ ok: false, error: 'Invalid response' }));
+      const data =
+        body && typeof body === 'object'
+          ? body
+          : { ok: false, error: 'Invalid response' };
 
       if (!res.ok) {
+        if (
+          opts?.captureChallenge &&
+          res.status === 403 &&
+          'code' in data &&
+          data.code === '2FA_REQUIRED' &&
+          'challengeToken' in data &&
+          typeof data.challengeToken === 'string'
+        )
+          return data as Result<T>;
         if (opts?.captureError) return data as Result<T>;
+        const message =
+          'error' in data
+            ? String(data.error)
+            : `Request failed (${res.status})`;
+        const code =
+          'code' in data && typeof data.code === 'string'
+            ? data.code
+            : undefined;
+        if (code) throw new SlyxupError(message, res.status, code);
+        if (res.status === 400) throw new ValidationError(message);
         if (res.status === 401)
           throw new UnauthorizedError(
             'error' in data ? String(data.error) : undefined
@@ -327,7 +373,7 @@ export class SlyxupClient {
     const post = <T>(
       path: string,
       body?: unknown,
-      opts?: { captureError?: boolean }
+      opts?: { captureError?: boolean; captureChallenge?: boolean }
     ) =>
       requestInner<T>(
         path,
@@ -339,6 +385,75 @@ export class SlyxupClient {
       );
 
     this.auth = {
+      startOAuth: async (provider, redirectUrl) => {
+        if (typeof window === 'undefined')
+          throw new Error('startOAuth requires a browser');
+        const verifier = Array.from(
+          crypto.getRandomValues(new Uint8Array(32)),
+          (b) => b.toString(16).padStart(2, '0')
+        ).join('');
+        const target = new URL(redirectUrl ?? window.location.href);
+        if (target.origin !== window.location.origin)
+          throw new Error('OAuth return URL must use this application origin');
+        target.searchParams.delete('slyxup_code');
+        window.sessionStorage.setItem(
+          `${storageKey}:oauth`,
+          JSON.stringify({ verifier, redirectUrl: target.href })
+        );
+        const digest = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(verifier)
+        );
+        const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+        const url = new URL(`${this.apiUrl}/v1/oauth/${provider}`);
+        url.searchParams.set('redirect_url', target.href);
+        url.searchParams.set('code_challenge', challenge);
+        if (this.publishableKey)
+          url.searchParams.set('publishable_key', this.publishableKey);
+        window.location.assign(url.href);
+      },
+      completeOAuth: () => {
+        if (this.oauthCompletion) return this.oauthCompletion;
+        if (typeof window === 'undefined') return Promise.resolve(null);
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('slyxup_code');
+        if (!code) return Promise.resolve(null);
+        this.oauthCompletion = (async () => {
+          const raw = window.sessionStorage.getItem(`${storageKey}:oauth`);
+          if (!raw)
+            throw new SlyxupError(
+              'OAuth must finish in the tab where it started',
+              401,
+              'oauth_verifier_missing'
+            );
+          const pending = JSON.parse(raw) as {
+            verifier: string;
+            redirectUrl: string;
+          };
+          url.searchParams.delete('slyxup_code');
+          if (
+            url.origin !== new URL(pending.redirectUrl).origin ||
+            url.pathname !== new URL(pending.redirectUrl).pathname
+          )
+            throw new Error('OAuth callback path mismatch');
+          window.history.replaceState(window.history.state, '', url.href);
+          window.sessionStorage.removeItem(`${storageKey}:oauth`);
+          const result = await post<SignInResponse>(
+            '/v1/oauth/exchange',
+            { code, verifier: pending.verifier },
+            { captureChallenge: true }
+          );
+          if ('challengeToken' in result) return result;
+          if (!('user' in result))
+            throw new SlyxupError(result.error, 401, 'oauth_exchange_failed');
+          if (result.sessionToken) persistToken(result.sessionToken);
+          return result;
+        })();
+        return this.oauthCompletion;
+      },
       signUp: async (input) => {
         const res = await post<AuthResponse>('/v1/auth/sign-up', input);
         if (!('user' in res))
@@ -350,7 +465,7 @@ export class SlyxupClient {
         // The server may answer 403 with code 2FA_REQUIRED — we must surface
         // the challenge back to the caller instead of throwing a generic error.
         const res = await post<SignInResponse>('/v1/auth/sign-in', input, {
-          captureError: true,
+          captureChallenge: true,
         });
         if ('challengeToken' in res) {
           return res as TwoFactorRequiredResponse;
@@ -366,12 +481,14 @@ export class SlyxupClient {
         const res = await post<AuthResponse>('/v1/auth/sign-in/2fa', input);
         if (!('user' in res)) throw new UnauthorizedError(res.error);
         if (res.sessionToken) persistToken(res.sessionToken);
+        this.oauthCompletion = undefined;
         return res;
       },
       signOut: async () => {
         const res = await post<{ ok: true }>('/v1/auth/sign-out');
         persistToken(undefined);
         jar.clear();
+        this.oauthCompletion = undefined;
         return res as { ok: true };
       },
       resendVerification: async (email: string) => {
@@ -433,7 +550,7 @@ export class SlyxupClient {
       },
       revoke: async (sessionId: string) => {
         const res = await requestInner<{ ok: true }>(
-          `/v1/sessions/${sessionId}`,
+          `/v1/sessions/${encodeURIComponent(sessionId)}`,
           {
             method: 'DELETE',
           }
@@ -508,7 +625,7 @@ export class SlyxupClient {
       },
       unlink: async (accountId, provider) => {
         const res = await requestInner<{ ok: true }>(
-          `/v1/user/accounts/${accountId}?provider=${encodeURIComponent(provider)}`,
+          `/v1/user/accounts/${encodeURIComponent(accountId)}?provider=${encodeURIComponent(provider)}`,
           {
             method: 'DELETE',
           }
@@ -536,6 +653,8 @@ export class SlyxupClient {
         const res = await requestInner<{ ok: true }>('/v1/user', {
           method: 'DELETE',
         });
+        persistToken(undefined);
+        jar.clear();
         return res as { ok: true };
       },
     };

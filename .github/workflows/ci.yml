@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-      # uses packageManager from package.json (pnpm@9.0.0) — no version key to avoid ERR_PNPM_BAD_PM_VERSION
+      # Uses the pinned packageManager from package.json.
 
       - uses: actions/setup-node@v4
         with:
@@ -44,13 +44,17 @@ jobs:
         run: pnpm build
 
       - name: Test
-        run: pnpm test --if-present
+        run: pnpm test
+      - name: Real D1 and Worker runtime regressions
+        run: pnpm test:runtime
 
-      - name: Drizzle check (no drift)
-        run: pnpm --filter auth.slyxup.online exec drizzle-kit generate --help 2>&1 | grep -q "generate" && echo "drizzle-kit available" || echo "migrations need generate"
+      - name: Validate local migrations
+        run: |
+          pnpm --filter auth db:migrate:local
+          pnpm --filter billing db:migrate:local
 
       - name: Wrangler types check
-        run: pnpm cf:typegen 2>&1 | head -n 50
+        run: pnpm cf:typegen
 
   security:
     runs-on: ubuntu-latest

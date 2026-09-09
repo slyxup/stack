@@ -161,4 +161,8 @@ export interface SlyxupClientOptions {
   secretKey?: string;
   /** API base URL, default https://auth.slyxup.online */
   apiUrl?: string;
+  /** Session token supplied by a request-scoped server integration. */
+  sessionToken?: string;
+  /** Memory by default. sessionStorage is an explicit, script-readable SPA opt-in. */
+  tokenStorage?: 'memory' | 'sessionStorage';
 }

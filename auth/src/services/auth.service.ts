@@ -242,15 +242,16 @@ export async function signIn(
     // Password is verified but 2FA is required. Do NOT create a usable session.
     // Store a short-lived pending challenge so the client can complete login
     // with a TOTP code or recovery code in a second step.
-    const challengeToken = randomToken(32);
-    await (env as unknown as { KV?: KVNamespace }).KV?.put(
-      `2fa_challenge:${challengeToken}`,
-      JSON.stringify({
+    const { issueChallenge } = await import('./challenge.service');
+    const challengeToken = await issueChallenge(
+      env,
+      'two_factor',
+      {
         userId: user.id,
         projectId: user.projectId,
         scope: input.projectId ?? user.projectId ?? null,
-      }),
-      { expirationTtl: 5 * 60 }
+      },
+      5 * 60
     );
     return { user, challengeToken, requires2FA: true };
   }
@@ -282,9 +283,12 @@ export async function complete2FASignIn(
   code?: string,
   recoveryCode?: string
 ) {
-  const raw = await env.KV?.get(`2fa_challenge:${challengeToken}`);
-  if (!raw) throw new Error('2FA_CHALLENGE_INVALID');
-  const challenge = JSON.parse(raw) as {
+  const { readChallenge, consumeChallenge } = await import(
+    './challenge.service'
+  );
+  const pending = await readChallenge(env, 'two_factor', challengeToken);
+  if (!pending) throw new Error('2FA_CHALLENGE_INVALID');
+  const challenge = pending.payload as {
     userId: string;
     projectId: string | null;
     scope: string | null;
@@ -295,8 +299,15 @@ export async function complete2FASignIn(
     .from(users)
     .where(eq(users.id, challenge.userId))
     .get();
-  if (!user || !user.twoFactorEnabled || !user.totpSecret) {
-    await env.KV?.delete(`2fa_challenge:${challengeToken}`);
+  if (
+    !user ||
+    user.blocked ||
+    !user.emailVerified ||
+    user.mustChangePassword ||
+    !user.twoFactorEnabled ||
+    !user.totpSecret
+  ) {
+    await consumeChallenge(env, 'two_factor', challengeToken);
     throw new Error('2FA_NOT_ENABLED');
   }
 
@@ -309,7 +320,8 @@ export async function complete2FASignIn(
   }
   if (!ok) throw new Error('INVALID_2FA_CODE');
 
-  await env.KV?.delete(`2fa_challenge:${challengeToken}`);
+  if (!(await consumeChallenge(env, 'two_factor', challengeToken)))
+    throw new Error('2FA_CHALLENGE_INVALID');
 
   const sessionToken = randomToken(32);
   const sessionId = randomUUID();
@@ -374,11 +386,12 @@ async function redeemRecoveryCode(
     )
     .get();
   if (!row) return false;
-  await db
+  const claimed = await db
     .update(recoveryCodes)
     .set({ used: true, usedAt: new Date() })
-    .where(eq(recoveryCodes.id, row.id));
-  return true;
+    .where(and(eq(recoveryCodes.id, row.id), eq(recoveryCodes.used, false)))
+    .returning({ id: recoveryCodes.id });
+  return claimed.length === 1;
 }
 
 export async function getSession(env: { DB: D1Database }, token: string) {

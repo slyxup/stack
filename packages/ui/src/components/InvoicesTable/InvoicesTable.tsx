@@ -37,16 +37,25 @@ export function InvoicesTable({
   injectStyles();
   const ref = useScopedTheme<HTMLDivElement>(theme);
   if (invoices.length === 0) return null;
-  const paidTotal = invoices
-    .filter((inv) => inv.status === 'paid')
-    .reduce((sum, inv) => sum + inv.amount, 0);
-  const currency = invoices[0]?.currency ?? 'USD';
+  const totals = new Map<string, number>();
+  for (const invoice of invoices) {
+    if (invoice.status === 'paid')
+      totals.set(
+        invoice.currency,
+        (totals.get(invoice.currency) ?? 0) + invoice.amount
+      );
+  }
+  const money = (amount: number, currency: string) =>
+    new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(
+      amount / 100
+    );
   return (
     <div ref={ref} className={`slx-card ${className ?? ''}`} style={style}>
       <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
         {title}
       </h3>
       <table
+        aria-label={title}
         style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}
       >
         <thead>
@@ -74,7 +83,7 @@ export function InvoicesTable({
                   : '—'}
               </td>
               <td style={{ padding: '8px 0' }}>
-                ${(inv.amount / 100).toFixed(2)} {inv.currency}
+                {money(inv.amount, inv.currency)} {inv.currency}
               </td>
               <td style={{ padding: '8px 0' }}>
                 <SubscriptionStatus status={inv.status} />
@@ -82,33 +91,35 @@ export function InvoicesTable({
             </tr>
           ))}
         </tbody>
-        {showTotal && paidTotal > 0 && (
+        {showTotal && totals.size > 0 && (
           <tfoot>
-            <tr>
-              <td
-                colSpan={2}
-                style={{
-                  padding: '10px 0 2px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '.06em',
-                  color: 'var(--slx-muted)',
-                }}
-              >
-                Total paid
-              </td>
-              <td
-                style={{
-                  padding: '10px 0 2px',
-                  fontSize: 14,
-                  fontWeight: 750,
-                  fontFamily: 'var(--slx-display)',
-                }}
-              >
-                ${(paidTotal / 100).toFixed(2)} {currency}
-              </td>
-            </tr>
+            {Array.from(totals, ([currency, paidTotal]) => (
+              <tr key={currency}>
+                <td
+                  colSpan={2}
+                  style={{
+                    padding: '10px 0 2px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.06em',
+                    color: 'var(--slx-muted)',
+                  }}
+                >
+                  Total paid
+                </td>
+                <td
+                  style={{
+                    padding: '10px 0 2px',
+                    fontSize: 14,
+                    fontWeight: 750,
+                    fontFamily: 'var(--slx-display)',
+                  }}
+                >
+                  {money(paidTotal, currency)} {currency}
+                </td>
+              </tr>
+            ))}
           </tfoot>
         )}
       </table>

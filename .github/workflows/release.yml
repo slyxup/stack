@@ -1,101 +1,34 @@
-name: "3. Release — NPM Publish on Push"
+name: "3. Release — Verified SDK packages"
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency: release
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   release:
-    if: github.repository == 'slyxup/stack'
+    if: github.repository == 'slyxup/stack' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm, registry-url: "https://registry.npmjs.org" }
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-
-      - name: Publish changed packages
-        run: |
-          git config user.name "slyxup-bot"
-          git config user.email "bot@users.noreply.github.com"
-
-          # Skip if this is already a version commit
-          if git log -1 --pretty=%B | grep -q "chore: version packages"; then
-            echo "Version commit, skipping."
-            exit 0
-          fi
-
-          # Find which packages had source changes (not just package.json)
-          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -oP '^packages/\K[^/]+' | sort -u)
-          if [ -z "$CHANGED" ]; then
-            echo "No package changes, skipping."
-            exit 0
-          fi
-
-          echo "Changed packages: $CHANGED"
-
-          for name in $CHANGED; do
-            pkg="packages/$name"
-            [ ! -d "$pkg" ] && continue
-
-            pkg_name=$(node -p "require('./$pkg/package.json').name")
-            npm_latest=$(npm view "$pkg_name" version 2>/dev/null || echo "")
-
-            # Get latest from npm, bump patch
-            if [ -n "$npm_latest" ]; then
-              IFS='.' read -r major minor patch <<< "$npm_latest"
-              new_version="${major}.${minor}.$((patch + 1))"
-            else
-              new_version=$(node -p "require('./$pkg/package.json').version")
-            fi
-
-            echo ""
-            echo "=== $pkg_name@$new_version ==="
-
-            # Check if already published
-            exists=$(npm view "$pkg_name@$new_version" version 2>/dev/null || echo "")
-            if [ -n "$exists" ]; then
-              echo "  Already exists, bumping further..."
-              IFS='.' read -r major minor patch <<< "$new_version"
-              new_version="${major}.${minor}.$((patch + 1))"
-            fi
-
-            # Update local version
-            node -e "
-              const fs=require('fs');
-              const p='./$pkg/package.json';
-              const j=JSON.parse(fs.readFileSync(p,'utf8'));
-              j.version='$new_version';
-              fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
-            "
-
-            # Publish — pnpm rewrites workspace:* → real versions
-            (cd "$pkg" && pnpm publish --access public --no-git-checks --provenance) \
-              && echo "  ✅ Published $pkg_name@$new_version" \
-              || echo "  ❌ Publish failed for $pkg_name"
-          done
-
-          # Commit version bumps
-          if ! git diff --quiet packages/*/package.json; then
-            git add packages/*/package.json pnpm-lock.yaml
-            git commit -m "chore: version packages" || true
-            git push || echo "Push failed (protected branch)..."
-          fi
-
-          echo ""
-          echo "=== Final npm versions ==="
-          for name in $CHANGED; do
-            pkg_name=$(node -p "require('./packages/$name/package.json').name")
-            echo "$pkg_name: $(npm view "$pkg_name" version 2>/dev/null || echo 'N/A')"
-          done
+      - run: pnpm typecheck && pnpm lint && pnpm build && pnpm test
+      - run: pnpm test:runtime && pnpm audit --prod --audit-level high
+      # Apply and review `pnpm exec changeset version` before merging the release.
+      # Versions come from committed package manifests, never guessed from npm.
+      - name: Publish versioned packages
+        run: pnpm exec changeset publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

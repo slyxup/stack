@@ -12,19 +12,26 @@ npm install @slyxup/ui @slyxup/core
 
 ## Setup
 
-Inject the stylesheet once at your app root:
+Wrap auth and billing UI in a provider at your app root:
 
 ```tsx
-import { SlyxupClient } from '@slyxup/core';
-import { SlyxUpStyles } from '@slyxup/ui';
+import { SlyxUpProvider, SlyxUpStyles } from '@slyxup/ui';
 
-const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
-
-<SlyxUpStyles />
-<App />
+<SlyxUpProvider
+  publishableKey="pk_test_your_project_key"
+  apiUrl="https://auth.slyxup.online"
+  billingApiUrl="https://billing.slyxup.online"
+>
+  <SlyxUpStyles />
+  <App />
+</SlyxUpProvider>
 ```
 
 (Components also auto-inject on first mount if you skip this.)
+
+The default stylesheet inherits host typography and does not load external fonts. Webfonts are loaded only when you explicitly select a font theme that has a stylesheet URL.
+
+Pass configuration explicitly (`import.meta.env.VITE_*` in Vite or `process.env.NEXT_PUBLIC_*` in a Next.js client boundary). Tokens are memory-only by default. Client-only SPAs can opt into `tokenStorage="sessionStorage"` for same-tab reload persistence, scoped by auth URL and project key. This remains script-readable; a same-origin server with HttpOnly cookies is the preferred sensitive-app integration. Billing hooks inherit the provider's key, current token, and `billingApiUrl`; they no longer use a global localStorage token. `useInvoices()` returns `{ invoices, loading, error, reload }`, so failures can be shown with a retry action instead of an empty invoice history.
 
 ## Components
 
@@ -44,8 +51,8 @@ import { SignIn, SignUp } from '@slyxup/ui';
 ```
 
 Notes:
-- `SignIn` accepts **either an email or a username** in the identifier field.
-- When the account has 2FA enabled, `SignIn` auto-detects the `2FA_REQUIRED` response and swaps to an authenticator-code step, then completes the sign-in with `completeSignIn`.
+- `SignIn username` accepts **either an email or a username** and sends the corresponding field. Without this prop the field validates an email address.
+- When the account has 2FA enabled, `SignIn` swaps to an authenticator-code step with a **Use a recovery code** alternative. Errors remain visible until the next attempt. Each instance has unique input IDs for accessible labels.
 - `SignUp` includes an optional **username** field (used for password sign-in as an alternative to email).
 
 ### `<UserButton />` — avatar + dropdown
@@ -112,6 +119,10 @@ Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GE
 
 Redirects to the hosted OAuth flow.
 
+**Release update:** project-scoped OAuth is now implemented. SignIn/SignUp call `client.auth.startOAuth`; the provider exchanges the callback code using the initiating tab's verifier. `useAuth()` exposes `oauthChallenge` and `authError`; SignIn displays the second-factor step when OAuth requires it. Register the return hostname on the project; test projects also allow localhost. Use the current SDK flow rather than hand-built OAuth links.
+
+`SocialButtons` uses the same proof-key flow and displays start errors. For custom servers configure the provider `apiUrl`; a conflicting legacy `basePath` is rejected rather than bypassing the callback exchange.
+
 ### `<PricingTable />` — billing plans grid
 
 ```tsx
@@ -162,10 +173,11 @@ const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' }
   subscription={subscription}
   invoices={invoices}
   onCancel={cancelSubscription}
+  onResume={resumeSubscription}
 />
 ```
 
-Shows current plan, status, renewal date, invoice history, and an optional cancel action.
+Shows current plan, status, renewal date, invoice history, and optional cancel/resume actions. Invoice amounts use currency-aware formatting; totals are grouped by currency rather than adding unrelated currencies together.
 
 ### Granular billing parts — compose your own layouts
 

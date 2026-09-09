@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getDb } from '../lib/db';
 import { plans, subscriptions } from '../lib/schema';
@@ -15,6 +15,8 @@ app.use('*', requireUser);
 app.get('/', async (c) => {
   const userId = c.get('userId');
   const projectId = c.req.query('projectId');
+  if (!projectId)
+    return c.json({ ok: false, error: 'projectId is required' }, 400);
   const db = getDb(c.env);
   const sub = projectId
     ? await db
@@ -23,8 +25,7 @@ app.get('/', async (c) => {
         .where(
           and(
             eq(subscriptions.userId, userId),
-            eq(subscriptions.projectId, projectId),
-            ne(subscriptions.status, 'canceled')
+            eq(subscriptions.projectId, projectId)
           )
         )
         .orderBy(desc(subscriptions.createdAt))
@@ -33,16 +34,24 @@ app.get('/', async (c) => {
     : null;
   let plan = null;
   if (sub) {
-    plan = await db.select().from(plans).where(eq(plans.id, sub.planId)).get();
+    plan = await db
+      .select()
+      .from(plans)
+      .where(and(eq(plans.id, sub.planId), eq(plans.projectId, projectId)))
+      .get();
   }
-  const features: string[] = plan ? ((plan.features as string[]) ?? []) : [];
-  const has = (f: string) => features.includes(f);
+  const eligible =
+    sub &&
+    (sub.status === 'active' || sub.status === 'trialing') &&
+    sub.currentPeriodEnd &&
+    sub.currentPeriodEnd.getTime() > Date.now();
+  const features: string[] = eligible && plan ? plan.features : [];
+  c.header('Cache-Control', 'no-store');
   return c.json({
     ok: true,
     planId: plan?.id ?? null,
     status: sub?.status ?? 'none',
     features,
-    has,
   });
 });
 

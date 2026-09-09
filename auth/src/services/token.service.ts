@@ -1,8 +1,13 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword } from '../lib/password';
-import { passwordResetTokens, users, verificationTokens } from '../lib/schema';
+import {
+  passwordResetTokens,
+  sessions,
+  users,
+  verificationTokens,
+} from '../lib/schema';
 import {
   resetPasswordEmailHtml,
   trySend,
@@ -68,11 +73,15 @@ export async function createVerificationToken(
 
 export async function verifyEmail(env: { DB: D1Database }, token: string) {
   const db = getDb(env);
-  const row = await db
-    .select()
-    .from(verificationTokens)
-    .where(eq(verificationTokens.token, token))
-    .get();
+  const [row] = await db
+    .delete(verificationTokens)
+    .where(
+      and(
+        eq(verificationTokens.token, token),
+        gt(verificationTokens.expiresAt, new Date())
+      )
+    )
+    .returning();
   if (!row) throw new Error('Invalid token');
   if (row.expiresAt < new Date()) throw new Error('Token expired');
   if (row.userId) {
@@ -81,19 +90,24 @@ export async function verifyEmail(env: { DB: D1Database }, token: string) {
       .set({ emailVerified: true, updatedAt: new Date() })
       .where(eq(users.id, row.userId));
   }
-  await db.delete(verificationTokens).where(eq(verificationTokens.id, row.id));
   return { email: row.email };
 }
 
 export async function resendVerification(
   env: { DB: D1Database },
-  email: string
+  email: string,
+  projectId: string | null = null
 ) {
   const db = getDb(env);
   const user = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(
+      and(
+        eq(users.email, email.toLowerCase()),
+        projectId ? eq(users.projectId, projectId) : isNull(users.projectId)
+      )
+    )
     .get();
   // Do not reveal existence — always succeed silently
   if (!user) return null;
@@ -102,12 +116,21 @@ export async function resendVerification(
   return token;
 }
 
-export async function forgotPassword(env: { DB: D1Database }, email: string) {
+export async function forgotPassword(
+  env: { DB: D1Database },
+  email: string,
+  projectId: string | null = null
+) {
   const db = getDb(env);
   const user = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(
+      and(
+        eq(users.email, email.toLowerCase()),
+        projectId ? eq(users.projectId, projectId) : isNull(users.projectId)
+      )
+    )
     .get();
   if (!user) return null; // silent
   const token = randomToken(32);
@@ -139,14 +162,25 @@ export async function resetPassword(
   if (row.expiresAt < new Date()) throw new Error('Token expired');
   if (!row.userId) throw new Error('Invalid token');
   const passwordHash = await hashPassword(newPassword);
-  await db
-    .update(users)
-    .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(users.id, row.userId));
-  await db
+  // Claim the single-use token atomically before changing credentials.
+  const claimed = await db
     .update(passwordResetTokens)
     .set({ used: true })
-    .where(eq(passwordResetTokens.id, row.id));
+    .where(
+      and(
+        eq(passwordResetTokens.id, row.id),
+        eq(passwordResetTokens.used, false)
+      )
+    )
+    .returning({ id: passwordResetTokens.id });
+  if (claimed.length !== 1) throw new Error('Invalid or used token');
+  await db.batch([
+    db
+      .update(users)
+      .set({ passwordHash, mustChangePassword: false, updatedAt: new Date() })
+      .where(eq(users.id, row.userId)),
+    db.delete(sessions).where(eq(sessions.userId, row.userId)),
+  ]);
   return { email: row.email };
 }
 

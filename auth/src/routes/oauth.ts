@@ -1,15 +1,25 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { z } from 'zod';
 import { setSessionCookie } from '../lib/cookies';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import {
   oauthAccounts,
+  projectDomains,
+  projects,
   sessions,
   users,
-  verificationTokens,
 } from '../lib/schema';
+import {
+  consumeChallenge,
+  issueChallenge,
+  pkceChallenge,
+  readChallenge,
+} from '../services/challenge.service';
 import { buildAuthUrl, newState } from '../services/oauth.service';
+import { verifyApiKey } from '../services/project.service';
 import { dispatchWebhooks } from '../services/webhook.service';
 
 type Bindings = {
@@ -43,7 +53,8 @@ async function exchangeAndProfile(
   provider: 'google' | 'github',
   env: Bindings,
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  verifier: string
 ): Promise<Profile> {
   if (provider === 'google') {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -55,6 +66,7 @@ async function exchangeAndProfile(
         client_secret: env.GOOGLE_CLIENT_SECRET ?? '',
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
+        code_verifier: verifier,
       }),
     });
     const token = (await tokenRes.json()) as {
@@ -73,10 +85,12 @@ async function exchangeAndProfile(
     const p = (await pRes.json()) as {
       sub: string;
       email?: string;
+      email_verified?: boolean;
       name?: string;
       picture?: string;
     };
-    if (!p.email) throw new Error('Google account has no email');
+    if (!p.email || p.email_verified !== true)
+      throw new Error('Google account has no verified email');
     return {
       providerAccountId: p.sub,
       email: p.email.toLowerCase(),
@@ -99,6 +113,7 @@ async function exchangeAndProfile(
       client_id: env.GITHUB_CLIENT_ID ?? '',
       client_secret: env.GITHUB_CLIENT_SECRET ?? '',
       redirect_uri: redirectUri,
+      code_verifier: verifier,
     }),
   });
   const token = (await tokenRes.json()) as {
@@ -123,8 +138,8 @@ async function exchangeAndProfile(
     avatar_url?: string;
   };
 
-  let email = u.email?.toLowerCase() ?? null;
-  if (!email) {
+  let email: string | null = null;
+  {
     // Private emails — need the emails endpoint
     const eRes = await fetch('https://api.github.com/user/emails', { headers });
     if (eRes.ok) {
@@ -143,7 +158,7 @@ async function exchangeAndProfile(
 
   return {
     providerAccountId: String(u.id),
-    email,
+    email: email.toLowerCase(),
     name: u.name ?? u.login,
     avatarUrl: u.avatar_url ?? null,
     accessToken: token.access_token,
@@ -158,52 +173,190 @@ function safeRedirect(
   if (!url) return fallback;
   try {
     const u = new URL(url);
-    const allowedHosts = new Set(['localhost', '127.0.0.1']);
-    if (
-      allowedHosts.has(u.hostname) ||
-      u.hostname.endsWith('.pages.dev') ||
-      u.hostname.endsWith('.workers.dev')
-    )
-      return url;
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return fallback;
     // Also allow any origin explicitly listed in ALLOWED_REDIRECT_ORIGINS
     const allowed = (env?.ALLOWED_REDIRECT_ORIGINS ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    if (allowed.includes(u.origin) || allowed.includes('*')) return url;
+    if (allowed.includes(u.origin) || u.origin === new URL(fallback).origin)
+      return url;
     // Allow custom domains that are registered as live project domains (best effort via exact origin check)
     // Note: full dynamic check would need DB lookup; for now allow any https origin that matches allowed list pattern
     // If ALLOWED_REDIRECT_ORIGINS contains the origin's host as substring, allow
     // This fallback enables local dev with custom domains without redeploy
-    if (
-      u.protocol === 'https:' &&
-      allowed.some((a) => u.origin === a || u.hostname === new URL(a).hostname)
-    ) {
-      return url;
-    }
   } catch {
     /* fallthrough */
   }
   return fallback;
 }
 
+const exchangeInput = z.object({
+  code: z.string().regex(/^[a-f0-9]{64}$/),
+  verifier: z.string().min(43).max(128),
+});
+
+/** Exchange a one-time app code with the verifier retained by the initiating tab. */
+oauth.post('/exchange', async (c) => {
+  const input = exchangeInput.safeParse(await c.req.json().catch(() => null));
+  if (!input.success)
+    return c.json({ ok: false, error: 'Invalid exchange input' }, 400);
+  const pending = await readChallenge(c.env, 'oauth_exchange', input.data.code);
+  const payload = pending?.payload;
+  if (
+    !payload ||
+    (await pkceChallenge(input.data.verifier)) !== payload.appChallenge
+  )
+    return c.json({ ok: false, error: 'Invalid OAuth exchange' }, 401);
+  const key = c.req.header('X-Publishable-Key');
+  const keyInfo = key ? await verifyApiKey(c.env, key) : null;
+  if (
+    payload.projectId &&
+    (!keyInfo ||
+      keyInfo.type !== 'publishable' ||
+      keyInfo.projectId !== payload.projectId)
+  )
+    return c.json({ ok: false, error: 'Wrong project key' }, 403);
+  const origin = c.req.header('Origin');
+  if (origin && origin !== new URL(String(payload.redirectUrl)).origin)
+    return c.json({ ok: false, error: 'Wrong exchange origin' }, 403);
+  if (!(await consumeChallenge(c.env, 'oauth_exchange', input.data.code)))
+    return c.json({ ok: false, error: 'OAuth code already used' }, 401);
+  const db = getDb(c.env);
+  const user = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, String(payload.userId)))
+    .get();
+  if (
+    !user ||
+    user.blocked ||
+    !user.emailVerified ||
+    user.mustChangePassword ||
+    user.projectId !== payload.projectId
+  )
+    return c.json({ ok: false, error: 'Account unavailable' }, 403);
+  c.header('Cache-Control', 'no-store');
+  if (user.twoFactorEnabled) {
+    const challengeToken = await issueChallenge(
+      c.env,
+      'two_factor',
+      { userId: user.id, projectId: user.projectId, scope: user.projectId },
+      300
+    );
+    return c.json({ ok: false, code: '2FA_REQUIRED', challengeToken }, 403);
+  }
+  const sessionToken = randomToken(32);
+  const expiresAt = new Date(Date.now() + 7 * 86400000);
+  await db
+    .insert(sessions)
+    .values({
+      userId: user.id,
+      projectId: user.projectId,
+      token: sessionToken,
+      expiresAt,
+    });
+  if (!user.projectId) setSessionCookie(c, sessionToken, expiresAt);
+  return c.json({
+    ok: true,
+    user: { id: user.id, email: user.email },
+    sessionToken,
+    expiresAt: expiresAt.toISOString(),
+  });
+});
+
 /** Start OAuth — redirects to provider */
 oauth.get('/:provider', async (c) => {
   const provider = c.req.param('provider') as 'google' | 'github';
   if (!['google', 'github'].includes(provider))
     return c.json({ ok: false, error: 'Unsupported provider' }, 400);
-  const redirectUrl = c.req.query('redirect_url');
-  const stateObj = newState(provider, redirectUrl);
-  await c.env.KV.put(
-    `oauth_state:${stateObj.state}`,
-    JSON.stringify(stateObj),
-    {
-      expirationTtl: 600,
-    }
+  const key =
+    c.req.query('publishable_key') ?? c.req.header('X-Publishable-Key');
+  const keyInfo = key ? await verifyApiKey(c.env, key) : null;
+  if (key && (!keyInfo || keyInfo.type !== 'publishable'))
+    return c.json({ ok: false, error: 'Invalid publishable key' }, 401);
+  const projectId = keyInfo?.projectId ?? null;
+  const appChallenge = c.req.query('code_challenge');
+  if (appChallenge && !/^[A-Za-z0-9_-]{43}$/.test(appChallenge))
+    return c.json({ ok: false, error: 'Invalid S256 challenge' }, 400);
+  if (projectId && (!appChallenge || !/^[A-Za-z0-9_-]{43}$/.test(appChallenge)))
+    return c.json(
+      { ok: false, error: 'Project OAuth requires an S256 app challenge' },
+      400
+    );
+  let redirectUrl = safeRedirect(
+    c.req.query('redirect_url'),
+    c.env.APP_URL,
+    c.env
   );
+  if (projectId) {
+    const candidate = new URL(c.req.query('redirect_url') ?? c.env.APP_URL);
+    const db = getDb(c.env);
+    const project = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .get();
+    const domain = await db
+      .select()
+      .from(projectDomains)
+      .where(
+        and(
+          eq(projectDomains.projectId, projectId),
+          eq(projectDomains.domain, candidate.hostname)
+        )
+      )
+      .get();
+    const local =
+      project?.environment === 'test' &&
+      ['localhost', '127.0.0.1'].includes(candidate.hostname) &&
+      ['http:', 'https:'].includes(candidate.protocol);
+    if (
+      !local &&
+      !(
+        candidate.protocol === 'https:' &&
+        (domain || project?.allowedDomains?.includes(candidate.hostname))
+      )
+    )
+      return c.json(
+        {
+          ok: false,
+          error: 'Register the OAuth return domain on this project',
+        },
+        403
+      );
+    redirectUrl = candidate.href;
+  }
+  const stateObj = newState(provider, redirectUrl);
+  const browserBinding = randomToken(32);
+  const state = await issueChallenge(
+    c.env,
+    'oauth_state',
+    {
+      ...stateObj,
+      projectId,
+      appChallenge: appChallenge ?? null,
+      browserBinding,
+    },
+    600
+  );
+  const cookieName = `slyxup_oauth_${state.slice(0, 16)}`;
+  setCookie(c, cookieName, browserBinding, {
+    httpOnly: true,
+    secure: new URL(c.req.url).protocol === 'https:',
+    sameSite: 'Lax',
+    path: '/v1/oauth',
+    maxAge: 600,
+  });
   const base = c.env.HOSTED_AUTH_URL ?? c.env.APP_URL;
   const redirectUri = `${base}/v1/oauth/callback/${provider}`;
-  const url = buildAuthUrl(provider, c.env, stateObj.state, redirectUri);
+  const url = buildAuthUrl(
+    provider,
+    c.env,
+    state,
+    redirectUri,
+    await pkceChallenge(stateObj.pkceVerifier)
+  );
   return c.redirect(url);
 });
 
@@ -216,12 +369,20 @@ oauth.get('/callback/:provider', async (c) => {
   const redirectUri = `${base}/v1/oauth/callback/${provider}`;
 
   if (!code || !state) return c.redirect(`${base}/sign-in?error=missing_code`);
-  const raw = await c.env.KV.get(`oauth_state:${state}`);
-  if (!raw) return c.redirect(`${base}/sign-in?error=invalid_state`);
-  await c.env.KV.delete(`oauth_state:${state}`);
-  const stateObj = JSON.parse(raw) as {
+  const pending = await readChallenge(c.env, 'oauth_state', state);
+  if (!pending) return c.redirect(`${base}/sign-in?error=invalid_state`);
+  const cookieName = `slyxup_oauth_${state.slice(0, 16)}`;
+  if (getCookie(c, cookieName) !== pending.payload.browserBinding)
+    return c.redirect(`${base}/sign-in?error=browser_mismatch`);
+  if (!(await consumeChallenge(c.env, 'oauth_state', state)))
+    return c.redirect(`${base}/sign-in?error=used_state`);
+  deleteCookie(c, cookieName, { path: '/v1/oauth' });
+  const stateObj = pending.payload as {
     provider: string;
     redirectUrl?: string;
+    projectId: string | null;
+    appChallenge: string | null;
+    pkceVerifier: string;
   };
   if (stateObj.provider !== provider)
     return c.redirect(`${base}/sign-in?error=state_mismatch`);
@@ -231,38 +392,52 @@ oauth.get('/callback/:provider', async (c) => {
       provider,
       c.env,
       code,
-      redirectUri
+      redirectUri,
+      stateObj.pkceVerifier
     );
 
     const db = getDb(c.env);
     const now = new Date();
 
     // Link by oauth_accounts first, then by email
-    const linked = await db
-      .select()
+    const scope = stateObj.projectId
+      ? eq(users.projectId, stateObj.projectId)
+      : isNull(users.projectId);
+    const linkedRow = await db
+      .select({ account: oauthAccounts })
       .from(oauthAccounts)
+      .innerJoin(users, eq(users.id, oauthAccounts.userId))
       .where(
         and(
           eq(oauthAccounts.provider, provider),
-          eq(oauthAccounts.providerAccountId, profile.providerAccountId)
+          eq(oauthAccounts.providerAccountId, profile.providerAccountId),
+          scope
         )
       )
       .get();
+    const linked = linkedRow?.account;
 
     let user = linked
       ? await db.select().from(users).where(eq(users.id, linked.userId)).get()
       : await db
           .select()
           .from(users)
-          .where(eq(users.email, profile.email))
+          .where(and(eq(users.email, profile.email), scope))
           .get();
+
+    if (user && (user.blocked || user.mustChangePassword))
+      throw new Error('Account unavailable');
+    if (user?.twoFactorEnabled && !stateObj.appChallenge)
+      throw new Error(
+        'Use the SDK OAuth flow to complete two-factor authentication'
+      );
 
     if (!user) {
       // Bootstrap: first user ever becomes admin (OAuth counts too) — guarded for single-tenant
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(users);
-      if (count === 0) {
+      if (count === 0 && !stateObj.projectId) {
         const requiredEmail = (
           c.env.BOOTSTRAP_ADMIN_EMAIL ??
           (c.env as unknown as Record<string, string | undefined>)
@@ -287,12 +462,13 @@ oauth.get('/callback/:provider', async (c) => {
       const [first, last] = (profile.name ?? '').split(' ');
       await db.insert(users).values({
         id,
+        projectId: stateObj.projectId,
         email: profile.email,
         emailVerified: true, // OAuth providers verify email
         firstName: first || null,
         lastName: last || null,
         avatarUrl: profile.avatarUrl ?? null,
-        role: count === 0 ? 'admin' : 'user',
+        role: count === 0 && !stateObj.projectId ? 'admin' : 'user',
         mustChangePassword: false,
         createdAt: now,
         updatedAt: now,
@@ -323,19 +499,38 @@ oauth.get('/callback/:provider', async (c) => {
         userId: user.id,
         provider,
         providerAccountId: profile.providerAccountId,
-        accessToken: profile.accessToken ?? null,
-        refreshToken: profile.refreshToken ?? null,
+        accessToken: null,
+        refreshToken: null,
         scope: null,
         createdAt: now,
         updatedAt: now,
       });
-      void dispatchWebhooks(c.env, user.projectId, 'oauth.linked', {
-        id: user.id,
-        provider,
-      });
+      c.executionCtx.waitUntil(
+        dispatchWebhooks(c.env, user.projectId, 'oauth.linked', {
+          id: user.id,
+          provider,
+        })
+      );
     }
 
-    // Create session
+    if (stateObj.appChallenge) {
+      const exchangeCode = await issueChallenge(
+        c.env,
+        'oauth_exchange',
+        {
+          userId: user.id,
+          projectId: user.projectId,
+          appChallenge: stateObj.appChallenge,
+          redirectUrl: stateObj.redirectUrl,
+        },
+        120
+      );
+      const target = new URL(stateObj.redirectUrl ?? c.env.APP_URL);
+      target.searchParams.set('slyxup_code', exchangeCode);
+      c.header('Referrer-Policy', 'no-referrer');
+      return c.redirect(target.href);
+    }
+    // Legacy platform-cookie flow.
     const sessionToken = randomToken(32);
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
     await db.insert(sessions).values({
@@ -349,10 +544,8 @@ oauth.get('/callback/:provider', async (c) => {
 
     setSessionCookie(c, sessionToken, expiresAt);
 
-    // Consume any pending verification tokens for this email
-    await db
-      .delete(verificationTokens)
-      .where(eq(verificationTokens.email, user.email));
+    // Verification tokens are email-scoped in the legacy schema. Do not
+    // consume another project's tokens when a platform account uses OAuth.
 
     const dest = safeRedirect(stateObj.redirectUrl, c.env.APP_URL, c.env);
     const joiner = dest.includes('?') ? '&' : '?';

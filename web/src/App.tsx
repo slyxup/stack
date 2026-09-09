@@ -1,5 +1,5 @@
 import { BookOpen } from 'lucide-react';
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import {
   BrowserRouter,
   Link,
@@ -9,13 +9,15 @@ import {
   Routes,
 } from 'react-router-dom';
 import { AdminLayout } from './components/AdminLayout';
-import Docs from './pages/Docs';
+import CheckoutSuccess from './pages/CheckoutSuccess';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import ProjectDetail from './pages/ProjectDetail';
 import Projects from './pages/Projects';
 import UiKit from './pages/UiKit';
 import { useAuth } from './store/auth';
+
+const Docs = lazy(() => import('./pages/Docs'));
 
 function RequireAuth() {
   const { user, ready, hydrate } = useAuth();
@@ -68,20 +70,23 @@ function NotFound() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/docs" element={<DocsStandalone />} />
-        <Route path="/ui" element={<UiKit />} />
-        <Route element={<RequireAuth />}>
-          <Route element={<AdminLayout />}>
-            <Route path="/admin" element={<Projects />} />
-            <Route path="/admin/projects/:id" element={<ProjectDetail />} />
-            <Route path="/admin/docs" element={<Docs />} />
+      <Suspense fallback={<output className="p-8">Loading page…</output>}>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/checkout/success" element={<CheckoutSuccess />} />
+          <Route path="/docs" element={<DocsStandalone />} />
+          <Route path="/ui" element={<UiKit />} />
+          <Route element={<RequireAuth />}>
+            <Route element={<AdminLayout />}>
+              <Route path="/admin" element={<Projects />} />
+              <Route path="/admin/projects/:id" element={<ProjectDetail />} />
+              <Route path="/admin/docs" element={<Docs />} />
+            </Route>
           </Route>
-        </Route>
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

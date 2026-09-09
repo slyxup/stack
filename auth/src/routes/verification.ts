@@ -7,9 +7,19 @@ import {
   verifyEmailSchema,
 } from '../schemas/auth';
 import { EMAIL_SHELL } from '../services/email.service';
+import { verifyApiKey } from '../services/project.service';
 import * as TokenService from '../services/token.service';
 
 const tokens = new Hono<{ Bindings: { DB: D1Database } }>();
+
+async function resolveProject(
+  env: { DB: D1Database },
+  key: string | undefined
+) {
+  if (!key) return null;
+  const info = await verifyApiKey(env, key);
+  return info?.type === 'publishable' ? info.projectId : false;
+}
 
 /** Email link target — verifies then renders a branded page. */
 tokens.get('/confirm', async (c) => {
@@ -60,7 +70,7 @@ tokens.get('/reset', async (c) => {
          if (p1 !== p2) { msg.className='err'; msg.textContent='Passwords do not match'; return; }
          const res = await fetch('/v1/verification/password/reset', {
            method: 'POST', headers: {'Content-Type':'application/json'},
-           body: JSON.stringify({ token: ${JSON.stringify(token)}, password: p1 })
+            body: JSON.stringify({ token: ${JSON.stringify(token).replace(/</g, '\\u003c')}, password: p1 })
          });
          const data = await res.json().catch(() => ({}));
          if (res.ok && data.ok) {
@@ -91,7 +101,13 @@ tokens.post(
   zValidator('json', resendVerificationSchema),
   async (c) => {
     const { email } = c.req.valid('json');
-    await TokenService.resendVerification(c.env, email);
+    const project = await resolveProject(
+      c.env,
+      c.req.header('X-Publishable-Key')
+    );
+    if (project === false)
+      return c.json({ ok: false, error: 'Invalid publishable key' }, 401);
+    await TokenService.resendVerification(c.env, email, project);
     // Always ok — do not reveal user existence
     return c.json({ ok: true });
   }
@@ -102,7 +118,13 @@ tokens.post(
   zValidator('json', forgotPasswordSchema),
   async (c) => {
     const { email } = c.req.valid('json');
-    await TokenService.forgotPassword(c.env, email);
+    const project = await resolveProject(
+      c.env,
+      c.req.header('X-Publishable-Key')
+    );
+    if (project === false)
+      return c.json({ ok: false, error: 'Invalid publishable key' }, 401);
+    await TokenService.forgotPassword(c.env, email, project);
     return c.json({ ok: true });
   }
 );

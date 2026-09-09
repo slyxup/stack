@@ -1,5 +1,15 @@
 # @slyxup/core
 
+## 3.0.0
+
+### Major Changes
+
+- Add project OAuth start/callback exchange with S256 proof keys, same-tab verifier storage and second-factor challenges. Backend migrations must be deployed before enabling these methods.
+
+- Make session transport explicit and project-scoped, validate Next.js middleware sessions, connect billing hooks to their auth provider, preserve actionable SDK errors, and complete username/recovery-code sign-in. Correct currency totals and remove automatic external font loading.
+
+  Migration: legacy localStorage session tokens are no longer read. Sign in again; use memory sessions, explicitly opt into project-scoped tab storage, or use a same-origin HttpOnly server integration. Standalone billing clients must receive getToken. Middleware now accepts Request and returns Promise<Response>. See INTEGRATION_GUIDE.md and package READMEs before upgrading.
+
 ## 0.2.1
 
 ### Patch Changes

@@ -31,10 +31,16 @@ export function getSessionToken(c: {
     if (bearer) return bearer;
   }
   const cookie = c.req.header('Cookie') ?? '';
-  const hostMatch = cookie.match(new RegExp(`${SESSION_COOKIE_HOST}=([^;]+)`));
-  if (hostMatch) return decodeURIComponent(hostMatch[1]);
-  const match = cookie.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
-  if (match) return decodeURIComponent(match[1]);
+  for (const name of [SESSION_COOKIE_HOST, SESSION_COOKIE]) {
+    const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    if (match) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return undefined;
+      }
+    }
+  }
   return undefined;
 }
 
@@ -59,7 +65,7 @@ export const requireUser = createMiddleware<Env>(async (c, next) => {
     const row = await c.env.AUTH_DB.prepare(
       `SELECT s.user_id, u.email, u.blocked
        FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ? LIMIT 1`
+       WHERE s.token = ? AND s.expires_at > ? AND u.email_verified = 1 LIMIT 1`
     )
       .bind(token, nowSec)
       .first<SessionRow>();
@@ -112,7 +118,7 @@ export const requireAdmin = createMiddleware<Env>(async (c, next) => {
     try {
       const nowSec = Math.floor(Date.now() / 1000);
       const row = await c.env.AUTH_DB.prepare(
-        'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1'
+        'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 AND u.email_verified = 1 LIMIT 1'
       )
         .bind(token, nowSec)
         .first<{ user_id: string }>();

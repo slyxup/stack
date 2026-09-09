@@ -1033,20 +1033,13 @@ export const CSS = `
 
 let injected = false;
 
-/** Inject the SlyxUp stylesheet + fonts once per document. Idempotent + SSR-safe. */
+/** Inject the SlyxUp stylesheet once per document. Fonts are an explicit theme opt-in. */
 export function injectStyles(): void {
   if (typeof document === 'undefined') return;
   // Design tokens are scoped to .slyxup-root — apply to <html> so the
   // components work in ANY host app without a wrapper element.
   document.documentElement.classList.add('slyxup-root');
   if (!document.querySelector('style[data-slyxup="styles"]')) {
-    if (!document.querySelector('link[href*="DM+Sans"]')) {
-      const fontLink = document.createElement('link');
-      fontLink.rel = 'stylesheet';
-      fontLink.href =
-        'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Space+Grotesk:wght@400;500;600;700&display=swap';
-      document.head.appendChild(fontLink);
-    }
     const style = document.createElement('style');
     style.setAttribute('data-slyxup', 'styles');
     style.textContent = CSS;

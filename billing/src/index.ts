@@ -26,10 +26,7 @@ app.use('*', async (c, next) => {
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
     origin
   );
-  const isTestRequest =
-    c.req.header('X-Environment') === 'test' ||
-    origin.includes('localhost') ||
-    origin.includes('127.0.0.1');
+  const isTestRequest = isLocalhost;
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers':
@@ -40,13 +37,10 @@ app.use('*', async (c, next) => {
   if (
     origin &&
     (allowed.includes(origin) ||
-      allowed.includes('*') ||
+      origin === new URL(c.req.url).origin ||
       isLocalhost ||
       isTestRequest)
   ) {
-    allow = true;
-  } else if (origin?.startsWith('https://') && allowed.includes('*')) {
-    // Wildcard CORS — allow any HTTPS origin
     allow = true;
   } else if (origin?.startsWith('https://')) {
     // Check project custom domains (like auth does) — cache for 60s
@@ -56,10 +50,10 @@ app.use('*', async (c, next) => {
         ? (JSON.parse(cached) as string[])
         : null;
       if (!hosts) {
-        // We don't have project context here, so allow any https origin in test and
-        // let the route handler do project-specific checks. For live, the route will
-        // validate the project's allowed domains.
-        hosts = [];
+        const result = await c.env.AUTH_DB.prepare(
+          "SELECT pd.domain FROM project_domains pd JOIN projects p ON p.id = pd.project_id WHERE p.environment = 'live'"
+        ).all<{ domain: string }>();
+        hosts = result.results.map((row) => row.domain.toLowerCase());
         await c.env.KV.put('billing_cors_domains', JSON.stringify(hosts), {
           expirationTtl: 60,
         });
@@ -89,6 +83,9 @@ app.use('*', async (c, next) => {
   }
   if (c.req.method === 'OPTIONS') {
     return new Response('', { status: 204, headers: corsHeaders });
+  }
+  if (origin && !allow && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    return c.json({ ok: false, error: 'Origin is not allowed' }, 403);
   }
   await next();
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);

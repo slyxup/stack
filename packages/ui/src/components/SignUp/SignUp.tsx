@@ -5,6 +5,7 @@ import { useAuth } from '../../react/hooks/useAuth';
 import { injectStyles } from '../../styles';
 import type { AuthLayout } from '../../theme';
 import { PasswordField } from '../PasswordField';
+import { SignIn } from '../SignIn/SignIn';
 
 export interface SignUpProps {
   social?: boolean;
@@ -36,10 +37,7 @@ export function SignUp({
   ],
 }: SignUpProps) {
   injectStyles();
-  const { signUp, client } = useAuth() as unknown as {
-    signUp: ReturnType<typeof useAuth>['signUp'];
-    client: { publishableKey?: string; apiUrl: string };
-  };
+  const { signUp, client, oauthChallenge } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -81,14 +79,24 @@ export function SignUp({
   }
 
   function oauth(provider: 'google' | 'github') {
-    const redirect = encodeURIComponent(window.location.href);
-    window.location.href = `${client.apiUrl}/v1/oauth/${provider}?redirect_url=${redirect}`;
+    void client.auth
+      .startOAuth(provider)
+      .catch((error: unknown) =>
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to start social sign-in'
+        )
+      );
   }
 
   const missingKey =
     !client.publishableKey ||
     client.publishableKey === 'pk_test_missing' ||
     client.publishableKey.includes('REPLACE');
+
+  if (oauthChallenge)
+    return <SignIn social={false} onSuccess={onSuccess} layout={layout} />;
 
   return (
     <div

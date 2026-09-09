@@ -1,9 +1,20 @@
 import { Hono } from 'hono';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { bodyLimit } from 'hono/body-limit';
 import { getDb } from '../lib/db';
-import { invoices, plans, subscriptions, webhookEvents } from '../lib/schema';
-import { verifyWebhookSignature } from '../services/paddle.service';
+import {
+  checkoutIntents,
+  invoices,
+  plans,
+  subscriptions,
+  webhookEvents,
+} from '../lib/schema';
+import {
+  type PaddleConfig,
+  getTransaction,
+  verifyWebhookSignature,
+} from '../services/paddle.service';
 
 // ── POST /v1/webhooks/paddle — Paddle Billing notifications ──
 // Configure in Paddle Dashboard > Developer tools > Notifications.
@@ -26,10 +37,16 @@ interface SubData {
     ends_at?: string | null;
   };
   scheduled_change?: { action?: string | null } | null;
-  custom_data?: { userId?: string; projectId?: string; planId?: string } | null;
+  custom_data?: {
+    userId?: string;
+    projectId?: string;
+    planId?: string;
+    checkoutIntentId?: string;
+  } | null;
 }
 
 interface TxData {
+  customer_id?: string;
   id: string;
   status?: string;
   subscription_id?: string | null;
@@ -77,7 +94,9 @@ function parseDate(s: string | null | undefined): Date | null {
 
 async function applySubscriptionEvent(
   db: ReturnType<typeof getDb>,
-  data: SubData
+  data: SubData,
+  occurredAt: string,
+  config: PaddleConfig
 ): Promise<void> {
   const priceId = data.items?.[0]?.price?.id;
   if (!data.id || !priceId) {
@@ -96,7 +115,14 @@ async function applySubscriptionEvent(
   const plan = await db
     .select({ id: plans.id, projectId: plans.projectId })
     .from(plans)
-    .where(eq(plans.paddlePriceId, priceId))
+    .where(
+      and(
+        eq(plans.paddlePriceId, priceId),
+        data.custom_data?.planId
+          ? eq(plans.id, data.custom_data.planId)
+          : undefined
+      )
+    )
     .get();
 
   const existing = await db
@@ -104,12 +130,73 @@ async function applySubscriptionEvent(
     .from(subscriptions)
     .where(eq(subscriptions.paddleSubscriptionId, data.id))
     .get();
+  if (existing?.lastEventAt && existing.lastEventAt >= occurredAt) return;
+  let intent = data.custom_data?.checkoutIntentId
+    ? await db
+        .select()
+        .from(checkoutIntents)
+        .where(eq(checkoutIntents.id, data.custom_data.checkoutIntentId))
+        .get()
+    : undefined;
+  if (!existing) {
+    if (!intent?.paddleTransactionId)
+      throw new Error('Server checkout attribution is not ready');
+    const transaction = await getTransaction(
+      config,
+      intent.paddleTransactionId
+    );
+    if (
+      transaction.subscription_id !== data.id ||
+      transaction.customer_id !== intent.paddleCustomerId ||
+      !transaction.items?.some((item) => item.price.id === priceId)
+    )
+      throw new Error(
+        'Subscription does not match the server-created transaction'
+      );
+    const claimed = await db
+      .update(checkoutIntents)
+      .set({ paddleSubscriptionId: data.id })
+      .where(
+        and(
+          eq(checkoutIntents.id, intent.id),
+          or(
+            isNull(checkoutIntents.paddleSubscriptionId),
+            eq(checkoutIntents.paddleSubscriptionId, data.id)
+          )
+        )
+      )
+      .returning();
+    if (!claimed.length) throw new Error('Checkout attribution already used');
+    intent = claimed[0];
+  }
 
-  // Identity: custom_data > existing row > resolved plan. Skip if we can't attribute it.
-  const userId = data.custom_data?.userId ?? existing?.userId;
-  const projectId =
-    data.custom_data?.projectId ?? plan?.projectId ?? existing?.projectId;
-  const planId = data.custom_data?.planId ?? plan?.id ?? existing?.planId;
+  // A client-supplied custom_data plan must match the actual paid price.
+  if (
+    !plan ||
+    (data.custom_data?.projectId &&
+      data.custom_data.projectId !== plan.projectId)
+  ) {
+    throw new Error(
+      'Subscription price does not match the configured project plan'
+    );
+  }
+  const userId = existing?.userId ?? intent?.userId;
+  const projectId = plan.projectId;
+  const planId = plan.id;
+  if (
+    intent &&
+    (intent.projectId !== projectId ||
+      intent.planId !== planId ||
+      intent.paddleCustomerId !== data.customer_id)
+  )
+    throw new Error('Checkout plan/customer mismatch');
+  if (
+    existing &&
+    (existing.projectId !== projectId ||
+      (data.custom_data?.userId && data.custom_data.userId !== existing.userId))
+  ) {
+    throw new Error('Subscription identity cannot be reassigned');
+  }
   if (!userId || !projectId || !planId) {
     console.warn(
       JSON.stringify({
@@ -128,23 +215,10 @@ async function applySubscriptionEvent(
     return; // unknown plan/user — ignore
   }
 
-  if (!plan && !data.custom_data?.planId) {
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        msg: 'subscription webhook: price not mapped to a plan row',
-        subId: data.id,
-        priceId,
-        planId,
-        projectId,
-        userId,
-      })
-    );
-  }
-
   const canceled = mapSubStatus(data.status) === 'canceled';
   const values = {
     paddleSubscriptionId: data.id,
+    lastEventAt: occurredAt,
     paddleCustomerId: data.customer_id ?? null,
     userId,
     projectId,
@@ -179,22 +253,35 @@ async function applySubscriptionEvent(
         currentPeriodEnd: values.currentPeriodEnd,
         cancelAtPeriodEnd: values.cancelAtPeriodEnd,
         canceledAt,
+        lastEventAt: occurredAt,
         updatedAt: new Date(),
       },
+      setWhere: or(
+        isNull(subscriptions.lastEventAt),
+        lt(subscriptions.lastEventAt, occurredAt)
+      ),
     });
 }
 
 async function applyTransactionCompleted(
   db: ReturnType<typeof getDb>,
-  data: TxData
+  data: TxData,
+  occurredAt: string
 ): Promise<void> {
   if (!data.id) return;
   const total = Number(data.details?.totals?.total ?? Number.NaN);
   if (!Number.isFinite(total)) return;
 
   let subscriptionId: string | undefined;
-  let userId = data.custom_data?.userId;
-  let projectId = data.custom_data?.projectId;
+  const intent = await db
+    .select()
+    .from(checkoutIntents)
+    .where(eq(checkoutIntents.paddleTransactionId, data.id))
+    .get();
+  let userId = intent?.userId;
+  let projectId = intent?.projectId;
+  if (intent && data.customer_id !== intent.paddleCustomerId)
+    throw new Error('Transaction customer mismatch');
 
   if (data.subscription_id) {
     const sub = await db
@@ -212,7 +299,8 @@ async function applyTransactionCompleted(
       projectId ??= sub.projectId;
     }
   }
-  if (!userId || !projectId) return; // cannot attribute — skip
+  if (!userId || !projectId)
+    throw new Error('Transaction attribution not ready');
 
   const paid = data.status === 'completed' || data.status === 'paid';
   // B3: Set updatedAt on conflict
@@ -220,6 +308,7 @@ async function applyTransactionCompleted(
     .insert(invoices)
     .values({
       paddleTransactionId: data.id,
+      lastEventAt: occurredAt,
       subscriptionId: subscriptionId ?? null,
       userId,
       projectId,
@@ -236,54 +325,80 @@ async function applyTransactionCompleted(
         invoiceNumber: data.invoice_number ?? null,
         billedAt: parseDate(data.billed_at),
         updatedAt: new Date(),
+        lastEventAt: occurredAt,
       },
+      setWhere: or(
+        isNull(invoices.lastEventAt),
+        lt(invoices.lastEventAt, occurredAt)
+      ),
     });
 }
 
 // B4: Handle transaction.canceled — correct invoice status
 async function applyTransactionCanceled(
   db: ReturnType<typeof getDb>,
-  data: TxData
+  data: TxData,
+  occurredAt: string
 ): Promise<void> {
   if (!data.id) return;
   // Set invoice to pending if it was previously marked paid
   await db
     .update(invoices)
-    .set({ status: 'pending', updatedAt: new Date() })
-    .where(eq(invoices.paddleTransactionId, data.id));
+    .set({ status: 'pending', updatedAt: new Date(), lastEventAt: occurredAt })
+    .where(
+      and(
+        eq(invoices.paddleTransactionId, data.id),
+        or(isNull(invoices.lastEventAt), lt(invoices.lastEventAt, occurredAt))
+      )
+    );
 }
 
 // B4: Handle transaction.partially_refunded
 async function applyTransactionPartiallyRefunded(
   db: ReturnType<typeof getDb>,
-  data: TxData
+  data: TxData,
+  occurredAt: string
 ): Promise<void> {
   if (!data.id) return;
   await db
     .update(invoices)
-    .set({ status: 'refunded', updatedAt: new Date() })
-    .where(eq(invoices.paddleTransactionId, data.id));
+    .set({ status: 'refunded', updatedAt: new Date(), lastEventAt: occurredAt })
+    .where(
+      and(
+        eq(invoices.paddleTransactionId, data.id),
+        or(isNull(invoices.lastEventAt), lt(invoices.lastEventAt, occurredAt))
+      )
+    );
 }
 
 async function applyAdjustment(
   db: ReturnType<typeof getDb>,
-  data: AdjustmentData
+  data: AdjustmentData,
+  occurredAt: string
 ): Promise<void> {
   // Approved refunds flip the original transaction's invoice to refunded
   if (data.action !== 'refund' || data.status !== 'approved') return;
   if (!data.transaction_id) return;
   await db
     .update(invoices)
-    .set({ status: 'refunded', updatedAt: new Date() })
-    .where(eq(invoices.paddleTransactionId, data.transaction_id));
+    .set({ status: 'refunded', updatedAt: new Date(), lastEventAt: occurredAt })
+    .where(
+      and(
+        eq(invoices.paddleTransactionId, data.transaction_id),
+        or(isNull(invoices.lastEventAt), lt(invoices.lastEventAt, occurredAt))
+      )
+    );
 }
 
 const app = new Hono<{
   Bindings: Record<string, unknown> & {
     DB: D1Database;
     PADDLE_WEBHOOK_SECRET?: string;
+    PADDLE_API_KEY?: string;
+    PADDLE_ENVIRONMENT?: string;
   };
 }>();
+app.use('/paddle', bodyLimit({ maxSize: 1024 * 1024 }));
 
 // GET /v1/webhooks/status — check if webhooks have been received (diagnostic)
 app.get('/status', async (c) => {
@@ -331,14 +446,23 @@ app.post('/paddle', async (c) => {
   } catch {
     return c.json({ ok: false, error: 'invalid JSON body' }, 400);
   }
-  if (!event.event_id || !event.event_type)
+  if (
+    !event ||
+    typeof event.event_id !== 'string' ||
+    typeof event.event_type !== 'string' ||
+    !parseDate(event.occurred_at) ||
+    !event.data ||
+    typeof event.data !== 'object'
+  )
     return c.json({ ok: false, error: 'missing event fields' }, 400);
 
   const db = getDb(c.env);
+  const occurredAt = new Date(event.occurred_at).toISOString();
+  const leaseToken = crypto.randomUUID();
+  const leaseUntil = new Date(Date.now() + 120000);
 
   // B6+B7: Idempotency guard — processedAt is NULL at insert, set only on success.
   // For duplicates: re-process failed events, skip completed ones.
-  let isNewEvent = false;
   try {
     await db.insert(webhookEvents).values({
       paddleEventId: event.event_id,
@@ -346,24 +470,45 @@ app.post('/paddle', async (c) => {
       occurredAt: parseDate(event.occurred_at),
       payload: event as unknown as Record<string, unknown>,
       status: 'pending',
+      leaseToken,
+      leaseUntil,
     });
-    isNewEvent = true;
   } catch (e) {
-    if (e instanceof Error && e.message.includes('UNIQUE constraint failed')) {
+    if (isUniqueConflict(e)) {
       // Duplicate event — check if it previously failed (allow reprocessing)
       const existing = await db
         .select({ status: webhookEvents.status })
         .from(webhookEvents)
         .where(eq(webhookEvents.paddleEventId, event.event_id))
         .get();
-      if (existing?.status !== 'failed') {
+      if (existing?.status === 'completed') {
         return c.json({ ok: true, duplicate: true });
       }
       // Update existing failed event to pending for reprocessing
-      await db
+      const claimed = await db
         .update(webhookEvents)
-        .set({ status: 'pending', processedAt: null })
-        .where(eq(webhookEvents.paddleEventId, event.event_id));
+        .set({ status: 'pending', processedAt: null, leaseToken, leaseUntil })
+        .where(
+          and(
+            eq(webhookEvents.paddleEventId, event.event_id),
+            or(
+              eq(webhookEvents.status, 'failed'),
+              and(
+                eq(webhookEvents.status, 'pending'),
+                or(
+                  isNull(webhookEvents.leaseUntil),
+                  lte(webhookEvents.leaseUntil, new Date())
+                )
+              )
+            )
+          )
+        )
+        .returning({ id: webhookEvents.id });
+      if (!claimed.length)
+        return c.json(
+          { ok: false, error: 'Event processing is still pending' },
+          503
+        );
     } else {
       throw e;
     }
@@ -371,33 +516,92 @@ app.post('/paddle', async (c) => {
 
   // B6: Processing errors are re-thrown so Paddle retries.
   // Only ack success. processedAt is set after processing (B7).
-  if (event.event_type.startsWith('subscription.')) {
-    await applySubscriptionEvent(db, event.data as unknown as SubData);
-  } else if (
-    event.event_type === 'transaction.completed' ||
-    event.event_type === 'transaction.paid'
-  ) {
-    await applyTransactionCompleted(db, event.data as unknown as TxData);
-  } else if (event.event_type === 'adjustment.updated') {
-    await applyAdjustment(db, event.data as AdjustmentData);
-  } else if (event.event_type === 'transaction.canceled') {
-    // B4
-    await applyTransactionCanceled(db, event.data as unknown as TxData);
-  } else if (event.event_type === 'transaction.partially_refunded') {
-    // B4
-    await applyTransactionPartiallyRefunded(
-      db,
-      event.data as unknown as TxData
-    );
-  }
+  try {
+    if (event.event_type.startsWith('subscription.')) {
+      if (!c.env.PADDLE_API_KEY)
+        throw new Error('Paddle API key required for attribution');
+      await applySubscriptionEvent(
+        db,
+        event.data as unknown as SubData,
+        occurredAt,
+        {
+          apiKey: c.env.PADDLE_API_KEY,
+          environment:
+            c.env.PADDLE_ENVIRONMENT === 'production'
+              ? 'production'
+              : 'sandbox',
+        }
+      );
+    } else if (
+      event.event_type === 'transaction.completed' ||
+      event.event_type === 'transaction.paid'
+    ) {
+      await applyTransactionCompleted(
+        db,
+        event.data as unknown as TxData,
+        occurredAt
+      );
+    } else if (event.event_type === 'adjustment.updated') {
+      await applyAdjustment(db, event.data as AdjustmentData, occurredAt);
+    } else if (event.event_type === 'transaction.canceled') {
+      // B4
+      await applyTransactionCanceled(
+        db,
+        event.data as unknown as TxData,
+        occurredAt
+      );
+    } else if (event.event_type === 'transaction.partially_refunded') {
+      // B4
+      await applyTransactionPartiallyRefunded(
+        db,
+        event.data as unknown as TxData,
+        occurredAt
+      );
+    }
 
-  // B6+B7: Mark as completed only after successful processing
-  await db
-    .update(webhookEvents)
-    .set({ processedAt: new Date(), status: 'completed' })
-    .where(eq(webhookEvents.paddleEventId, event.event_id));
+    // B6+B7: Mark as completed only after successful processing
+    await db
+      .update(webhookEvents)
+      .set({
+        processedAt: new Date(),
+        status: 'completed',
+        leaseUntil: null,
+        leaseToken: null,
+      })
+      .where(
+        and(
+          eq(webhookEvents.paddleEventId, event.event_id),
+          eq(webhookEvents.leaseToken, leaseToken)
+        )
+      );
+  } catch (error) {
+    await db
+      .update(webhookEvents)
+      .set({
+        status: 'failed',
+        processedAt: null,
+        leaseUntil: null,
+        leaseToken: null,
+      })
+      .where(
+        and(
+          eq(webhookEvents.paddleEventId, event.event_id),
+          eq(webhookEvents.leaseToken, leaseToken)
+        )
+      );
+    throw error;
+  }
 
   return c.json({ ok: true });
 });
 
 export default app;
+
+function isUniqueConflict(error: unknown): boolean {
+  let cause = error;
+  for (let depth = 0; cause instanceof Error && depth < 5; depth++) {
+    if (cause.message.includes('UNIQUE constraint failed')) return true;
+    cause = cause.cause;
+  }
+  return false;
+}

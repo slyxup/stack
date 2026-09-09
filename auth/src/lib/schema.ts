@@ -329,13 +329,29 @@ export const oauthAccounts = sqliteTable(
   (t) => ({
     providerIdx: uniqueIndex('oauth_accounts_provider_idx').on(
       t.provider,
-      t.providerAccountId
+      t.providerAccountId,
+      t.userId
     ),
     userIdx: index('oauth_accounts_user_idx').on(t.userId),
   })
 );
 
 // ── Verification Tokens (email verify) ──
+export const authChallenges = sqliteTable(
+  'auth_challenges',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    purpose: text('purpose', {
+      enum: ['oauth_state', 'oauth_exchange', 'two_factor'],
+    }).notNull(),
+    payload: text('payload', { mode: 'json' })
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({ expiresIdx: index('auth_challenges_expires_idx').on(t.expiresAt) })
+);
+
 export const verificationTokens = sqliteTable(
   'verification_tokens',
   {

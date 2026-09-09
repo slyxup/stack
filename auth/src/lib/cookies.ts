@@ -35,17 +35,23 @@ export function getSessionToken(c: {
   }
   const cookie = c.req.header('Cookie') ?? '';
   // Prefer host cookie first
-  const hostMatch = cookie.match(new RegExp(`${SESSION_COOKIE_HOST}=([^;]+)`));
-  if (hostMatch) return decodeURIComponent(hostMatch[1]);
-  const match = cookie.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
-  if (match) return decodeURIComponent(match[1]);
+  for (const name of [SESSION_COOKIE_HOST, SESSION_COOKIE]) {
+    const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    if (match) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return undefined;
+      }
+    }
+  }
   return undefined;
 }
 
 export function setSessionCookie(
   c: {
     req: { header: (n: string) => string | undefined };
-    header: (n: string, v: string) => void;
+    header: (n: string, v: string, options?: { append?: boolean }) => void;
   },
   token: string,
   expiresAt: Date
@@ -81,13 +87,13 @@ export function setSessionCookie(
   // Legacy clients reading slyxup_session continue to work until they upgrade.
   if (useHostPrefix) {
     const legacy = `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=${expires}`;
-    c.header('Set-Cookie', legacy);
+    c.header('Set-Cookie', legacy, { append: true });
   }
 }
 
 export function clearSessionCookie(c: {
   req: { header: (n: string) => string | undefined };
-  header: (n: string, v: string) => void;
+  header: (n: string, v: string, options?: { append?: boolean }) => void;
 }) {
   const host = (c.req.header('Host') ?? '').split(':')[0].toLowerCase();
   const isLocalhost =
@@ -104,7 +110,8 @@ export function clearSessionCookie(c: {
   if (useHostPrefix) {
     c.header(
       'Set-Cookie',
-      `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+      `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+      { append: true }
     );
   }
 }

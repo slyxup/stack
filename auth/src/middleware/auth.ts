@@ -18,6 +18,20 @@ export const requireSession = createMiddleware<Env>(async (c, next) => {
   if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
   const data = await getSession(c.env, token);
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  const key = c.req.header('X-Publishable-Key');
+  if (key) {
+    const project = await verifyApiKey(c.env, key);
+    if (
+      !project ||
+      project.type !== 'publishable' ||
+      project.projectId !== data.session.projectId
+    ) {
+      return c.json(
+        { ok: false, error: 'Session does not belong to this project' },
+        403
+      );
+    }
+  }
   c.set('userId', data.user.id);
   c.set('sessionToken', token);
   await next();
