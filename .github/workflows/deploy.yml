@@ -16,7 +16,7 @@ jobs:
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck && pnpm lint && pnpm build && pnpm test
       - run: pnpm test:runtime
@@ -29,7 +29,7 @@ jobs:
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter auth db:migrate:remote && pnpm --filter auth run deploy
         env:
@@ -46,7 +46,7 @@ jobs:
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm --filter web run deploy
@@ -63,7 +63,7 @@ jobs:
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter billing db:migrate:remote && pnpm --filter billing run deploy
         env:
