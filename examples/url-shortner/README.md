@@ -1,6 +1,6 @@
 # URL shortener SDK example
 
-This is a client-only Next.js static export. It demonstrates the SlyxUp React SDK; it does not run server middleware and must not be used as proof of server authorization or paid-feature enforcement.
+This is a client-only Next.js static export using the published `@slyxup/core@3.0.0` and `@slyxup/ui@3.0.0` SDKs. It does not run server middleware and must not be used as proof of server authorization or paid-feature enforcement.
 
 ```dotenv
 # .env.local (public configuration only)
