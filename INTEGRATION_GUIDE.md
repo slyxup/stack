@@ -1,6 +1,6 @@
 # Integrating SlyxUp Auth and Billing
 
-This guide describes the 3.0.0 SDK release candidate. Do not assume the npm `latest` tag already contains these changes: publication follows the reviewed release PR. Check registry versions and release notes before upgrading.
+This guide describes the published 3.0.0 SDK release. Install `@slyxup/core@3.0.0` and `@slyxup/ui@3.0.0`; both npm `latest` tags point to 3.0.0.
 
 ## Choose your session transport first
 

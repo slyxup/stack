@@ -127,11 +127,11 @@ importers:
   examples/url-shortner:
     dependencies:
       '@slyxup/core':
-        specifier: workspace:*
-        version: link:../../packages/core
+        specifier: ^3.0.0
+        version: 3.0.0
       '@slyxup/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
+        specifier: ^3.0.0
+        version: 3.0.0(react@18.3.1)
       next:
         specifier: 15.5.25
         version: 15.5.25(@types/node@20.19.43)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1729,6 +1729,14 @@ packages:
   '@sindresorhus/is@7.2.0':
     resolution: {integrity: sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw==}
     engines: {node: '>=18'}
+
+  '@slyxup/core@3.0.0':
+    resolution: {integrity: sha512-YRqXMY8IJSHUFXfUnmJG7WA0ti+MYqgmdqP5ymBcYgLJyfyA+U2J8yo59Oc0pzoEsn8n6ecxwDVAIgMCeso06w==}
+
+  '@slyxup/ui@3.0.0':
+    resolution: {integrity: sha512-5DAHBq4Umwuz9NCkJ4oI7nqGvbaV+8INcuh1lGCifXktLjxb4IFZZcIpFLqdcutCpX6j/L6I75AMhzZCkshOhg==}
+    peerDependencies:
+      react: ^18 || ^19
 
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
@@ -4702,6 +4710,13 @@ snapshots:
   '@rolldown/pluginutils@1.0.1': {}
 
   '@sindresorhus/is@7.2.0': {}
+
+  '@slyxup/core@3.0.0': {}
+
+  '@slyxup/ui@3.0.0(react@18.3.1)':
+    dependencies:
+      '@slyxup/core': 3.0.0
+      react: 18.3.1
 
   '@speed-highlight/core@1.2.24': {}
 
