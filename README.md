@@ -5,7 +5,7 @@
 ```
 slyxup.online/stack               ← monorepo (here, pnpm + wrangler)
 ├── auth/     → https://auth.slyxup.online (Hono Worker + D1 + KV)
-├── web/      → https://stack.slyxup.online (Vite + React 19, Cloudflare Pages)
+├── web/      → https://stack.slyxup.com (Vite + React 19, `stack-frontend` Worker)
 ├── billing/  → https://billing.slyxup.online (Hono Worker + separate D1 + Paddle)
 ├── examples/  → starter apps
 └── packages/{core,ui}
@@ -62,11 +62,11 @@ pnpm --filter billing db:migrate:local
 pnpm --filter auth dev  # localhost:8787; run billing separately on 8788
 ```
 
-Web deployment (Cloudflare Pages):
+Web deployment (Cloudflare Worker Static Assets):
 
 ```bash
 pnpm --filter web build
-pnpm --filter web deploy
+pnpm --filter web run deploy
 ```
 
 **Dev → Prod Flow (tumhara flow):**

@@ -5,7 +5,7 @@
 - Dashboard, Organizations, SAML/SCIM, Enterprise SSO
 - Billing Teams, Analytics, Storage, AI (auth stays identity-only)
 - **NEVER add billing tables/routes to `slyxup_auth` or the auth Worker** — billing.slyxup.online is the sole billing owner (its own D1 + Paddle webhooks). Auth ↔ billing integration happens only via billing's read-only `AUTH_DB` session check.
-- Passkeys, Mobile SDK, Vue/Svelte SDK, React Native
+- Passkeys, Mobile/Vue/Svelte SDKs, React Native
 - Multi-region, complex admin panel
 
 If AI adds these, it’s out of scope — stop.

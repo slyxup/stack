@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "86cbbdf9b08ab4abef680d2ab5e756ea",
+  "name": "billing-slyxup-com",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "vars": {
+    "API_URL": "https://billing-slyxup-com.billing-86c.workers.dev",
+    "AUTH_URL": "https://auth-slyxup-com.auth-0f4.workers.dev",
+    "APP_URL": "https://stack.slyxup.com",
+    "CORS_ORIGINS": "https://stack.slyxup.com,https://email.slyxup.com,http://localhost:5173,http://localhost:3002",
+    "PADDLE_ENVIRONMENT": "sandbox"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "slyxup_billing_com",
+    "database_id": "831e8635-e118-4a28-8a1b-bbc07f390bb5",
+    "migrations_dir": "migrations"
+  }],
+  "kv_namespaces": [{
+    "binding": "KV",
+    "id": "217d865248d1410fb9db2f4d9837cd4e"
+  }]
+}

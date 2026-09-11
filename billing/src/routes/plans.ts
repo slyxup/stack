@@ -15,18 +15,20 @@ async function sha256HexLocal(input: string): Promise<string> {
 
 // ── Resolve publishable key → projectId via AUTH_DB, with HTTP fallback ──
 async function resolveProjectFromKey(
-  authDb: D1Database,
+  authDb: D1Database | undefined,
   publishableKey: string,
   authUrl?: string
 ): Promise<string | null> {
   try {
     const hashedKey = await sha256HexLocal(publishableKey.trim());
-    const row = await authDb
-      .prepare(
-        'SELECT project_id FROM api_keys WHERE hashed_key = ? AND type = ? LIMIT 1'
-      )
-      .bind(hashedKey, 'publishable')
-      .first<{ project_id: string }>();
+    const row = authDb
+      ? await authDb
+          .prepare(
+            'SELECT project_id FROM api_keys WHERE hashed_key = ? AND type = ? LIMIT 1'
+          )
+          .bind(hashedKey, 'publishable')
+          .first<{ project_id: string }>()
+      : null;
     if (row?.project_id) return row.project_id;
   } catch {
     // AUTH_DB may not have auth tables in local dev — fall through to HTTP

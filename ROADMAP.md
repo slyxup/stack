@@ -17,11 +17,8 @@
 
 ## Phase 2 — API Contract
 ## Phase 3 — Core SDK
-## Phase 4 — React SDK
-## Phase 5 — Nextjs SDK
-## Phase 6 — UI
-## Phase 7 — CLI
-## Phase 8 — Marketing
-## Phase 9 — CI/Release
+## Phase 4 — UI SDK (`packages/ui`)
+## Phase 5 — Marketing
+## Phase 6 — CI/Release
 
 Each phase = one PR, `pnpm typecheck && pnpm build` green before next.

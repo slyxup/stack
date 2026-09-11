@@ -50,10 +50,14 @@ app.use('*', async (c, next) => {
         ? (JSON.parse(cached) as string[])
         : null;
       if (!hosts) {
-        const result = await c.env.AUTH_DB.prepare(
-          "SELECT pd.domain FROM project_domains pd JOIN projects p ON p.id = pd.project_id WHERE p.environment = 'live'"
-        ).all<{ domain: string }>();
-        hosts = result.results.map((row) => row.domain.toLowerCase());
+        if (c.env.AUTH_DB) {
+          const result = await c.env.AUTH_DB.prepare(
+            "SELECT pd.domain FROM project_domains pd JOIN projects p ON p.id = pd.project_id WHERE p.environment = 'live'"
+          ).all<{ domain: string }>();
+          hosts = result.results.map((row) => row.domain.toLowerCase());
+        } else {
+          hosts = [];
+        }
         await c.env.KV.put('billing_cors_domains', JSON.stringify(hosts), {
           expirationTtl: 60,
         });
@@ -94,12 +98,17 @@ app.use('*', async (c, next) => {
 app.get('/health', (c) =>
   c.json({
     ok: true,
-    service: 'billing.slyxup.online',
+    service: 'billing',
     runtime: 'cloudflare',
   })
 );
 app.get('/v1/health', (c) =>
-  c.json({ ok: true, db: !!c.env.DB, authDb: !!c.env.AUTH_DB })
+  c.json({
+    ok: true,
+    db: !!c.env.DB,
+    authDb: !!c.env.AUTH_DB,
+    authUrl: c.env.AUTH_URL,
+  })
 );
 
 // Paddle checkout redirect lands here — VERIFY with Paddle first.

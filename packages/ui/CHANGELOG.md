@@ -72,7 +72,7 @@
 
 ### Minor Changes
 
-- [`7cf24ff`](https://github.com/slyxup/stack/commit/7cf24ffe37fe6f2bca41fdc0281618c2db02b3ae) - Full V1 SDKs: SlyxupClient with cookie jar, React provider + hooks, Next.js server helpers/middleware, themed UI components, slyxup CLI
+- [`7cf24ff`](https://github.com/slyxup/stack/commit/7cf24ffe37fe6f2bca41fdc0281618c2db02b3ae) - Full V1 core and UI SDK release with authenticated client helpers and themed components
 
 ### Patch Changes
 

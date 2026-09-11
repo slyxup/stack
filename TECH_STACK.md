@@ -4,9 +4,9 @@
 | --- | --- |
 | Auth service | `auth/`: Hono, Cloudflare Workers, Drizzle/D1, KV, R2 |
 | Billing service | `billing/`: Hono, separate D1, Paddle Billing; auth validation through `AUTH_DB`/HTTP |
-| Web | `web/`: React 19 + Vite + Tailwind v4, deployed to Cloudflare Pages |
+| Web | `web/`: React 19 + Vite + Tailwind v4, deployed to the `stack-frontend` Cloudflare Worker |
 | Core SDK | `packages/core/`: TypeScript ESM, typed fetch client, billing client, management helpers, Web API server helpers |
-| React SDK | `packages/ui/`: React 18/19 components, hooks, self-contained stylesheet and theme tokens |
+| UI SDK | `packages/ui/`: React 18/19 components, hooks, self-contained stylesheet and theme tokens |
 | Example | `examples/url-shortner/`: Next.js 15 static export, client-only SDK usage |
 | Tooling | pnpm 10.34.5 (Corepack), Turborepo, TypeScript, Biome, Vitest, Wrangler 4 |
 
