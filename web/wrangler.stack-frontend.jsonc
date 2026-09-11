@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "ed01399ae5f7a46697e0802e4eaef6a9",
+  "name": "stack-frontend",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-09-10",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [{
+    "pattern": "stack.slyxup.com",
+    "custom_domain": true
+  }],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "vars": { "APP_NAME": "SlyxUp Stack" }
+}

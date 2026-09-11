@@ -10,8 +10,7 @@
     "preview": "vite preview --port 4173",
     "lint": "oxlint",
     "typecheck": "tsc -b --noEmit",
-    "deploy": "pnpm build && wrangler pages deploy dist --project-name=stack-slyxup-online --branch main --commit-dirty=true",
-    "deploy:preview": "pnpm build && wrangler pages deploy dist --project-name=stack-slyxup-online --branch preview --commit-dirty=true",
+    "deploy": "pnpm build && wrangler deploy --config wrangler.stack-frontend.jsonc",
     "cf:typegen": "wrangler types"
   },
   "dependencies": {
