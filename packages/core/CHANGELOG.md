@@ -1,5 +1,14 @@
 # @slyxup/core
 
+## 3.1.0
+
+### Minor Changes
+
+- [`82eb003`](https://github.com/slyxup/stack/commit/82eb003052ab0b5f0122445cd2daae74f176eb06) - V4 SDK: CSRF double-submit support with automatic token capture and retry,
+  actionable error catalog (`ERROR_CATALOG`, `err.hint`, `isRetryableCode`),
+  client-side validation (`validateSignUp`, `validateSignIn`), theme presets
+  (`THEME_PRESETS`), and accessible `ErrorDisplay` component.
+
 ## 3.0.1
 
 ### Patch Changes

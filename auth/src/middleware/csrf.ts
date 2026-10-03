@@ -13,6 +13,16 @@ const EXEMPT_PREFIXES = [
   '/health',
   '/v1/health',
   '/v1/project-environment/',
+  // Public auth endpoints are unauthenticated by definition — there is no
+  // ambient credential to forge yet, so CSRF enforcement here only 403s
+  // legitimate browser clients (SDKs without CSRF support). Login, signup,
+  // verification and password-reset must never 403.
+  '/v1/auth/sign-up',
+  '/v1/auth/sign-in', // also covers /v1/auth/sign-in/2fa
+  '/v1/auth/sign-out',
+  '/v1/auth/password/force-change',
+  '/v1/verification',
+  '/v1/key/resolve',
 ];
 
 function isExempt(path: string): boolean {
@@ -29,6 +39,12 @@ function isMachineCall(c: Context): boolean {
   return false;
 }
 
+/** True when the request carries a session cookie (cookie-authenticated). */
+function hasSessionCookie(c: Context): boolean {
+  const cookie = c.req.header('Cookie') ?? c.req.header('cookie') ?? '';
+  return /(?:^|;\s*)(?:__Host-slyxup_session|slyxup_session)=/.test(cookie);
+}
+
 /**
  * CSRF protection via double-submit cookie.
  *
@@ -37,6 +53,11 @@ function isMachineCall(c: Context): boolean {
  * - POST/PUT/PATCH/DELETE: require `X-CSRF-Token` header === cookie value
  *   (constant-time compare). Missing/invalid → 403 CSRF_TOKEN_INVALID.
  * - Skips machine-to-machine (secret key) and exempt paths.
+ * - Skips requests carrying no session cookie: project SDKs authenticate
+ *   with per-origin Bearer tokens (localStorage), which browsers never attach
+ *   automatically, so those requests are not CSRF-able. The session cookie is
+ *   HttpOnly + SameSite=Lax + host-only, so cross-site fetches never carry it
+ *   either — enforcing CSRF there just 403s legitimate clients.
  */
 export async function csrfMiddleware(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
@@ -64,6 +85,25 @@ export async function csrfMiddleware(c: Context, next: Next) {
     if (isExempt(path)) {
       await next();
       // Still expose the token for convenience.
+      c.res.headers.set('X-CSRF-Token', token);
+      return;
+    }
+    // No session cookie → not a cookie-authenticated request → nothing CSRF
+    // can forge (Bearer tokens are never attached automatically). Enforcing
+    // here breaks every Bearer/unauthenticated browser client, so pass
+    // through while still minting/exposing the token for later use.
+    if (!hasSessionCookie(c)) {
+      await next();
+      if (minted) {
+        const isHttps = new URL(c.req.url).protocol === 'https:';
+        setCookie(c, COOKIE_NAME, token, {
+          httpOnly: false, // JS must read it to echo in the header
+          secure: isHttps, // allow http on localhost dev
+          sameSite: 'Lax',
+          maxAge: 60 * 60 * 24, // 24h
+          path: '/',
+        });
+      }
       c.res.headers.set('X-CSRF-Token', token);
       return;
     }
