@@ -1,7 +1,6 @@
 import { ArrowRight, Plus, RefreshCw, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CodeBlock } from '../components/CodeBlock';
 import {
   Alert,
   Badge,
@@ -234,20 +233,6 @@ export default function Projects() {
           ))}
         </div>
       )}
-
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Prefer the terminal?</CardTitle>
-          <CardDesc>Same operations via the CLI.</CardDesc>
-        </CardHeader>
-        <CardBody>
-          <CodeBlock
-            title="cli — projects"
-            lang="bash"
-            code={`slyxup project list --json\nslyxup project create "Acme" --json`}
-          />
-        </CardBody>
-      </Card>
 
       <Dialog
         open={showNew}

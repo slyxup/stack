@@ -1,4 +1,8 @@
-import type { SlyxupSessionInfo } from '@slyxup/core';
+import {
+  DEFAULT_AUTH_API_URL,
+  DEFAULT_BILLING_API_URL,
+  type SlyxupSessionInfo,
+} from '@slyxup/core';
 import {
   type FormEvent,
   useCallback,
@@ -123,7 +127,7 @@ export function UserProfile({
 }: UserProfileProps) {
   injectStyles();
   const { isLoaded, user, reload } = useUser();
-  const { client } = useAuth();
+  const { client, billingApiUrl } = useAuth();
 
   const [tab, setTab] = useState<Tab>('profile');
 
@@ -266,14 +270,13 @@ export function UserProfile({
     setPlansLoading(true);
     try {
       const rawApiUrl =
-        (client as unknown as { apiUrl: string }).apiUrl ??
-        'https://auth.slyxup.online';
+        (client as unknown as { apiUrl?: string }).apiUrl ?? DEFAULT_AUTH_API_URL;
       const billingUrl = (() => {
         // Localhost: swap port 8787 → 8788 (auth → billing)
         if (/^https?:\/\/localhost(:\d+)?$/.test(rawApiUrl)) {
           return rawApiUrl.replace(/:(\d+)$/, ':8788');
         }
-        return rawApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+        return billingApiUrl ?? DEFAULT_BILLING_API_URL;
       })();
       const token =
         (
@@ -291,7 +294,7 @@ export function UserProfile({
       // Also forward publishable key if available (helps billing resolve project)
       const pubKey = (client as unknown as { publishableKey?: string })
         ?.publishableKey;
-      if (pubKey && pubKey !== 'pk_test_missing')
+      if (pubKey && pubKey !== 'pk_missing')
         headers['X-Publishable-Key'] = pubKey;
 
       // Derive projectId for plans: prefer user.projectId, then try to resolve from publishableKey's project (for examples)
@@ -399,7 +402,7 @@ export function UserProfile({
       const planPaths: string[] = [];
       if (projectId) {
         planPaths.push(`${billingUrl}/v1/billing/plans?projectId=${projectId}`);
-      } else if (pubKey && pubKey !== 'pk_test_missing') {
+      } else if (pubKey && pubKey !== 'pk_missing') {
         // No projectId but have publishableKey — let billing resolve project via X-Publishable-Key header.
         // Billing plans route returns [] in test/localhost when projectId is missing, which is fine.
         planPaths.push(`${billingUrl}/v1/billing/plans`);
@@ -641,8 +644,7 @@ export function UserProfile({
       // Always use Paddle.js overlay checkout
       // authApiUrl is available via client apiUrl
       const rawApiUrl =
-        (client as unknown as { apiUrl: string }).apiUrl ??
-        'https://auth.slyxup.online';
+        (client as unknown as { apiUrl?: string }).apiUrl ?? DEFAULT_AUTH_API_URL;
       await initPaddle(rawApiUrl);
       // Pass custom data so the billing webhook can attribute the created
       // subscription to this user + project + plan (Paddle copies custom_data

@@ -4,7 +4,7 @@ export interface OAuthState {
   state: string;
   provider: 'google' | 'github';
   redirectUrl?: string;
-  pkceVerifier?: string;
+  pkceVerifier: string;
   createdAt: number;
 }
 
@@ -16,7 +16,8 @@ export function buildAuthUrl(
     APP_URL: string;
   },
   state: string,
-  redirectUri: string
+  redirectUri: string,
+  challenge?: string
 ): string {
   if (provider === 'google') {
     const clientId = env.GOOGLE_CLIENT_ID ?? '';
@@ -29,6 +30,10 @@ export function buildAuthUrl(
       access_type: 'offline',
       prompt: 'consent',
     });
+    if (challenge) {
+      params.set('code_challenge', challenge);
+      params.set('code_challenge_method', 'S256');
+    }
     return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   }
   const clientId = env.GITHUB_CLIENT_ID ?? '';
@@ -38,6 +43,10 @@ export function buildAuthUrl(
     scope: 'read:user user:email',
     state,
   });
+  if (challenge) {
+    params.set('code_challenge', challenge);
+    params.set('code_challenge_method', 'S256');
+  }
   return `https://github.com/login/oauth/authorize?${params}`;
 }
 

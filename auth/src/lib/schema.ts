@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 // Drizzle schema for D1 (SQLite) — CF Workers — V1
 // D1 quirks: no BOOL/DATETIME (use integer 0/1 + unix seconds), FK always ON, 100 bound params, JSON as TEXT
 import {
@@ -157,6 +157,10 @@ export const users = sqliteTable(
       .notNull()
       .default(false),
     passwordHash: text('password_hash'),
+    /** Hash algorithm version: 'pbkdf2' (legacy 100k) or 'pbkdf2-600k' (V4+). Reserved: 'argon2id'. */
+    passwordHashVersion: text('password_hash_version')
+      .notNull()
+      .default('pbkdf2'),
     /** Optional unique handle per project (sign-in identifier alongside email). */
     username: text('username'),
     firstName: text('first_name'),
@@ -193,6 +197,13 @@ export const users = sqliteTable(
   },
   (t) => ({
     emailIdx: uniqueIndex('users_email_project_idx').on(t.email, t.projectId),
+    // Hot path: sign-in filters `lower(email) = ? AND project_id = ?`, which
+    // can't use the case-sensitive unique index above (full scan on tenants
+    // with many users). Expression index serves it directly.
+    emailLowerProjectIdx: index('users_email_lower_project_idx').on(
+      sql`lower(${t.email})`,
+      t.projectId
+    ),
     usernameIdx: uniqueIndex('users_username_project_idx').on(
       t.username,
       t.projectId
@@ -280,6 +291,8 @@ export const sessions = sqliteTable(
     token: text('token').notNull().unique(),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
+    /** HMAC-SHA256(IP + normalized UA). Null when SESSION_SECRET unset. */
+    fingerprintHash: text('fingerprint_hash'),
     expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
@@ -329,13 +342,29 @@ export const oauthAccounts = sqliteTable(
   (t) => ({
     providerIdx: uniqueIndex('oauth_accounts_provider_idx').on(
       t.provider,
-      t.providerAccountId
+      t.providerAccountId,
+      t.userId
     ),
     userIdx: index('oauth_accounts_user_idx').on(t.userId),
   })
 );
 
 // ── Verification Tokens (email verify) ──
+export const authChallenges = sqliteTable(
+  'auth_challenges',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    purpose: text('purpose', {
+      enum: ['oauth_state', 'oauth_exchange', 'two_factor'],
+    }).notNull(),
+    payload: text('payload', { mode: 'json' })
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => ({ expiresIdx: index('auth_challenges_expires_idx').on(t.expiresAt) })
+);
+
 export const verificationTokens = sqliteTable(
   'verification_tokens',
   {
@@ -380,7 +409,7 @@ export const passwordResetTokens = sqliteTable(
   })
 );
 
-// ── API Keys (pk_/sk_ test/live) ──
+// ── API Keys (one pk_ + one sk_ per project; project environment is canonical) ──
 // hashedKey is SHA-256 hex of the full key (never store plaintext, never btoa).
 export const apiKeys = sqliteTable(
   'api_keys',
@@ -392,8 +421,9 @@ export const apiKeys = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    prefix: text('prefix').notNull(), // pk_test_ / pk_live_ / sk_test_ / sk_live_
+    prefix: text('prefix').notNull(), // pk_ or sk_
     hashedKey: text('hashed_key').notNull().unique(),
+    // Retained for migration/history. Runtime validation uses projects.environment.
     environment: text('environment', { enum: ['test', 'live'] })
       .notNull()
       .default('test'),
@@ -511,7 +541,7 @@ export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
 
 // NOTE: Billing tables (plans/subscriptions/invoices) live ONLY in
-// billing.slyxup.online (D1 slyxup_billing). Auth owns identity only.
+// billing.slyxup.com (D1 slyxup_billing). Auth owns identity only.
 
 // ── Audit Logs ──
 export const auditLogs = sqliteTable(
@@ -543,6 +573,9 @@ export const auditLogs = sqliteTable(
         'key.revoked',
         'project.created',
         'project.deleted',
+        'project.environment_changed',
+        'domain.added',
+        'domain.removed',
       ],
     }).notNull(),
     metadata: text('metadata', { mode: 'json' }).$type<

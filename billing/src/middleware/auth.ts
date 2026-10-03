@@ -1,18 +1,28 @@
 import { createMiddleware } from 'hono/factory';
+import { getBillingConfig } from '../lib/config';
 
 export type Env = {
   Bindings: {
     DB: D1Database;
-    AUTH_DB: D1Database;
+    AUTH_DB?: D1Database;
     KV: KVNamespace;
     APP_URL: string;
     AUTH_URL: string;
     API_URL: string;
+    PAYMENT_LINK_URL?: string;
+    PAYMENT_SUCCESS_URL?: string;
     CORS_ORIGINS: string;
     PADDLE_ENVIRONMENT?: string;
     PADDLE_API_KEY?: string;
     PADDLE_WEBHOOK_SECRET?: string;
     PADDLE_CLIENT_TOKEN?: string;
+    PADDLE_DEFAULT_ENVIRONMENT?: string;
+    PADDLE_SANDBOX_API_KEY?: string;
+    PADDLE_SANDBOX_WEBHOOK_SECRET?: string;
+    PADDLE_SANDBOX_CLIENT_TOKEN?: string;
+    PADDLE_PRODUCTION_API_KEY?: string;
+    PADDLE_PRODUCTION_WEBHOOK_SECRET?: string;
+    PADDLE_PRODUCTION_CLIENT_TOKEN?: string;
     BILLING_ADMIN_SECRET?: string;
   };
   Variables: { userId: string; userEmail: string };
@@ -31,10 +41,16 @@ export function getSessionToken(c: {
     if (bearer) return bearer;
   }
   const cookie = c.req.header('Cookie') ?? '';
-  const hostMatch = cookie.match(new RegExp(`${SESSION_COOKIE_HOST}=([^;]+)`));
-  if (hostMatch) return decodeURIComponent(hostMatch[1]);
-  const match = cookie.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
-  if (match) return decodeURIComponent(match[1]);
+  for (const name of [SESSION_COOKIE_HOST, SESSION_COOKIE]) {
+    const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    if (match) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return undefined;
+      }
+    }
+  }
   return undefined;
 }
 
@@ -45,7 +61,7 @@ interface SessionRow {
 }
 
 /**
- * Validates the auth session by calling auth.slyxup.online /v1/session
+ * Validates the auth session by calling the Auth Worker /v1/session
  * (works for both local and prod without duplicating auth tables into billing D1).
  * Falls back to direct AUTH_DB read for performance when available.
  */
@@ -53,16 +69,19 @@ export const requireUser = createMiddleware<Env>(async (c, next) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
 
-  // Try direct AUTH_DB read first (fast path for prod where tables exist)
+  // Use the Auth Worker over HTTP for cross-account deployments. AUTH_DB is
+  // optional and retained only for same-account/local compatibility.
   try {
     const nowSec = Math.floor(Date.now() / 1000);
-    const row = await c.env.AUTH_DB.prepare(
-      `SELECT s.user_id, u.email, u.blocked
+    const row = c.env.AUTH_DB
+      ? await c.env.AUTH_DB.prepare(
+          `SELECT s.user_id, u.email, u.blocked
        FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ? LIMIT 1`
-    )
-      .bind(token, nowSec)
-      .first<SessionRow>();
+       WHERE s.token = ? AND s.expires_at > ? AND u.email_verified = 1 LIMIT 1`
+        )
+          .bind(token, nowSec)
+          .first<SessionRow>()
+      : null;
     if (row) {
       if (row.blocked) return c.json({ ok: false, error: 'Blocked' }, 403);
       c.set('userId', row.user_id);
@@ -76,7 +95,7 @@ export const requireUser = createMiddleware<Env>(async (c, next) => {
 
   // Fallback: call auth service via HTTP (no duplication, works for local dev with different D1 instances)
   try {
-    const authUrl = c.env.AUTH_URL ?? 'https://auth.slyxup.online';
+    const authUrl = getBillingConfig(c.env as unknown as Record<string, string | undefined>).authUrl;
     const res = await fetch(`${authUrl}/v1/session`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -111,11 +130,13 @@ export const requireAdmin = createMiddleware<Env>(async (c, next) => {
   if (token) {
     try {
       const nowSec = Math.floor(Date.now() / 1000);
-      const row = await c.env.AUTH_DB.prepare(
-        'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 LIMIT 1'
-      )
-        .bind(token, nowSec)
-        .first<{ user_id: string }>();
+      const row = c.env.AUTH_DB
+        ? await c.env.AUTH_DB.prepare(
+            'SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ? AND u.blocked = 0 AND u.email_verified = 1 LIMIT 1'
+          )
+            .bind(token, nowSec)
+            .first<{ user_id: string }>()
+        : null;
       if (row) {
         c.set('userId', row.user_id);
         await next();
@@ -123,7 +144,7 @@ export const requireAdmin = createMiddleware<Env>(async (c, next) => {
       }
     } catch {}
     try {
-      const authUrl = c.env.AUTH_URL ?? 'https://auth.slyxup.online';
+      const authUrl = getBillingConfig(c.env as unknown as Record<string, string | undefined>).authUrl;
       const res = await fetch(`${authUrl}/v1/session`, {
         headers: { Authorization: `Bearer ${token}` },
       });

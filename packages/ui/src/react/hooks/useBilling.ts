@@ -6,14 +6,29 @@ import {
   type Plan,
   type Subscription,
 } from '@slyxup/core';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-
-const defaultClient = new BillingClient();
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { AuthContext } from '../context/auth-context';
 
 export function useBilling(apiUrl?: string) {
+  const auth = useContext(AuthContext);
+  const authClient = auth?.client;
+  const billingApiUrl = apiUrl ?? auth?.billingApiUrl;
+  const userId = auth?.userId;
   const client = useMemo(
-    () => (apiUrl ? new BillingClient({ apiUrl }) : defaultClient),
-    [apiUrl]
+    () =>
+      new BillingClient({
+        apiUrl: billingApiUrl,
+        publishableKey: authClient?.publishableKey,
+        getToken: () => (userId ? authClient?.getToken() : undefined),
+      }),
+    [billingApiUrl, authClient, userId]
   );
   return { client };
 }
@@ -25,6 +40,9 @@ export function usePlans(projectId: string | undefined, apiUrl?: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+    setPlans([]);
+    setError(null);
     if (!projectId) {
       setLoading(false);
       return;
@@ -32,11 +50,19 @@ export function usePlans(projectId: string | undefined, apiUrl?: string) {
     setLoading(true);
     client
       .listPlans(projectId)
-      .then(setPlans)
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : 'Failed')
-      )
-      .finally(() => setLoading(false));
+      .then((value) => {
+        if (active) setPlans(value);
+      })
+      .catch((e: unknown) => {
+        if (active)
+          setError(e instanceof Error ? e.message : 'Unable to load plans');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [projectId, client]);
 
   return { plans, loading, error };
@@ -79,16 +105,33 @@ export function useInvoices(apiUrl?: string) {
   const { client } = useBilling(apiUrl);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const generation = useRef(0);
 
-  useEffect(() => {
-    client
-      .listInvoices()
-      .then(setInvoices)
-      .catch(() => setInvoices([]))
-      .finally(() => setLoading(false));
+  const reload = useCallback(async () => {
+    const request = ++generation.current;
+    setLoading(true);
+    setError(null);
+    setInvoices([]);
+    try {
+      const result = await client.listInvoices();
+      if (request === generation.current) setInvoices(result);
+    } catch (e) {
+      if (request === generation.current)
+        setError(e instanceof Error ? e.message : 'Unable to load invoices');
+    } finally {
+      if (request === generation.current) setLoading(false);
+    }
   }, [client]);
 
-  return { invoices, loading };
+  useEffect(() => {
+    void reload();
+    return () => {
+      generation.current++;
+    };
+  }, [reload]);
+
+  return { invoices, loading, error, reload };
 }
 
 export interface CheckoutHookOptions {

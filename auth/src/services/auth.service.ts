@@ -1,7 +1,17 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { randomToken, randomUUID, sha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
-import { hashPassword, verifyPassword } from '../lib/password';
+import {
+  generateFingerprint,
+  type RequestMeta,
+} from '../lib/fingerprint';
+import { log } from '../lib/logger';
+import {
+  CURRENT_HASH_VERSION,
+  hashPassword,
+  needsRehash,
+  verifyPassword,
+} from '../lib/password';
 import {
   recoveryCodes,
   sessions,
@@ -22,9 +32,11 @@ export async function signUp(
     lastName?: string;
     username?: string;
     bootstrapToken?: string;
-  }
+  },
+  meta?: RequestMeta
 ) {
   const db = getDb(env);
+  const email = input.email.trim().toLowerCase();
   // Project-scoped uniqueness: same email can exist in different projects.
   const existing = input.projectId
     ? await db
@@ -32,7 +44,7 @@ export async function signUp(
         .from(users)
         .where(
           and(
-            eq(users.email, input.email),
+            sql`lower(${users.email}) = ${email}`,
             eq(users.projectId, input.projectId)
           )
         )
@@ -40,7 +52,9 @@ export async function signUp(
     : await db
         .select()
         .from(users)
-        .where(and(eq(users.email, input.email), isNull(users.projectId)))
+        .where(
+          and(sql`lower(${users.email}) = ${email}`, isNull(users.projectId))
+        )
         .get();
   if (existing) throw new Error('Email already exists');
 
@@ -69,7 +83,7 @@ export async function signUp(
     const requiredEmail = (
       env.BOOTSTRAP_ADMIN_EMAIL ?? env.INITIAL_ADMIN_EMAIL
     )?.toLowerCase();
-    if (requiredEmail && input.email.toLowerCase() !== requiredEmail) {
+    if (requiredEmail && email !== requiredEmail) {
       throw new Error('EMAIL_NOT_ALLOWED_FOR_BOOTSTRAP');
     }
     const secret = env.BOOTSTRAP_SECRET ?? env.ADMIN_BOOTSTRAP_TOKEN;
@@ -94,9 +108,10 @@ export async function signUp(
   await db.insert(users).values({
     id: userId,
     projectId: input.projectId ?? null,
-    email: input.email,
+    email,
     emailVerified: false,
     passwordHash,
+    passwordHashVersion: CURRENT_HASH_VERSION,
     username: input.username ?? null,
     firstName: input.firstName ?? null,
     lastName: input.lastName ?? null,
@@ -111,21 +126,27 @@ export async function signUp(
   await db.insert(verificationTokens).values({
     id: randomUUID(),
     userId,
-    email: input.email,
+    email,
     token,
     expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
     createdAt: now,
   });
 
-  // Create session
+  // Create session (fingerprinted to IP + UA when a secret is configured)
   const sessionToken = randomToken(32);
   const sessionId = randomUUID();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+  const fingerprint = meta
+    ? await generateFingerprint(meta, env.SESSION_SECRET)
+    : null;
   await db.insert(sessions).values({
     id: sessionId,
     userId,
     projectId: input.projectId ?? null,
     token: sessionToken,
+    ipAddress: meta?.ip ?? null,
+    userAgent: meta?.userAgent ?? null,
+    fingerprintHash: fingerprint,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -134,7 +155,7 @@ export async function signUp(
   // Deliver the verification email (best-effort, never blocks signup)
   await sendVerificationEmail(
     env as unknown as Record<string, string | undefined>,
-    input.email,
+    email,
     token
   );
 
@@ -144,7 +165,7 @@ export async function signUp(
     expiresAt,
     verificationToken: token,
     role,
-    user: { id: userId, email: input.email },
+    user: { id: userId, email },
   };
 }
 
@@ -162,26 +183,32 @@ export type SignInResult =
     };
 
 export async function signIn(
-  env: { DB: D1Database },
+  env: { DB: D1Database; SESSION_SECRET?: string },
   input: {
     email?: string;
     username?: string;
     password: string;
     projectId?: string;
-  }
+  },
+  meta?: RequestMeta
 ): Promise<SignInResult> {
   const db = getDb(env);
+  const email = input.email?.trim().toLowerCase();
   let user: typeof users.$inferSelect | undefined;
   if (input.username) {
     // Username login — resolve within project scope (or platform when no projectId).
     user = await findByUsername(db, input.username, input.projectId ?? null);
   } else if (input.projectId) {
     // Try project-scoped user first
-    const email = input.email as string;
     user = await db
       .select()
       .from(users)
-      .where(and(eq(users.email, email), eq(users.projectId, input.projectId)))
+      .where(
+        and(
+          sql`lower(${users.email}) = ${email}`,
+          eq(users.projectId, input.projectId)
+        )
+      )
       .get();
     // Fallback: platform user (project_id null) who is a member of this project
     // This allows dashboard/platform users to sign in via the platform's publishable key
@@ -189,29 +216,27 @@ export async function signIn(
       const platformUser = await db
         .select()
         .from(users)
-        .where(and(eq(users.email, email), isNull(users.projectId)))
+        .where(
+          and(sql`lower(${users.email}) = ${email}`, isNull(users.projectId))
+        )
         .get();
       if (platformUser) {
-        // Check if this platform user's developer is a member of the project
+        // Check if this platform user's developer is a member of the project —
+        // one JOIN query instead of two sequential lookups.
         const { developers, projectMembers } = await import('../lib/schema');
-        const dev = await db
-          .select()
+        const link = await db
+          .select({ developerId: developers.id })
           .from(developers)
+          .innerJoin(
+            projectMembers,
+            and(
+              eq(projectMembers.developerId, developers.id),
+              eq(projectMembers.projectId, input.projectId)
+            )
+          )
           .where(eq(developers.userId, platformUser.id))
           .get();
-        if (dev) {
-          const membership = await db
-            .select()
-            .from(projectMembers)
-            .where(
-              and(
-                eq(projectMembers.projectId, input.projectId),
-                eq(projectMembers.developerId, dev.id)
-              )
-            )
-            .get();
-          if (membership) user = platformUser;
-        }
+        if (link) user = platformUser;
         // Also allow if no developer link but it's the platform owner (first admin)
         // For bootstrap, allow any platform admin to sign in via any project key they own
         if (!user && platformUser.role === 'admin') {
@@ -221,16 +246,34 @@ export async function signIn(
     }
   } else {
     // Platform user only — never fall back to an arbitrary project user
-    const email = input.email as string;
     user = await db
       .select()
       .from(users)
-      .where(and(eq(users.email, email), isNull(users.projectId)))
+      .where(
+        and(sql`lower(${users.email}) = ${email}`, isNull(users.projectId))
+      )
       .get();
   }
   if (!user || !user.passwordHash) throw new Error('Invalid credentials');
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw new Error('Invalid credentials');
+  // Opportunistic rehash: upgrade legacy PBKDF2-100k → PBKDF2-600k on login.
+  // Best-effort — never blocks authentication.
+  if (needsRehash(user.passwordHash)) {
+    try {
+      const newHash = await hashPassword(input.password);
+      await db
+        .update(users)
+        .set({
+          passwordHash: newHash,
+          passwordHashVersion: CURRENT_HASH_VERSION,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+    } catch {
+      log.warn('password_rehash_failed', { userId: user.id });
+    }
+  }
   if (user.blocked)
     throw new Error(
       `ACCOUNT_BLOCKED:${user.blockedReason ?? 'Contact support'}`
@@ -242,15 +285,16 @@ export async function signIn(
     // Password is verified but 2FA is required. Do NOT create a usable session.
     // Store a short-lived pending challenge so the client can complete login
     // with a TOTP code or recovery code in a second step.
-    const challengeToken = randomToken(32);
-    await (env as unknown as { KV?: KVNamespace }).KV?.put(
-      `2fa_challenge:${challengeToken}`,
-      JSON.stringify({
+    const { issueChallenge } = await import('./challenge.service');
+    const challengeToken = await issueChallenge(
+      env,
+      'two_factor',
+      {
         userId: user.id,
         projectId: user.projectId,
         scope: input.projectId ?? user.projectId ?? null,
-      }),
-      { expirationTtl: 5 * 60 }
+      },
+      5 * 60
     );
     return { user, challengeToken, requires2FA: true };
   }
@@ -259,11 +303,17 @@ export async function signIn(
   const sessionId = randomUUID();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
   const now = new Date();
+  const fingerprint = meta
+    ? await generateFingerprint(meta, env.SESSION_SECRET)
+    : null;
   await db.insert(sessions).values({
     id: sessionId,
     userId: user.id,
     projectId: input.projectId ?? user.projectId ?? null,
     token: sessionToken,
+    ipAddress: meta?.ip ?? null,
+    userAgent: meta?.userAgent ?? null,
+    fingerprintHash: fingerprint,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -277,14 +327,18 @@ export async function signIn(
  * code against the pending challenge, then create a real session.
  */
 export async function complete2FASignIn(
-  env: { DB: D1Database; KV?: KVNamespace },
+  env: { DB: D1Database; KV?: KVNamespace; SESSION_SECRET?: string },
   challengeToken: string,
   code?: string,
-  recoveryCode?: string
+  recoveryCode?: string,
+  meta?: RequestMeta
 ) {
-  const raw = await env.KV?.get(`2fa_challenge:${challengeToken}`);
-  if (!raw) throw new Error('2FA_CHALLENGE_INVALID');
-  const challenge = JSON.parse(raw) as {
+  const { readChallenge, consumeChallenge } = await import(
+    './challenge.service'
+  );
+  const pending = await readChallenge(env, 'two_factor', challengeToken);
+  if (!pending) throw new Error('2FA_CHALLENGE_INVALID');
+  const challenge = pending.payload as {
     userId: string;
     projectId: string | null;
     scope: string | null;
@@ -295,8 +349,15 @@ export async function complete2FASignIn(
     .from(users)
     .where(eq(users.id, challenge.userId))
     .get();
-  if (!user || !user.twoFactorEnabled || !user.totpSecret) {
-    await env.KV?.delete(`2fa_challenge:${challengeToken}`);
+  if (
+    !user ||
+    user.blocked ||
+    !user.emailVerified ||
+    user.mustChangePassword ||
+    !user.twoFactorEnabled ||
+    !user.totpSecret
+  ) {
+    await consumeChallenge(env, 'two_factor', challengeToken);
     throw new Error('2FA_NOT_ENABLED');
   }
 
@@ -309,17 +370,24 @@ export async function complete2FASignIn(
   }
   if (!ok) throw new Error('INVALID_2FA_CODE');
 
-  await env.KV?.delete(`2fa_challenge:${challengeToken}`);
+  if (!(await consumeChallenge(env, 'two_factor', challengeToken)))
+    throw new Error('2FA_CHALLENGE_INVALID');
 
   const sessionToken = randomToken(32);
   const sessionId = randomUUID();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
   const now = new Date();
+  const fingerprint = meta
+    ? await generateFingerprint(meta, env.SESSION_SECRET)
+    : null;
   await db.insert(sessions).values({
     id: sessionId,
     userId: user.id,
     projectId: challenge.scope ?? challenge.projectId ?? null,
     token: sessionToken,
+    ipAddress: meta?.ip ?? null,
+    userAgent: meta?.userAgent ?? null,
+    fingerprintHash: fingerprint,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -374,14 +442,22 @@ async function redeemRecoveryCode(
     )
     .get();
   if (!row) return false;
-  await db
+  const claimed = await db
     .update(recoveryCodes)
     .set({ used: true, usedAt: new Date() })
-    .where(eq(recoveryCodes.id, row.id));
-  return true;
+    .where(and(eq(recoveryCodes.id, row.id), eq(recoveryCodes.used, false)))
+    .returning({ id: recoveryCodes.id });
+  return claimed.length === 1;
 }
 
-export async function getSession(env: { DB: D1Database }, token: string) {
+export type SessionUser =
+  NonNullable<Awaited<ReturnType<typeof getSession>>>['user'];
+
+export async function getSession(
+  env: { DB: D1Database; SESSION_SECRET?: string },
+  token: string,
+  meta?: RequestMeta
+) {
   const db = getDb(env);
   const session = await db
     .select()
@@ -397,11 +473,43 @@ export async function getSession(env: { DB: D1Database }, token: string) {
       .catch(() => undefined);
     return null;
   }
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.userId))
-    .get();
+  // Fingerprint check: sessions are bound to IP + UA. A mismatch on a
+  // session older than the rotation grace (5 min) means likely hijack →
+  // revoke. Within grace (e.g. mobile network hop right after login),
+  // rotate the fingerprint instead of killing the session.
+  if (meta && session.fingerprintHash && env.SESSION_SECRET) {
+    const current = await generateFingerprint(meta, env.SESSION_SECRET);
+    if (current && current !== session.fingerprintHash) {
+      const ageMs = Date.now() - new Date(session.updatedAt).getTime();
+      if (ageMs > 5 * 60 * 1000) {
+        log.warn('session_fingerprint_mismatch', { sessionId: session.id });
+        await db
+          .delete(sessions)
+          .where(eq(sessions.token, token))
+          .catch(() => undefined);
+        return null;
+      }
+      await db
+        .update(sessions)
+        .set({
+          fingerprintHash: current,
+          ipAddress: meta.ip ?? session.ipAddress,
+          userAgent: meta.userAgent ?? session.userAgent,
+          updatedAt: new Date(),
+        })
+        .where(eq(sessions.id, session.id))
+        .catch(() => undefined);
+    }
+  }
+  // User + profile are independent once the session is known — fetch concurrently.
+  const [user, profile] = await Promise.all([
+    db.select().from(users).where(eq(users.id, session.userId)).get(),
+    db
+      .select({ bio: userProfiles.bio })
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, session.userId))
+      .get(),
+  ]);
   if (!user) {
     // User deleted — cleanup orphaned session
     await db
@@ -426,11 +534,6 @@ export async function getSession(env: { DB: D1Database }, token: string) {
       .catch(() => undefined);
     return null;
   }
-  const profile = await db
-    .select({ bio: userProfiles.bio })
-    .from(userProfiles)
-    .where(eq(userProfiles.userId, user.id))
-    .get();
   return { session, user: { ...user, bio: profile?.bio ?? null } };
 }
 
@@ -444,27 +547,35 @@ export async function forcePasswordChange(
   }
 ) {
   const db = getDb(env);
+  const email = input.email.trim().toLowerCase();
   let user: typeof users.$inferSelect | undefined;
   if (input.projectId) {
     user = await db
       .select()
       .from(users)
       .where(
-        and(eq(users.email, input.email), eq(users.projectId, input.projectId))
+        and(
+          sql`lower(${users.email}) = ${email}`,
+          eq(users.projectId, input.projectId)
+        )
       )
       .get();
     if (!user) {
       user = await db
         .select()
         .from(users)
-        .where(and(eq(users.email, input.email), isNull(users.projectId)))
+        .where(
+          and(sql`lower(${users.email}) = ${email}`, isNull(users.projectId))
+        )
         .get();
     }
   } else {
     user = await db
       .select()
       .from(users)
-      .where(and(eq(users.email, input.email), isNull(users.projectId)))
+      .where(
+        and(sql`lower(${users.email}) = ${email}`, isNull(users.projectId))
+      )
       .get();
   }
   if (!user || !user.passwordHash) throw new Error('Invalid credentials');
@@ -480,6 +591,7 @@ export async function forcePasswordChange(
     .update(users)
     .set({
       passwordHash: newHash,
+      passwordHashVersion: CURRENT_HASH_VERSION,
       mustChangePassword: false,
       updatedAt: new Date(),
     })

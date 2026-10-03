@@ -117,7 +117,7 @@ export default function Page() {
   }
 
   return (
-    <SlyxUpProvider publishableKey={pk} apiUrl={process.env.NEXT_PUBLIC_SLYXUP_API_URL}>
+    <SlyxUpProvider publishableKey={pk} apiUrl={process.env.NEXT_PUBLIC_SLYXUP_API_URL} billingApiUrl={process.env.NEXT_PUBLIC_SLYXUP_BILLING_URL} tokenStorage="sessionStorage">
       <SlyxUpStyles />
       <Hero />
     </SlyxUpProvider>

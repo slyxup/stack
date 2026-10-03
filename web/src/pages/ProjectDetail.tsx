@@ -1,6 +1,8 @@
 import {
   ArrowLeft,
+  ArrowRight,
   CreditCard,
+  DollarSign,
   FileText,
   Globe,
   KeyRound,
@@ -11,6 +13,8 @@ import {
   Settings2,
   ShieldCheck,
   Trash2,
+  TrendingUp,
+  UserCheck,
   Users,
 } from 'lucide-react';
 import { type ComponentType, useCallback, useEffect, useState } from 'react';
@@ -38,10 +42,12 @@ import {
   type ApiKey,
   type AuditLog,
   type BillingPlan,
+  type BillingStats,
   type Invoice,
   type PlanInput,
   type Project,
   type ProjectUser,
+  type ProjectUserDetail,
   type SessionInfo,
   type Subscription,
   addDomain,
@@ -52,8 +58,9 @@ import {
   deletePlan,
   deleteProject,
   deleteProjectUser,
+  getBillingStats,
+  getProjectUser,
   getSubscription,
-  goLiveProject,
   listAdminPlans,
   listAuditLogs,
   listBillingPlans,
@@ -67,7 +74,9 @@ import {
   resumeSubscription,
   revokeKey,
   revokeProjectUserSession,
+  setProjectEnvironment,
   startCheckout,
+  syncPlanToPaddle,
   unblockProjectUser,
   updatePlan,
   updateProjectUser,
@@ -108,6 +117,9 @@ export default function ProjectDetail() {
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
+  const [userFilter, setUserFilter] = useState<
+    'all' | 'oauth' | 'password' | 'attention'
+  >('all');
   const [usersBusy, setUsersBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -127,6 +139,7 @@ export default function ProjectDetail() {
     Subscription | null | undefined
   >(undefined);
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [stats, setStats] = useState<BillingStats | null>(null);
 
   // Admin plan manager (create/edit/deactivate)
   const [adminPlans, setAdminPlans] = useState<BillingPlan[] | null>(null);
@@ -152,6 +165,7 @@ export default function ProjectDetail() {
   const [auditBusy, setAuditBusy] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<ProjectUser | null>(null);
+  const [userDetail, setUserDetail] = useState<ProjectUserDetail | null>(null);
   const [userSessions, setUserSessions] = useState<SessionInfo[] | null>(null);
   const [sessionsBusy, setSessionsBusy] = useState(false);
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
@@ -203,13 +217,16 @@ export default function ProjectDetail() {
   }, []);
 
   const loadSubscription = async (pid: string) => {
-    const [s, inv] = await Promise.all([
+    const [s, inv, st] = await Promise.all([
       getSubscription(pid),
       listInvoices(pid),
+      getBillingStats(pid),
     ]);
     if (s.ok) setSubscription(s.data.subscription);
     else setError(s.error);
     if (inv.ok) setInvoices(inv.data.invoices);
+    if (st.ok) setStats(st.data.stats);
+    // stats failure is non-fatal (fresh project / billing unconfigured)
   };
 
   const loadAdminPlans = async (pid: string) => {
@@ -365,7 +382,8 @@ export default function ProjectDetail() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: lazy tab loader — intentionally keyed on tab+id only
   useEffect(() => {
-    if (tab === 'audit' && id && auditLogs === null) {
+    // Overview shows a "Recent activity" preview from the same feed.
+    if ((tab === 'audit' || tab === 'overview') && id && auditLogs === null) {
       void loadAudit(id);
     }
   }, [tab, id]);
@@ -402,6 +420,51 @@ export default function ProjectDetail() {
 
   const fullName = (u: ProjectUser) =>
     `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
+
+  const visibleUsers =
+    users?.filter((u) => {
+      if (userFilter === 'oauth') return u.authMethod === 'oauth';
+      if (userFilter === 'password') return u.authMethod === 'email_password';
+      if (userFilter === 'attention')
+        return u.blocked || !u.emailVerified || !u.twoFactorEnabled;
+      return true;
+    }) ?? null;
+
+  const userStats = users
+    ? {
+        total: users.length,
+        oauth: users.filter((u) => u.authMethod === 'oauth').length,
+        password: users.filter((u) => u.authMethod === 'email_password').length,
+        verified: users.filter((u) => u.emailVerified).length,
+        twoFactor: users.filter((u) => u.twoFactorEnabled).length,
+        attention: users.filter(
+          (u) => u.blocked || !u.emailVerified || !u.twoFactorEnabled
+        ).length,
+      }
+    : null;
+
+  const fmtMoney = (cents: number, currency = 'USD') => {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+      }).format(cents / 100);
+    } catch {
+      return `${(cents / 100).toFixed(2)} ${currency}`;
+    }
+  };
+
+  /** Largest-currency total, e.g. "$1,240" (+ others collapsed). */
+  const topMoney = (byCurrency: Record<string, number> | undefined) => {
+    if (!byCurrency) return '—';
+    const entries = Object.entries(byCurrency).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) return fmtMoney(0);
+    const [cur, cents] = entries[0];
+    return entries.length > 1
+      ? `${fmtMoney(cents, cur)} +${entries.length - 1}`
+      : fmtMoney(cents, cur);
+  };
 
   const saveName = async (u: ProjectUser) => {
     if (!id) return;
@@ -451,10 +514,20 @@ export default function ProjectDetail() {
     void loadUsers(id, { query: debouncedQ });
   };
 
-  const viewSessions = async (u: ProjectUser) => {
+  const viewUserDetails = async (u: ProjectUser) => {
     setSelectedUser(u);
+    setUserDetail(null);
     setUserSessions(null);
-    if (id) void loadSessions(id, u.id);
+    if (!id) return;
+    const [detail] = await Promise.all([
+      getProjectUser(id, u.id),
+      loadSessions(id, u.id),
+    ]);
+    if (!detail.ok) {
+      setError(detail.error);
+      return;
+    }
+    setUserDetail(detail.data.user);
   };
 
   const toggleBlock = async (u: ProjectUser) => {
@@ -488,7 +561,10 @@ export default function ProjectDetail() {
     setBusy(true);
     setError(null);
     setRevealed(null);
-    const r = await createKey(id, { name: keyName.trim(), type: keyType });
+    const r = await createKey(id, {
+      name: keyName.trim(),
+      type: keyType,
+    });
     setBusy(false);
     if (!r.ok) {
       setError(r.error);
@@ -547,13 +623,30 @@ export default function ProjectDetail() {
 
   const goLive = async () => {
     if (!id) return;
-    if (!confirm('Switch this project to live environment?')) return;
-    const r = await goLiveProject(id);
+    const nextEnvironment = project?.environment === 'live' ? 'test' : 'live';
+    if (!confirm(`Switch this project to ${nextEnvironment} environment?`))
+      return;
+    const r = await setProjectEnvironment(id, nextEnvironment);
     if (!r.ok) {
       setError(r.error);
       return;
     }
-    setProject({ ...project, environment: 'live' });
+    setProject({ ...project, environment: r.data.environment });
+    setError(null);
+    void loadPlans(id);
+  };
+
+  const syncPlan = async (plan: BillingPlan) => {
+    if (!id) return;
+    setPlanBusy(true);
+    setError(null);
+    const r = await syncPlanToPaddle(plan.id);
+    setPlanBusy(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    await Promise.all([loadAdminPlans(id), loadPlans(id)]);
   };
 
   const destroy = async () => {
@@ -639,298 +732,552 @@ export default function ProjectDetail() {
       )}
 
       {tab === 'overview' && (
-        <div className="grid sm:grid-cols-3 gap-4">
-          {[
-            { label: 'Total users', value: String(total) },
-            {
-              label: 'API keys',
-              value: keys === null ? '…' : String(keys.length),
-            },
-            {
-              label: 'Domains',
-              value: domains === null ? '…' : String(domains.length),
-            },
-          ].map((s) => (
-            <Card key={s.label}>
+        <div className="space-y-4">
+          {/* Stat band — users + money side by side */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                label: 'Total users',
+                value: String(total),
+                sub: 'across this project',
+                icon: Users,
+                grad: 'from-[#1a1a22] to-[#0b0b10]',
+              },
+              {
+                label: 'Paying subscribers',
+                value: stats ? String(stats.subscribers.paying) : '…',
+                sub: stats
+                  ? `${stats.subscribers.trialing} trialing · ${stats.subscribers.active} active`
+                  : 'Paddle-backed',
+                icon: UserCheck,
+                grad: 'from-emerald-600 to-emerald-900',
+              },
+              {
+                label: 'MRR',
+                value: stats ? topMoney(stats.mrr.byCurrency) : '…',
+                sub: 'active + trialing plans',
+                icon: TrendingUp,
+                grad: 'from-sky-600 to-indigo-900',
+              },
+              {
+                label: 'Total revenue',
+                value: stats ? topMoney(stats.revenue.byCurrency) : '…',
+                sub: stats
+                  ? `${stats.revenue.paidCount} paid invoices`
+                  : 'paid invoices',
+                icon: DollarSign,
+                grad: 'from-amber-500 to-orange-800',
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${s.grad} p-4 sm:p-5 text-white min-w-0`}
+              >
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background:
+                      'radial-gradient(220px 120px at 85% 0%, rgba(255,255,255,0.16), transparent 65%)',
+                  }}
+                />
+                <div className="relative min-w-0">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/65">
+                    <s.icon className="size-3.5" /> {s.label}
+                  </div>
+                  <div className="mt-1.5 text-[26px] sm:text-[30px] font-extrabold tracking-tight truncate">
+                    {s.value}
+                  </div>
+                  <div className="text-[11.5px] text-white/60 truncate">
+                    {s.sub}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-5 gap-4">
+            {/* Health — keys, domains, env */}
+            <Card className="lg:col-span-2">
               <CardHeader>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[#63666f]">
-                  {s.label}
-                </div>
-                <div className="text-[28px] font-extrabold tracking-tight mt-1">
-                  {s.value}
-                </div>
+                <CardTitle>Project health</CardTitle>
+                <CardDesc>Integration surface at a glance.</CardDesc>
               </CardHeader>
+              <CardBody className="space-y-2.5">
+                {[
+                  {
+                    k: 'API keys',
+                    v: keys === null ? '…' : String(keys.length),
+                    go: () => setTab('keys'),
+                  },
+                  {
+                    k: 'Domains',
+                    v: domains === null ? '…' : String(domains.length),
+                    go: () => setTab('domains'),
+                  },
+                  {
+                    k: 'Environment',
+                    v: project.environment || 'test',
+                    go: () => setTab('danger'),
+                  },
+                ].map((r) => (
+                  <button
+                    key={r.k}
+                    type="button"
+                    onClick={r.go}
+                    className="flex w-full items-center justify-between rounded-xl border border-[#e4e6eb] px-4 py-3 text-left hover:border-black transition-colors cursor-pointer"
+                  >
+                    <span className="text-[13px] font-semibold">{r.k}</span>
+                    <span className="flex items-center gap-1.5 font-mono text-[12px] text-[#63666f]">
+                      {r.v} <ArrowRight className="size-3.5" />
+                    </span>
+                  </button>
+                ))}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTab('keys')}
+                  >
+                    Create API key
+                  </Button>
+                  <Link to="/docs/quickstart">
+                    <Button size="sm" variant="secondary">
+                      Quickstart
+                    </Button>
+                  </Link>
+                </div>
+              </CardBody>
             </Card>
-          ))}
-          <Card className="sm:col-span-3">
-            <CardHeader>
-              <CardTitle>Next steps</CardTitle>
-              <CardDesc>
-                Create an API key, allow your frontend domain, then follow the
-                integration docs.
-              </CardDesc>
-            </CardHeader>
-            <CardBody className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setTab('keys')}
-              >
-                Create API key
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setTab('domains')}
-              >
-                Add domain
-              </Button>
-              <Link to="/docs">
-                <Button size="sm" variant="secondary">
-                  Read integration docs
+
+            {/* Recent activity — live audit feed */}
+            <Card className="lg:col-span-3">
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Recent activity</CardTitle>
+                  <CardDesc>
+                    {auditLogs === null
+                      ? 'Loading…'
+                      : auditTotal > 0
+                        ? `${Math.min(6, auditLogs.length)} of ${auditTotal} events`
+                        : 'Nothing yet — actions appear here as they happen'}
+                  </CardDesc>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setTab('audit')}
+                >
+                  View all
                 </Button>
-              </Link>
+              </CardHeader>
+              <CardBody>
+                {auditLogs === null ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-11" />
+                    ))}
+                  </div>
+                ) : auditLogs.length === 0 ? (
+                  <Empty
+                    title="No activity yet"
+                    desc="Sign-ups, key operations, blocks and billing-relevant changes will stream in here."
+                  />
+                ) : (
+                  <div className="space-y-1.5">
+                    {auditLogs.slice(0, 6).map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-black/[0.03] transition-colors min-w-0"
+                      >
+                        <Badge
+                          tone={
+                            log.action.includes('delete') ||
+                            log.action.includes('block') ||
+                            log.action.includes('revoked')
+                              ? 'red'
+                              : log.action.includes('create') ||
+                                  log.action.includes('added') ||
+                                  log.action.includes('unblock')
+                                ? 'green'
+                                : 'gray'
+                          }
+                        >
+                          {log.action}
+                        </Badge>
+                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#63666f]">
+                          {log.actorEmail || log.actorId || 'system'}
+                          {log.targetId
+                            ? ` → ${log.targetType ?? 'target'} ${log.targetId.slice(0, 8)}…`
+                            : ''}
+                        </span>
+                        <span className="shrink-0 font-mono text-[11px] text-[#9a9da8]">
+                          {new Date(log.createdAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {tab === 'users' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                label: 'Directory',
+                value: userStats ? userStats.total : '…',
+                detail: userStats
+                  ? `${total} total in project`
+                  : 'Loading users',
+                tone: 'bg-[#09090b] text-white',
+              },
+              {
+                label: 'OAuth only',
+                value: userStats ? userStats.oauth : '…',
+                detail: userStats
+                  ? `${userStats.password} email/password`
+                  : 'Loading methods',
+                tone: 'bg-[#eef2ff] text-[#3730a3]',
+              },
+              {
+                label: 'Verified',
+                value: userStats ? userStats.verified : '…',
+                detail: userStats
+                  ? `${userStats.twoFactor} protected with 2FA`
+                  : 'Loading security',
+                tone: 'bg-[#ecfdf5] text-[#047857]',
+              },
+              {
+                label: 'Needs attention',
+                value: userStats ? userStats.attention : '…',
+                detail: 'Blocked, unverified, or no 2FA',
+                tone: 'bg-[#fff7ed] text-[#c2410c]',
+              },
+            ].map((stat) => (
+              <div key={stat.label} className={`rounded-2xl p-4 ${stat.tone}`}>
+                <div className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-65">
+                  {stat.label}
+                </div>
+                <div className="mt-1 text-[26px] font-extrabold tracking-tight tabular-nums">
+                  {stat.value}
+                </div>
+                <div className="mt-1 text-[11px] opacity-70 truncate">
+                  {stat.detail}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                <div>
+                  <CardTitle>User directory</CardTitle>
+                  <CardDesc>
+                    {users === null
+                      ? 'Loading…'
+                      : `${visibleUsers?.length ?? 0} shown · ${total} total · server search`}
+                  </CardDesc>
+                </div>
+                <div className="relative w-full sm:w-[260px]">
+                  <Search
+                    className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9da8]"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    name="user-search"
+                    placeholder="Search by email…"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    className="pl-9 rounded-full!"
+                    aria-label="Search users by email"
+                  />
+                </div>
+              </div>
+              <div
+                className="flex flex-wrap items-center gap-1.5"
+                role="tablist"
+                aria-label="Filter users"
+              >
+                {(
+                  [
+                    ['all', 'All users'],
+                    ['oauth', 'OAuth only'],
+                    ['password', 'Email + password'],
+                    ['attention', 'Needs attention'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={userFilter === key}
+                    onClick={() => setUserFilter(key)}
+                    className={`rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black ${userFilter === key ? 'border-black bg-black text-white' : 'border-black/[0.1] bg-white text-[#63666f] hover:border-black/25 hover:text-black'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
+            <CardBody>
+              {users === null ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-12" />
+                  ))}
+                </div>
+              ) : users.length === 0 ? (
+                <Empty
+                  title="No users"
+                  desc="Users appear here after they sign up through your integrated app (see Docs → Quickstart)."
+                />
+              ) : visibleUsers?.length === 0 ? (
+                <Empty
+                  title="No users match this filter"
+                  desc="Try another authentication or security filter."
+                />
+              ) : (
+                <TableWrap>
+                  <table className="w-full min-w-[860px]">
+                    <thead>
+                      <tr className="border-b border-[#e4e6eb]">
+                        <Th>User</Th>
+                        <Th>Sign-in</Th>
+                        <Th>Role</Th>
+                        <Th>Security</Th>
+                        <Th right>Actions</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleUsers?.map((u) => (
+                        <tr
+                          key={u.id}
+                          className="border-b border-[#f0f1f4] last:border-0"
+                        >
+                          <Td>
+                            {editing === u.id ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={editName}
+                                  onChange={(e) => setEditName(e.target.value)}
+                                  className="h-8! w-32!"
+                                  placeholder="Name"
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-8!"
+                                  disabled={busy}
+                                  onClick={() => void saveName(u)}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8!"
+                                  onClick={() => setEditing(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : editingEmail === u.id ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={editEmailValue}
+                                  onChange={(e) =>
+                                    setEditEmailValue(e.target.value)
+                                  }
+                                  className="h-8! w-48!"
+                                  placeholder="Email"
+                                  type="email"
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-8!"
+                                  disabled={busy}
+                                  onClick={() => void saveEmail(u)}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8!"
+                                  onClick={() => setEditingEmail(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <div>
+                                <button
+                                  type="button"
+                                  className="block text-left font-semibold cursor-pointer hover:underline"
+                                  onClick={() => {
+                                    setEditing(u.id);
+                                    setEditName(fullName(u));
+                                  }}
+                                >
+                                  {fullName(u)}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="block text-left font-mono text-[11px] text-[#63666f] cursor-pointer hover:underline"
+                                  onClick={() => {
+                                    setEditingEmail(u.id);
+                                    setEditEmailValue(u.email);
+                                  }}
+                                >
+                                  {u.email}
+                                </button>
+                              </div>
+                            )}
+                          </Td>
+                          <Td>
+                            <div className="space-y-1">
+                              <Badge
+                                tone={
+                                  u.authMethod === 'oauth' ? 'mono' : 'gray'
+                                }
+                              >
+                                {u.authMethod === 'oauth'
+                                  ? 'OAuth only'
+                                  : 'Email + password'}
+                              </Badge>
+                              {u.oauthProviders.length > 0 && (
+                                <div className="text-[11px] text-[#63666f]">
+                                  {u.oauthProviders.join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          </Td>
+                          <Td>
+                            <select
+                              value={u.role}
+                              disabled={busy}
+                              onChange={(e) =>
+                                void changeRole(
+                                  u,
+                                  e.target.value as 'user' | 'admin'
+                                )
+                              }
+                              className="rounded-lg border border-[#e4e6eb] bg-white px-2 py-1 text-[12.5px] font-semibold cursor-pointer disabled:opacity-50"
+                            >
+                              <option value="user">user</option>
+                              <option value="admin">admin</option>
+                            </select>
+                          </Td>
+                          <Td>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge tone={u.blocked ? 'red' : 'green'}>
+                                {u.blocked ? 'blocked' : 'active'}
+                              </Badge>
+                              <Badge tone={u.emailVerified ? 'green' : 'amber'}>
+                                {u.emailVerified ? 'verified' : 'unverified'}
+                              </Badge>
+                              <Badge
+                                tone={u.twoFactorEnabled ? 'green' : 'gray'}
+                              >
+                                2FA {u.twoFactorEnabled ? 'on' : 'off'}
+                              </Badge>
+                            </div>
+                          </Td>
+                          <Td right>
+                            <span className="inline-flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8!"
+                                onClick={() => void viewUserDetails(u)}
+                              >
+                                Details
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8!"
+                                disabled={busy}
+                                onClick={() => void toggleBlock(u)}
+                              >
+                                {u.blocked ? 'Unblock' : 'Block'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8! text-[#dc2626]! hover:bg-red-50!"
+                                disabled={busy}
+                                onClick={() => void removeUser(u)}
+                              >
+                                Delete
+                              </Button>
+                            </span>
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrap>
+              )}
+              {usersBusy && (
+                <div className="py-2 text-[12px] text-[#63666f] flex items-center gap-1.5">
+                  <Loader2 className="size-3.5 animate-spin" /> Searching…
+                </div>
+              )}
+              {users && users.length < total && (
+                <div className="pt-3 text-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={usersBusy}
+                    onClick={() =>
+                      id &&
+                      void loadUsers(id, {
+                        query: debouncedQ,
+                        offset: users.length,
+                        append: true,
+                      })
+                    }
+                  >
+                    Load more ({users.length}/{total})
+                  </Button>
+                </div>
+              )}
             </CardBody>
           </Card>
         </div>
       )}
 
-      {tab === 'users' && (
-        <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-            <div>
-              <CardTitle>Users</CardTitle>
-              <CardDesc>
-                {users === null
-                  ? 'Loading…'
-                  : `${users.length} shown · ${total} total · server search, 20 per page`}
-              </CardDesc>
-            </div>
-            <div className="relative">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9da8]" />
-              <Input
-                placeholder="Search email"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="pl-9 rounded-full! sm:w-[240px]"
-              />
-            </div>
-          </CardHeader>
-          <CardBody>
-            {users === null ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-12" />
-                ))}
-              </div>
-            ) : users.length === 0 ? (
-              <Empty
-                title="No users"
-                desc="Users appear here after they sign up through your integrated app (see Docs → Quickstart)."
-              />
-            ) : (
-              <TableWrap>
-                <table className="w-full min-w-[640px]">
-                  <thead>
-                    <tr className="border-b border-[#e4e6eb]">
-                      <Th>User</Th>
-                      <Th>Role</Th>
-                      <Th>Status</Th>
-                      <Th right>Actions</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr
-                        key={u.id}
-                        className="border-b border-[#f0f1f4] last:border-0"
-                      >
-                        <Td>
-                          {editing === u.id ? (
-                            <div className="flex items-center gap-1">
-                              <Input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="h-8! w-32!"
-                                placeholder="Name"
-                              />
-                              <Button
-                                size="sm"
-                                className="h-8!"
-                                disabled={busy}
-                                onClick={() => void saveName(u)}
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8!"
-                                onClick={() => setEditing(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : editingEmail === u.id ? (
-                            <div className="flex items-center gap-1">
-                              <Input
-                                value={editEmailValue}
-                                onChange={(e) =>
-                                  setEditEmailValue(e.target.value)
-                                }
-                                className="h-8! w-48!"
-                                placeholder="Email"
-                                type="email"
-                              />
-                              <Button
-                                size="sm"
-                                className="h-8!"
-                                disabled={busy}
-                                onClick={() => void saveEmail(u)}
-                              >
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8!"
-                                onClick={() => setEditingEmail(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <div>
-                              <button
-                                type="button"
-                                className="block text-left font-semibold cursor-pointer hover:underline"
-                                onClick={() => {
-                                  setEditing(u.id);
-                                  setEditName(fullName(u));
-                                }}
-                              >
-                                {fullName(u)}
-                              </button>
-                              <button
-                                type="button"
-                                className="block text-left font-mono text-[11px] text-[#63666f] cursor-pointer hover:underline"
-                                onClick={() => {
-                                  setEditingEmail(u.id);
-                                  setEditEmailValue(u.email);
-                                }}
-                              >
-                                {u.email}
-                              </button>
-                            </div>
-                          )}
-                        </Td>
-                        <Td>
-                          <select
-                            value={u.role}
-                            disabled={busy}
-                            onChange={(e) =>
-                              void changeRole(
-                                u,
-                                e.target.value as 'user' | 'admin'
-                              )
-                            }
-                            className="rounded-lg border border-[#e4e6eb] bg-white px-2 py-1 text-[12.5px] font-semibold cursor-pointer disabled:opacity-50"
-                          >
-                            <option value="user">user</option>
-                            <option value="admin">admin</option>
-                          </select>
-                        </Td>
-                        <Td>
-                          <Badge tone={u.blocked ? 'red' : 'green'}>
-                            {u.blocked ? 'blocked' : 'active'}
-                          </Badge>
-                        </Td>
-                        <Td right>
-                          <span className="inline-flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8!"
-                              onClick={() => void viewSessions(u)}
-                            >
-                              Sessions
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8!"
-                              disabled={busy}
-                              onClick={() => void toggleBlock(u)}
-                            >
-                              {u.blocked ? 'Unblock' : 'Block'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8! text-[#dc2626]! hover:bg-red-50!"
-                              disabled={busy}
-                              onClick={() => void removeUser(u)}
-                            >
-                              Delete
-                            </Button>
-                          </span>
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </TableWrap>
-            )}
-            {usersBusy && (
-              <div className="py-2 text-[12px] text-[#63666f] flex items-center gap-1.5">
-                <Loader2 className="size-3.5 animate-spin" /> Searching…
-              </div>
-            )}
-            {users && users.length < total && (
-              <div className="pt-3 text-center">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={usersBusy}
-                  onClick={() =>
-                    id &&
-                    void loadUsers(id, {
-                      query: debouncedQ,
-                      offset: users.length,
-                      append: true,
-                    })
-                  }
-                >
-                  Load more ({users.length}/{total})
-                </Button>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-      )}
-
-      {/* Sessions modal */}
+      {/* User detail modal */}
       {selectedUser && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          aria-label="Close sessions dialog"
+          aria-label="Close user details dialog"
           onClick={() => setSelectedUser(null)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') setSelectedUser(null);
           }}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[86vh] flex flex-col overscroll-contain"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-[#e4e6eb]">
               <div>
                 <h3 className="font-bold text-[15px]">
-                  Sessions — {selectedUser.email}
+                  User details — {selectedUser.email}
                 </h3>
                 <p className="text-[12px] text-[#63666f]">
-                  Active sessions for this user
+                  Identity, sign-in method, security posture, and active
+                  sessions
                 </p>
               </div>
               <button
@@ -942,50 +1289,177 @@ export default function ProjectDetail() {
               </button>
             </div>
             <div className="p-4 overflow-y-auto flex-1">
-              {sessionsBusy ? (
+              {userDetail === null ? (
                 <div className="flex items-center gap-1.5 text-[12px] text-[#63666f]">
-                  <Loader2 className="size-3.5 animate-spin" /> Loading
-                  sessions…
-                </div>
-              ) : userSessions === null || userSessions.length === 0 ? (
-                <div className="text-[13px] text-[#63666f]">
-                  No active sessions.
+                  <Loader2 className="size-3.5 animate-spin" /> Loading user
+                  details…
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {userSessions.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-[#e4e6eb] p-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-[12.5px] font-mono truncate">
-                          {s.id.slice(0, 16)}…
-                        </div>
-                        <div className="text-[11px] text-[#63666f]">
-                          {s.ip || '—'} · {s.userAgent?.slice(0, 40) || '—'}
-                          {s.userAgent && s.userAgent.length > 40 ? '…' : ''}
-                        </div>
-                        <div className="text-[11px] text-[#63666f]">
-                          Created {new Date(s.createdAt).toLocaleDateString()}
-                          {s.lastSeenAt
-                            ? ` · Last seen ${new Date(s.lastSeenAt).toLocaleDateString()}`
-                            : ''}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-[#e4e6eb] p-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#8a8d98]">
+                        Sign-in method
+                      </div>
+                      <div className="mt-1 font-semibold text-[13px]">
+                        {userDetail.authMethod === 'oauth'
+                          ? 'OAuth only'
+                          : 'Email + password'}
+                      </div>
+                      <div className="mt-1 text-[11px] text-[#63666f]">
+                        {userDetail.oauthProviders.length > 0
+                          ? userDetail.oauthProviders
+                              .map((account) => account.provider)
+                              .join(' · ')
+                          : 'No social provider linked'}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#e4e6eb] p-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#8a8d98]">
+                        Security
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Badge
+                          tone={userDetail.emailVerified ? 'green' : 'amber'}
+                        >
+                          {userDetail.emailVerified
+                            ? 'Email verified'
+                            : 'Email unverified'}
+                        </Badge>
+                        <Badge
+                          tone={userDetail.twoFactorEnabled ? 'green' : 'gray'}
+                        >
+                          2FA{' '}
+                          {userDetail.twoFactorEnabled ? 'enabled' : 'disabled'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[#e4e6eb] p-3 text-[12px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                      <div>
+                        <span className="text-[#8a8d98]">User ID</span>
+                        <div className="font-mono break-all">
+                          {userDetail.id}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-[#dc2626]! hover:bg-red-50! shrink-0"
-                        disabled={busy}
-                        onClick={() =>
-                          id && void revokeSession(id, selectedUser.id, s.id)
-                        }
-                      >
-                        Revoke
-                      </Button>
+                      <div>
+                        <span className="text-[#8a8d98]">Role</span>
+                        <div className="font-semibold">{userDetail.role}</div>
+                      </div>
+                      <div>
+                        <span className="text-[#8a8d98]">Created</span>
+                        <div>
+                          {new Date(userDetail.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[#8a8d98]">Last updated</span>
+                        <div>
+                          {new Date(userDetail.updatedAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[#8a8d98]">Active sessions</span>
+                        <div>{userDetail.sessionCount}</div>
+                      </div>
+                      <div>
+                        <span className="text-[#8a8d98]">Account status</span>
+                        <div
+                          className={
+                            userDetail.blocked
+                              ? 'font-semibold text-red-700'
+                              : 'font-semibold text-emerald-700'
+                          }
+                        >
+                          {userDetail.blocked
+                            ? `Blocked${userDetail.blockedReason ? `: ${userDetail.blockedReason}` : ''}`
+                            : 'Active'}
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+
+                  {userDetail.profile && (
+                    <div className="rounded-xl border border-[#e4e6eb] p-3 text-[12px]">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#8a8d98]">
+                        Profile
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[#8a8d98]">Bio</span>
+                          <div>{userDetail.profile.bio || '—'}</div>
+                        </div>
+                        <div>
+                          <span className="text-[#8a8d98]">Phone</span>
+                          <div>{userDetail.profile.phone || '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#8a8d98]">
+                        Active sessions
+                      </div>
+                      <span className="text-[11px] text-[#63666f]">
+                        {userSessions?.length ?? 0} loaded
+                      </span>
+                    </div>
+                    {sessionsBusy ? (
+                      <div className="flex items-center gap-1.5 text-[12px] text-[#63666f]">
+                        <Loader2 className="size-3.5 animate-spin" /> Loading
+                        sessions…
+                      </div>
+                    ) : userSessions === null || userSessions.length === 0 ? (
+                      <div className="text-[13px] text-[#63666f]">
+                        No active sessions.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {userSessions.map((s) => (
+                          <div
+                            key={s.id}
+                            className="flex items-center justify-between gap-2 rounded-xl border border-[#e4e6eb] p-3"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-[12.5px] font-mono truncate">
+                                {s.id.slice(0, 16)}…
+                              </div>
+                              <div className="text-[11px] text-[#63666f]">
+                                {s.ip || '—'} ·{' '}
+                                {s.userAgent?.slice(0, 40) || '—'}
+                                {s.userAgent && s.userAgent.length > 40
+                                  ? '…'
+                                  : ''}
+                              </div>
+                              <div className="text-[11px] text-[#63666f]">
+                                Created{' '}
+                                {new Date(s.createdAt).toLocaleDateString()}
+                                {s.lastSeenAt
+                                  ? ` · Last seen ${new Date(s.lastSeenAt).toLocaleDateString()}`
+                                  : ''}
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-[#dc2626]! hover:bg-red-50! shrink-0"
+                              disabled={busy}
+                              onClick={() =>
+                                id &&
+                                void revokeSession(id, selectedUser.id, s.id)
+                              }
+                            >
+                              Revoke
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1067,7 +1541,7 @@ export default function ProjectDetail() {
                   >
                     <div className="min-w-0">
                       <div className="font-mono text-[12px] font-bold truncate">
-                        {k.prefix}_… · {k.name} · {k.type} · {k.environment}
+                        {k.prefix}_… · {k.name} · {k.type}
                       </div>
                       <div className="font-mono text-[11px] text-[#63666f] truncate">
                         {k.id}
@@ -1152,6 +1626,70 @@ export default function ProjectDetail() {
 
       {tab === 'billing' && (
         <div className="space-y-4">
+          {/* Revenue band — subscribers, MRR, earnings */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                label: 'Subscribed users',
+                value: stats ? String(stats.subscribers.paying) : '…',
+                sub: stats
+                  ? `${stats.subscribers.total} total · ${stats.subscribers.canceled} canceled`
+                  : 'active + trialing',
+                icon: UserCheck,
+                grad: 'from-emerald-600 to-emerald-900',
+              },
+              {
+                label: 'MRR',
+                value: stats ? topMoney(stats.mrr.byCurrency) : '…',
+                sub: 'monthly recurring revenue',
+                icon: TrendingUp,
+                grad: 'from-sky-600 to-indigo-900',
+              },
+              {
+                label: 'Total earnings',
+                value: stats ? topMoney(stats.revenue.byCurrency) : '…',
+                sub: stats
+                  ? `${stats.revenue.paidCount} paid invoices`
+                  : 'paid invoices, all time',
+                icon: DollarSign,
+                grad: 'from-amber-500 to-orange-800',
+              },
+              {
+                label: 'Trialing now',
+                value: stats ? String(stats.subscribers.trialing) : '…',
+                sub: stats
+                  ? `${stats.subscribers.past_due} past due · ${stats.subscribers.paused} paused`
+                  : 'conversion pipeline',
+                icon: CreditCard,
+                grad: 'from-[#3f3f46] to-black',
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${s.grad} p-4 sm:p-5 text-white min-w-0`}
+              >
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background:
+                      'radial-gradient(220px 120px at 85% 0%, rgba(255,255,255,0.16), transparent 65%)',
+                  }}
+                />
+                <div className="relative min-w-0">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-white/65">
+                    <s.icon className="size-3.5" /> {s.label}
+                  </div>
+                  <div className="mt-1.5 text-[26px] sm:text-[30px] font-extrabold tracking-tight truncate">
+                    {s.value}
+                  </div>
+                  <div className="text-[11.5px] text-white/60 truncate">
+                    {s.sub}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* My subscription — real edit actions */}
           <Card>
             <CardHeader>
@@ -1288,6 +1826,7 @@ export default function ProjectDetail() {
                       <tr className="border-b border-black/[0.06]">
                         <Th>Name</Th>
                         <Th>Price</Th>
+                        <Th>Subs</Th>
                         <Th>Status</Th>
                         <Th right>Actions</Th>
                       </tr>
@@ -1313,6 +1852,13 @@ export default function ProjectDetail() {
                             </span>
                           </Td>
                           <Td>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[11.5px] font-bold text-emerald-700">
+                              <UserCheck className="size-3" />
+                              {stats?.plans.find((s) => s.planId === p.id)
+                                ?.subscribers ?? '…'}
+                            </span>
+                          </Td>
+                          <Td>
                             <Badge tone={p.isActive ? 'green' : 'gray'}>
                               {p.isActive ? 'active' : 'inactive'}
                             </Badge>
@@ -1326,6 +1872,14 @@ export default function ProjectDetail() {
                                 onClick={() => openPlanEdit(p)}
                               >
                                 <Pencil className="size-3.5" /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={planBusy}
+                                onClick={() => void syncPlan(p)}
+                              >
+                                Sync Paddle
                               </Button>
                               {p.isActive && (
                                 <Button
@@ -1419,7 +1973,7 @@ export default function ProjectDetail() {
                             return setError(r.error);
                           }
                           try {
-                            await ensurePaddle();
+                            await ensurePaddle(id);
                             if (r.data.transactionId) {
                               onCheckoutResult((e) => {
                                 if (e.name === 'checkout.completed') {
@@ -1648,7 +2202,7 @@ export default function ProjectDetail() {
                   disabled={busy}
                   onClick={() => void goLive()}
                 >
-                  Switch to live
+                  Switch to {project.environment === 'live' ? 'test' : 'live'}
                 </Button>
               </div>
             </CardBody>
@@ -1684,12 +2238,12 @@ export default function ProjectDetail() {
             lang="bash"
             code={
               tab === 'users'
-                ? `curl -H "Authorization: Bearer $TOKEN" ${import.meta.env.VITE_API_URL || 'https://auth.slyxup.online'}/v1/projects/${project.id}/users`
+                ? `curl -H "Authorization: Bearer $TOKEN" ${import.meta.env.VITE_API_URL || 'https://auth-slyxup-com.auth-0f4.workers.dev'}/v1/projects/${project.id}/users`
                 : tab === 'keys'
-                  ? `slyxup keys list --project-id ${project.id} --json`
+                  ? `curl -H "Authorization: Bearer $TOKEN" "${import.meta.env.VITE_API_URL || 'https://auth-slyxup-com.auth-0f4.workers.dev'}/v1/keys?projectId=${project.id}"`
                   : tab === 'domains'
-                    ? `slyxup domains list --project-id ${project.id} --json`
-                    : `curl "${'https://billing.slyxup.online'}/v1/billing/plans?projectId=${project.id}"`
+                    ? `curl -H "Authorization: Bearer $TOKEN" ${import.meta.env.VITE_API_URL || 'https://auth-slyxup-com.auth-0f4.workers.dev'}/v1/projects/${project.id}/domains`
+                    : `curl -H "Authorization: Bearer $TOKEN" "${import.meta.env.VITE_BILLING_URL || 'https://billing-slyxup-com.billing-86c.workers.dev'}/v1/billing/stats?projectId=${project.id}"`
             }
           />
         </div>

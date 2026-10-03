@@ -18,6 +18,7 @@ export interface BillingPortalProps {
   subscription: PortalSubscription | null;
   invoices: InvoiceRow[];
   onCancel?: () => void;
+  onResume?: () => void;
   /** Per-component theme (accent, mode, radius…) — scoped, never global. */
   theme?: SlyxUpTheme;
   style?: CSSProperties;
@@ -33,6 +34,7 @@ export function BillingPortal({
   subscription,
   invoices,
   onCancel,
+  onResume,
   theme,
   style,
   className,
@@ -46,6 +48,7 @@ export function BillingPortal({
       <CurrentPlanCard
         subscription={subscription}
         onCancel={onCancel}
+        onResume={onResume}
         theme={theme}
       />
       <InvoicesTable invoices={invoices} theme={theme} />

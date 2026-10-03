@@ -15,6 +15,34 @@
       "when": 1787806532033,
       "tag": "0001_dashing_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788942540244,
+      "tag": "0002_tidy_trish_tilby",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789193978000,
+      "tag": "0003_environment_prices",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789200504000,
+      "tag": "0004_environment_customers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790064901000,
+      "tag": "0005_refund_requests",
+      "breakpoints": true
     }
   ]
 }

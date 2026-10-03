@@ -2,7 +2,17 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { randomToken, randomUUID, sha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import { hashPassword, verifyPassword } from '../lib/password';
-import { apiKeys, developers, projectMembers, projects } from '../lib/schema';
+import {
+  apiKeys,
+  auditLogs,
+  developers,
+  projectDomains,
+  projectMembers,
+  projects,
+  sessions,
+  users,
+  webhookEndpoints,
+} from '../lib/schema';
 
 // ── Developer (CLI) auth ──
 export async function registerDeveloper(
@@ -145,11 +155,29 @@ export async function createApiKey(
     projectId: string;
     name: string;
     type: 'publishable' | 'secret';
-    environment: 'test' | 'live';
   }
 ) {
   const db = getDb(env);
-  const prefix = `${input.type === 'publishable' ? 'pk' : 'sk'}_${input.environment}`;
+  const project = await db
+    .select({ environment: projects.environment })
+    .from(projects)
+    .where(eq(projects.id, input.projectId))
+    .get();
+  if (!project) throw new Error('Project not found');
+
+  const existing = await db
+    .select({ id: apiKeys.id })
+    .from(apiKeys)
+    .where(
+      and(eq(apiKeys.projectId, input.projectId), eq(apiKeys.type, input.type))
+    )
+    .get();
+  if (existing)
+    throw new Error(
+      `This project already has a ${input.type} key. Revoke it before creating a replacement.`
+    );
+
+  const prefix = input.type === 'publishable' ? 'pk' : 'sk';
   const { full, raw } = generateKey(prefix);
   const hashedKey = await sha256Hex(raw);
   const now = new Date();
@@ -159,7 +187,7 @@ export async function createApiKey(
     name: input.name,
     prefix,
     hashedKey,
-    environment: input.environment,
+    environment: project.environment,
     type: input.type,
     lastUsedAt: null,
     expiresAt: null,
@@ -175,13 +203,30 @@ export async function verifyApiKey(
   rawKey: string
 ): Promise<{ projectId: string; type: string; environment: string } | null> {
   const db = getDb(env);
-  const hash = await sha256Hex(rawKey.trim());
+  const candidate = rawKey.trim();
+  if (!/^(pk|sk)_[A-Za-z0-9]+$/.test(candidate)) return null;
+  const hash = await sha256Hex(candidate);
+  // Single roundtrip: key + project environment in one JOIN (was 2 sequential queries).
   const row = await db
-    .select()
+    .select({
+      id: apiKeys.id,
+      projectId: apiKeys.projectId,
+      type: apiKeys.type,
+      environment: apiKeys.environment,
+      prefix: apiKeys.prefix,
+      projectEnvironment: projects.environment,
+    })
     .from(apiKeys)
+    .innerJoin(projects, eq(projects.id, apiKeys.projectId))
     .where(eq(apiKeys.hashedKey, hash))
     .get();
   if (!row) return null;
+  if (
+    !row.projectEnvironment ||
+    row.projectEnvironment !== row.environment ||
+    row.prefix !== candidate.slice(0, candidate.indexOf('_'))
+  )
+    return null;
   // Touch lastUsedAt asynchronously (best-effort)
   void db
     .update(apiKeys)
@@ -244,8 +289,22 @@ export async function deleteProject(
     if (project.developerId !== developerId)
       throw new Error('Only project owner can delete');
   }
-  // D1 cascades handle most FKs (users, apiKeys, domains, members, sessions, auditLogs, webhooks)
-  // But explicitly delete for safety + to avoid orphan KV cache
+  // Explicit child deletes first — immune to FK drift in long-lived D1
+  // databases where older rows predate a cascade clause. Deleting users
+  // cascades their sessions/oauth/recovery/profile/token rows.
+  await db.delete(sessions).where(eq(sessions.projectId, projectId));
+  await db.delete(users).where(eq(users.projectId, projectId));
+  await db.delete(apiKeys).where(eq(apiKeys.projectId, projectId));
+  await db
+    .delete(projectDomains)
+    .where(eq(projectDomains.projectId, projectId));
+  await db
+    .delete(projectMembers)
+    .where(eq(projectMembers.projectId, projectId));
+  await db.delete(auditLogs).where(eq(auditLogs.projectId, projectId));
+  await db
+    .delete(webhookEndpoints)
+    .where(eq(webhookEndpoints.projectId, projectId));
   await db.delete(projects).where(eq(projects.id, projectId));
   return { ok: true as const, projectId };
 }

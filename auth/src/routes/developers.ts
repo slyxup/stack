@@ -63,7 +63,7 @@ export async function ensureDeveloper(
     // In single-tenant mode, project users (with projectId) never become developers.
     if (!u || u.role !== 'admin') {
       throw new Error(
-        'Developer registration is disabled on this instance. Please self-host your own SlyxUp Stack — see https://stack.slyxup.online/docs for setup. Docs and SDK remain public.'
+        'Developer registration is disabled on this instance. Please self-host your own SlyxUp Stack — see https://stack.slyxup.com/docs for setup. Docs and SDK remain public.'
       );
     }
     // Also enforce email whitelist if BOOTSTRAP_ADMIN_EMAIL is set

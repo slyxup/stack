@@ -5,7 +5,7 @@ Fixes #
 ## Phase (see ROADMAP.md)
 
 - [ ] DB Schema (drizzle:generate + migrate local+remote)
-- [ ] API / Core / React / Nextjs / UI / CLI / Marketing
+- [ ] API / Core / UI / Admin web / Billing / Docs
 
 ## Checklist (Industry Standard)
 
@@ -17,9 +17,9 @@ Fixes #
 - [ ] `wrangler types` run, `worker-configuration.d.ts` updated?
 - [ ] Env: `wrangler.jsonc` vars vs `.dev.vars` vs `wrangler secret put` correct?
 - [ ] No `Math.random()` / hardcoded secrets / `pgTable` / `docker`?
-- [ ] Domain folder `.slyxup.online` naming correct?
+- [ ] Package and active Wrangler config names are correct?
 - [ ] Conventional commit (`feat(auth): ...`)?
-- [ ] No Dashboard/Orgs beyond V1 scope? Billing changes confined to billing.slyxup.online (auth has zero billing)?
+- [ ] Billing changes remain in `billing` (auth has zero billing tables)?
 
 ## Screenshots / Logs
 

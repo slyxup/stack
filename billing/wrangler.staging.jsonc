@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Staging Billing Worker (Week 7). Create resources once, then fill in IDs:
+  //   wrangler d1 create slyxup-billing-staging
+  //   wrangler kv:namespace create slyxup-cache-staging
+  // Deploy: pnpm --filter billing exec wrangler deploy --config wrangler.staging.jsonc
+  "name": "billing-slyxup-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "vars": {
+    "APP_URL": "https://staging.slyxup.com",
+    "API_URL": "https://billing-staging.slyxup.com",
+    "AUTH_URL": "https://auth-staging.slyxup.com",
+    "CORS_ORIGINS": "https://staging.slyxup.com,http://localhost:3000,http://localhost:5173,http://localhost:8788",
+    "PADDLE_ENVIRONMENT": "sandbox"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "slyxup_billing_staging",
+    "database_id": "REPLACE_WITH_STAGING_BILLING_D1_ID",
+    "migrations_dir": "migrations"
+  }],
+  "kv_namespaces": [{
+    "binding": "KV",
+    "id": "REPLACE_WITH_STAGING_KV_ID"
+  }]
+}

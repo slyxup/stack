@@ -23,6 +23,7 @@ export function useAuth() {
   const completeSignIn = async (input: CompleteSignInInput) => {
     const res = await client.auth.completeSignIn(input);
     await reload();
+    ctx.clearOAuthChallenge?.();
     return res;
   };
 
@@ -44,6 +45,9 @@ export function useAuth() {
     userId,
     sessionToken,
     client,
+    billingApiUrl: ctx.billingApiUrl,
+    oauthChallenge: ctx.oauthChallenge,
+    authError: ctx.authError,
     signIn,
     completeSignIn,
     signUp,

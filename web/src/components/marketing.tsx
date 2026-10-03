@@ -3,12 +3,27 @@ import { Link } from 'react-router-dom';
 
 export function Logo({ size = 30 }: { size?: number }) {
   return (
-    <span
-      className="flex items-center justify-center rounded-lg bg-white text-black font-extrabold shrink-0"
-      style={{ width: size, height: size, fontSize: size * 0.45 }}
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      className="shrink-0"
+      style={{ imageRendering: 'pixelated', display: 'block' }}
     >
-      S
-    </span>
+      <g fill="#DC2626">
+        <rect x={8} y={8} width={6} height={6} /><rect x={50} y={8} width={6} height={6} />
+        <rect x={8} y={14} width={6} height={6} /><rect x={14} y={14} width={6} height={6} /><rect x={44} y={14} width={6} height={6} /><rect x={50} y={14} width={6} height={6} />
+        <rect x={8} y={20} width={6} height={6} /><rect x={14} y={20} width={6} height={6} /><rect x={20} y={20} width={6} height={6} /><rect x={26} y={20} width={6} height={6} /><rect x={32} y={20} width={6} height={6} /><rect x={38} y={20} width={6} height={6} /><rect x={44} y={20} width={6} height={6} /><rect x={50} y={20} width={6} height={6} />
+        <rect x={8} y={26} width={6} height={6} /><rect x={14} y={26} width={6} height={6} /><rect x={26} y={26} width={6} height={6} /><rect x={32} y={26} width={6} height={6} /><rect x={44} y={26} width={6} height={6} /><rect x={50} y={26} width={6} height={6} />
+        <rect x={8} y={32} width={6} height={6} /><rect x={14} y={32} width={6} height={6} /><rect x={20} y={32} width={6} height={6} /><rect x={38} y={32} width={6} height={6} /><rect x={44} y={32} width={6} height={6} /><rect x={50} y={32} width={6} height={6} />
+        <rect x={14} y={38} width={6} height={6} /><rect x={20} y={38} width={6} height={6} /><rect x={38} y={38} width={6} height={6} /><rect x={44} y={38} width={6} height={6} />
+        <rect x={20} y={44} width={6} height={6} /><rect x={26} y={44} width={6} height={6} /><rect x={32} y={44} width={6} height={6} /><rect x={38} y={44} width={6} height={6} />
+      </g>
+      <g fill="#7F1D1D">
+        <rect x={20} y={26} width={6} height={6} /><rect x={38} y={26} width={6} height={6} /><rect x={26} y={38} width={6} height={6} /><rect x={32} y={38} width={6} height={6} />
+      </g>
+    </svg>
   );
 }
 
@@ -93,14 +108,15 @@ export function SiteFooter() {
                 ['Admin panel', '/admin'],
                 ['UI Kit', '/ui'],
                 ['Sign in', '/login'],
+                ['About Yasir', '/about'],
               ]}
             />
             <FooterCol
               title="Developers"
               links={[
                 ['Documentation', '/docs'],
-                ['API reference', '/docs'],
-                ['CLI', '/docs'],
+                ['API reference', '/docs/api-reference'],
+                ['Paddle setup', '/docs/paddle-setup'],
               ]}
             />
             <FooterCol
@@ -116,7 +132,7 @@ export function SiteFooter() {
         <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/[0.08] pt-5 text-[12px] text-white/35 min-w-0">
           <span>© {new Date().getFullYear()} SlyxUp Stack</span>
           <span className="sm:ml-auto">
-            Auth + billing for modern products.
+             Built by Yasir Hameed · auth + billing for modern products.
           </span>
         </div>
       </div>

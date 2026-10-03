@@ -7,12 +7,24 @@ import checkoutRoute from './routes/checkout';
 import entitlementsRoute from './routes/entitlements';
 import invoicesRoute from './routes/invoices';
 import plansRoute from './routes/plans';
+import refundsRoute, { adminRefunds } from './routes/refunds';
+import statsRoute from './routes/stats';
 import subscriptionRoute from './routes/subscription';
 import transactionsRoute from './routes/transactions';
 import webhookRoute from './routes/webhooks';
+import {
+  getDefaultBillingEnvironment,
+  getPaddleClientToken,
+  getPaddleConfig,
+  resolveProjectEnvironment,
+} from './services/paddle-config';
+import { checkoutIntents } from './lib/schema';
+import { getDb } from './lib/db';
+import { csrfMiddleware } from './middleware/csrf';
+import { eq } from 'drizzle-orm';
 
 // SlyxUp Billing Worker — CF Workers + D1 + Paddle
-// Deploy: https://billing.slyxup.online (wrangler deploy)
+// Deploy: `wrangler deploy` (URL comes from your Cloudflare account)
 // API: /v1/*  Webhooks: /v1/webhooks/*  Health: /health
 
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
@@ -26,29 +38,26 @@ app.use('*', async (c, next) => {
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
     origin
   );
-  const isTestRequest =
-    c.req.header('X-Environment') === 'test' ||
-    origin.includes('localhost') ||
-    origin.includes('127.0.0.1');
+  const isTestRequest = isLocalhost;
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, Cookie, X-Publishable-Key',
+      'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key, X-CSRF-Token',
     'Access-Control-Max-Age': '86400',
   };
   let allow = false;
+  // Pages previews + product subdomains — always safe for CORS
+  if (origin.endsWith('.pages.dev') || origin.endsWith('.slyxup.com')) allow = true;
   if (
+    !allow &&
     origin &&
     (allowed.includes(origin) ||
-      allowed.includes('*') ||
+      origin === new URL(c.req.url).origin ||
       isLocalhost ||
       isTestRequest)
   ) {
     allow = true;
-  } else if (origin?.startsWith('https://') && allowed.includes('*')) {
-    // Wildcard CORS — allow any HTTPS origin
-    allow = true;
-  } else if (origin?.startsWith('https://')) {
+  } else if (!allow && origin?.startsWith('https://')) {
     // Check project custom domains (like auth does) — cache for 60s
     try {
       const cached = await c.env.KV.get('billing_cors_domains');
@@ -56,10 +65,14 @@ app.use('*', async (c, next) => {
         ? (JSON.parse(cached) as string[])
         : null;
       if (!hosts) {
-        // We don't have project context here, so allow any https origin in test and
-        // let the route handler do project-specific checks. For live, the route will
-        // validate the project's allowed domains.
-        hosts = [];
+        if (c.env.AUTH_DB) {
+          const result = await c.env.AUTH_DB.prepare(
+            "SELECT pd.domain FROM project_domains pd JOIN projects p ON p.id = pd.project_id WHERE p.environment = 'live'"
+          ).all<{ domain: string }>();
+          hosts = result.results.map((row) => row.domain.toLowerCase());
+        } else {
+          hosts = [];
+        }
         await c.env.KV.put('billing_cors_domains', JSON.stringify(hosts), {
           expirationTtl: 60,
         });
@@ -90,19 +103,57 @@ app.use('*', async (c, next) => {
   if (c.req.method === 'OPTIONS') {
     return new Response('', { status: 204, headers: corsHeaders });
   }
+  if (origin && !allow && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    return c.json({ ok: false, error: 'Origin is not allowed' }, 403);
+  }
   await next();
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);
+});
+
+// CSRF protection on mutation routes (webhooks exempt — HMAC-signed).
+app.use('/v1/*', csrfMiddleware);
+
+// Per-endpoint rate limiting (Day 3). Route-level limiters in
+// routes/{checkout,refunds,transactions}.ts stay authoritative for their
+// strict budgets; this is a global backstop with billing-specific budgets.
+app.use('/v1/*', async (c, next) => {
+  // Webhooks are signature-validated and high-volume — skip global limiter.
+  if (new URL(c.req.url).pathname.startsWith('/v1/webhooks/')) {
+    await next();
+    return;
+  }
+  const { checkBillingRateLimit, resolveBillingEndpoint } = await import(
+    './lib/rate-limit'
+  );
+  const ip =
+    c.req.header('CF-Connecting-IP') ??
+    c.req.header('X-Forwarded-For') ??
+    'unknown';
+  const endpoint = resolveBillingEndpoint(c.req.method, c.req.path);
+  const rl = await checkBillingRateLimit(c.env.KV, endpoint, ip);
+  if (!rl.allowed) {
+    return c.json(
+      { ok: false, error: 'TOO_MANY_REQUESTS' },
+      { status: 429, headers: { 'Retry-After': String(rl.resetIn) } }
+    );
+  }
+  await next();
 });
 
 app.get('/health', (c) =>
   c.json({
     ok: true,
-    service: 'billing.slyxup.online',
+    service: 'billing',
     runtime: 'cloudflare',
   })
 );
 app.get('/v1/health', (c) =>
-  c.json({ ok: true, db: !!c.env.DB, authDb: !!c.env.AUTH_DB })
+  c.json({
+    ok: true,
+    db: !!c.env.DB,
+    authDb: !!c.env.AUTH_DB,
+    authUrl: c.env.AUTH_URL,
+  })
 );
 
 // Paddle checkout redirect lands here — VERIFY with Paddle first.
@@ -114,7 +165,7 @@ app.get('/', async (c) => {
     url.searchParams.get('_ptxn') ?? url.searchParams.get('transaction_id');
   const projectId = url.searchParams.get('project_id');
   const origin = url.searchParams.get('origin');
-  const base = c.env.APP_URL ?? 'https://stack.slyxup.online';
+  const base = c.env.APP_URL ?? 'https://stack.slyxup.com';
   if (txnId) {
     const paid = await isTransactionCompleted(c.env, txnId);
     const params = new URLSearchParams();
@@ -126,7 +177,7 @@ app.get('/', async (c) => {
     }
     // Not paid (or lookup failed) → resume payment instead of fake success.
     params.set('_ptxn', txnId);
-    return c.redirect(`https://billing.slyxup.online/pay?${params}`, 302);
+    return c.redirect(`${new URL(c.req.url).origin}/pay?${params}`, 302);
   }
   return c.redirect(base, 302);
 });
@@ -155,7 +206,9 @@ app.get('/pay', (c) => {
   if (projectId) successParams.set('project_id', projectId);
   if (origin) successParams.set('origin', origin);
   if (txnId) successParams.set('transaction_id', txnId);
-  const successUrl = `https://billing.slyxup.online/?${successParams}`;
+   const successBase =
+     c.env.PAYMENT_SUCCESS_URL ?? `${new URL(c.req.url).origin}/`;
+   const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}${successParams}`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -182,6 +235,7 @@ app.get('/pay', (c) => {
 <script>
 (function () {
   var TXN = ${JSON.stringify(txnId)};
+  var PROJECT = ${JSON.stringify(projectId)};
   var SUCCESS = ${JSON.stringify(successUrl)};
   var msg = document.getElementById('msg');
   var actions = document.getElementById('actions');
@@ -220,7 +274,7 @@ app.get('/pay', (c) => {
     loadPaddleJs(
       function () {
         setStatus('Contacting billing server…');
-        fetch('/v1/billing/config', { headers: { Accept: 'application/json' } })
+        fetch('/v1/billing/config?projectId=' + encodeURIComponent(PROJECT), { headers: { Accept: 'application/json' } })
           .then(function (r) {
             if (!r.ok) throw new Error('config http ' + r.status);
             return r.json();
@@ -232,7 +286,14 @@ app.get('/pay', (c) => {
               // the token — a test_ token sent to prod hosts gets
               // invalid_client_token. Set env explicitly BEFORE Initialize.
               window.Paddle.Environment.set(cfg.environment === 'production' ? 'production' : 'sandbox');
-              window.Paddle.Initialize({ token: cfg.clientToken });
+               window.Paddle.Initialize({
+                 token: cfg.clientToken,
+                 eventCallback: function (data) {
+                   if (data && data.name === 'checkout.completed') {
+                     window.location.assign(SUCCESS);
+                   }
+                 }
+               });
             } catch (e) {
               throw new Error('init: ' + (e && e.message ? e.message : e));
             }
@@ -273,14 +334,24 @@ async function isTransactionCompleted(
   txnId: string
 ): Promise<boolean> {
   try {
-    if (!env.PADDLE_API_KEY || !/^txn_[A-Za-z0-9]+$/.test(txnId)) return false;
+    if (!/^txn_[A-Za-z0-9]+$/.test(txnId)) return false;
+    const intent = await getDb(env)
+      .select({ projectId: checkoutIntents.projectId })
+      .from(checkoutIntents)
+      .where(eq(checkoutIntents.paddleTransactionId, txnId))
+      .get();
+    if (!intent) return false;
+    const config = getPaddleConfig(
+      env,
+      await resolveProjectEnvironment(env, intent.projectId)
+    );
     const base =
-      env.PADDLE_ENVIRONMENT === 'production'
+      config.environment === 'production'
         ? 'https://api.paddle.com'
         : 'https://sandbox-api.paddle.com';
     const res = await fetch(
       `${base}/transactions/${encodeURIComponent(txnId)}`,
-      { headers: { Authorization: `Bearer ${env.PADDLE_API_KEY}` } }
+      { headers: { Authorization: `Bearer ${config.apiKey}` } }
     );
     if (!res.ok) return false;
     const data = (await res.json()) as { data?: { status?: string } };
@@ -291,12 +362,15 @@ async function isTransactionCompleted(
 }
 
 app.route('/v1/admin/plans', adminRoute);
+app.route('/v1/admin/refunds', adminRefunds);
 app.route('/v1/billing/plans', plansRoute);
 app.route('/v1/billing/checkout', checkoutRoute);
 app.route('/v1/billing/subscription', subscriptionRoute);
+app.route('/v1/billing/stats', statsRoute);
 app.route('/v1/billing/transactions', transactionsRoute);
 app.route('/v1/billing/entitlements', entitlementsRoute);
 app.route('/v1/billing/invoices', invoicesRoute);
+app.route('/v1/billing/refunds', refundsRoute);
 app.route('/v1/webhooks', webhookRoute);
 
 // Public: Paddle config for client-side Paddle.js overlay checkout.
@@ -304,16 +378,25 @@ app.route('/v1/webhooks', webhookRoute);
 // Fails LOUDLY when the secret is missing — never fall back to a hardcoded
 // token (a stale one caused cryptic `invalid_client_token` failures).
 app.get('/v1/billing/config', (c) => {
-  const token = c.env.PADDLE_CLIENT_TOKEN;
-  if (!token)
-    return c.json(
-      { ok: false, error: 'Paddle client token not configured' },
-      503
-    );
-  return c.json({
-    ok: true,
-    environment: (c.env.PADDLE_ENVIRONMENT ?? 'sandbox') as string,
-    clientToken: token,
+  const projectId = c.req.query('projectId');
+  const environmentPromise = projectId
+    ? resolveProjectEnvironment(c.env, projectId)
+    : Promise.resolve(getDefaultBillingEnvironment(c.env));
+  return environmentPromise.then((environment) => {
+    const token = getPaddleClientToken(c.env, environment);
+    if (!token)
+      return c.json(
+        {
+          ok: false,
+          error: `Paddle ${environment === 'live' ? 'production' : 'sandbox'} client token not configured`,
+        },
+        503
+      );
+    return c.json({
+      ok: true,
+      environment: environment === 'live' ? 'production' : 'sandbox',
+      clientToken: token,
+    });
   });
 });
 

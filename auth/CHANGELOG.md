@@ -1,4 +1,4 @@
-# auth.slyxup.online
+# auth.slyxup.com
 
 ## 0.1.1
 

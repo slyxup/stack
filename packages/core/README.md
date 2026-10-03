@@ -15,8 +15,8 @@ npm install @slyxup/core
 import { SlyxupClient } from '@slyxup/core';
 
 const client = new SlyxupClient({
-  publishableKey: 'pk_test_xxx',          // from `slyxup keys create`
-  apiUrl: 'https://auth.slyxup.online',   // default; override for self-host/local
+  publishableKey: 'pk_xxx',               // from project key management
+    apiUrl: 'https://auth-slyxup-com.auth-0f4.workers.dev',   // override for self-host/local
 });
 
 // ── Auth ──
@@ -59,7 +59,11 @@ await client.users.delete();              // GDPR delete
 
 // ── Billing ── (import { createBillingClient } from '@slyxup/core')
 import { createBillingClient } from '@slyxup/core';
-const billing = createBillingClient({ publishableKey: 'pk_live_xxx' });
+const billing = createBillingClient({
+  publishableKey: client.publishableKey,
+  getToken: () => client.getToken(),
+   apiUrl: 'https://billing-slyxup-com.billing-86c.workers.dev',
+});
 const plans = await billing.listPlans(projectId);
 const { transactionId, checkoutUrl } = await billing.checkout(planId, {
   origin: 'https://your-app.com/billing/done', // return target after payment
@@ -70,9 +74,15 @@ const { paid, status } = await billing.getTransaction(transactionId);
 const sub = await billing.getSubscription(projectId); // null when none
 ```
 
-The client keeps an internal cookie jar, so sign-in state persists across calls in **Node/SSR too** (browsers manage cookies natively).
+The client keeps tokens in memory by default and a cookie jar in Node. **Create a separate client for each server request**; never share a signed-in client between users. Pass `sessionToken` from your application's HttpOnly cookie for server requests. Secret keys are rejected in browsers.
+
+For a client-only SPA, opt into `tokenStorage: 'sessionStorage'` to survive reloads in the same tab. Storage is scoped by auth URL and publishable key. This is script-readable storage, not an HttpOnly session: use a same-origin server integration for sensitive applications. Legacy `slyxup_session_token` localStorage values are not imported; users must sign in again. Project auth currently returns bearer tokens rather than setting cross-site cookies.
+
+HTTP errors preserve server `code` values (for example `EMAIL_NOT_VERIFIED`); sign-in returns a challenge only for `2FA_REQUIRED`. Rate limits and server failures are not reported as invalid credentials. Request headers accept all standard `HeadersInit` forms. Account deletion clears the client's session state.
 
 ## Error handling
+
+Billing uses the same typed errors as auth. Supply its URL explicitly for local/self-hosted deployments (normally `http://localhost:8788`); explicit URLs are never rewritten. `getToken` is evaluated for each request, so sign-in/sign-out on the linked auth client is reflected immediately. Billing never reads browser storage implicitly. `getSubscription()` without a project returns the newest non-canceled subscription or `null`; prefer a project ID for unambiguous billing controls.
 
 ```ts
 import { SlyxupError, UnauthorizedError, RateLimitError, NetworkError, ValidationError } from '@slyxup/core';
@@ -88,13 +98,20 @@ try {
 
 | Error | Status | Meaning |
 |---|---|---|
-| `ValidationError` | 400 | Bad input |
+| `ValidationError` | 400 | Bad input (client pre-validates via `validateSignUp`/`validateSignIn`) |
 | `UnauthorizedError` | 401 | No/expired session |
 | `RateLimitError` | 429 | Too many requests |
 | `NetworkError` | 0 | Fetch failed |
-| `SlyxupError` | * | Base class (`e.status`, `e.code`) |
+| `SlyxupError` | * | Base class (`e.status`, `e.code`, `e.hint`) |
+
+Every error carries a machine `code` plus an actionable `hint`
+(`getErrorHint(code)`, `isRetryableCode(code)`, `ERROR_CATALOG`).
+Full table: `docs/ERRORS.md`. Client validates sign-up/sign-in locally before
+sending (mirrors server Zod schemas; server stays authoritative).
 
 ## API surface
+
+`auth.startOAuth('google' | 'github', redirectUrl?)` starts browser OAuth with a tab-held verifier. `auth.completeOAuth()` exchanges the returned `slyxup_code` once, removes it from the address bar, and returns an auth response, a `2FA_REQUIRED` challenge, or null when no callback is present. The return URL must use the current app origin and a domain registered on the project. The React provider completes callbacks automatically. Both provider PKCE and the application code exchange use S256; no session token is placed in the redirect URL.
 
 | Namespace | Method | Endpoint |
 |---|---|---|
@@ -132,6 +149,10 @@ try {
 | `billing.listInvoices()` | GET | `/v1/billing/invoices` |
 
 ## Framework wrappers
+
+Full auth/billing setup, SPA versus server-cookie recipes and upgrade notes: [INTEGRATION_GUIDE.md](../../INTEGRATION_GUIDE.md). This is the 3.0.0 release candidate; confirm npm publication before upgrading external consumers.
+
+`@slyxup/core` also exports Web API server-session helpers: `slyxupMiddleware`, `getServerSession`, `createSessionCookie`, and `clearSessionCookie`. They accept a standard `Request` and return a `Response`; protected routes validate the session with `apiUrl`. Public routes match exact pathnames, with explicit `/docs/*` wildcards. Invalid sessions redirect; auth outages return 503. A cookie's presence alone never grants access. Use `getServerSession(request, { apiUrl, publishableKey })` inside protected route handlers as well. These helpers require your application to set its own HttpOnly cookie after server-side sign-in; a direct browser sign-in to a different auth origin cannot set your application's cookie.
 
 - Prebuilt UI cards: [`@slyxup/ui`](../ui)
 

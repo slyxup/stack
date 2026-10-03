@@ -4,6 +4,8 @@ export {
   getTheme,
   ACCENTS,
   FONTS,
+  THEME_PRESETS,
+  type ThemePresetName,
   type SlyxUpTheme,
   type ThemeMode,
   type AccentName,
@@ -64,6 +66,7 @@ export {
 } from './components/PasswordStrength';
 export { CopyField, type CopyFieldProps } from './components/CopyField';
 export { EmptyState, type EmptyStateProps } from './components/EmptyState';
+export { ErrorDisplay, type ErrorDisplayProps } from './components/ErrorDisplay';
 export { SignUp, type SignUpProps } from './components/SignUp/SignUp';
 export {
   UserButton,

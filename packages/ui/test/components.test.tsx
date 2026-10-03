@@ -5,6 +5,7 @@ import React from 'react';
 const mockSignIn = vi.fn().mockResolvedValue({ ok: true });
 const mockSignUp = vi.fn().mockResolvedValue({ ok: true });
 const mockSignOut = vi.fn().mockResolvedValue({ ok: true });
+const mockCompleteSignIn = vi.fn().mockResolvedValue({ ok: true });
 
 vi.mock('../src/react/hooks/useAuth', () => ({
   useAuth: () => ({
@@ -15,6 +16,7 @@ vi.mock('../src/react/hooks/useAuth', () => ({
     signIn: mockSignIn,
     signUp: mockSignUp,
     signOut: mockSignOut,
+    completeSignIn: mockCompleteSignIn,
   }),
 }));
 vi.mock('../src/react/hooks/useUser', () => ({
@@ -81,6 +83,37 @@ describe('SignIn', () => {
     const onSignUp = vi.fn();
     render(<SignIn onSignUpClick={onSignUp} />);
     expect(screen.getByText(/sign up/i)).toBeTruthy();
+  });
+
+  it('sends usernames through the username field', async () => {
+    render(<SignIn username social={false} />);
+    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'ada' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'password' } });
+    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    await waitFor(() => expect(mockSignIn).toHaveBeenCalledWith({ username: 'ada', password: 'password' }));
+  });
+
+  it('completes a two-factor challenge using a recovery code', async () => {
+    mockSignIn.mockResolvedValueOnce({ code: '2FA_REQUIRED', challengeToken: 'challenge' });
+    const success = vi.fn();
+    render(<SignIn onSuccess={success} />);
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'ada@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'password' } });
+    fireEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    await screen.findByLabelText('Authenticator code');
+    expect(success).not.toHaveBeenCalled();
+    expect(screen.queryByText('Continue with Google')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Use a recovery code' }));
+    fireEvent.change(screen.getByLabelText('Recovery code'), { target: { value: 'recovery-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify code' }));
+    await waitFor(() => expect(mockCompleteSignIn).toHaveBeenCalledWith({ challengeToken: 'challenge', recoveryCode: 'recovery-123' }));
+    await waitFor(() => expect(success).toHaveBeenCalledOnce());
+  });
+
+  it('gives separate sign-in forms unique label targets', () => {
+    render(<><SignIn social={false} /><SignIn social={false} /></>);
+    const inputs = screen.getAllByLabelText(/^email$/i);
+    expect(inputs[0].id).not.toBe(inputs[1].id);
   });
 });
 

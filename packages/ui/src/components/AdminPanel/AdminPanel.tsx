@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { injectStyles } from '../../styles';
 
 export interface AdminPanelProps {
-  /** Secret key — sk_test_xxx / sk_live_xxx */
+  /** Secret key — sk_xxx */
   secretKey: string;
-  /** API base URL (default: https://auth.slyxup.online) */
+  /** API base URL (set this to the Auth Worker URL) */
   apiUrl?: string;
   /** Render as full-page (default) or inline */
   fullPage?: boolean;
@@ -18,6 +18,7 @@ type Tab = 'overview' | 'users' | 'sessions' | 'keys' | 'audit';
 interface Project {
   id: string;
   name: string;
+  environment: 'test' | 'live';
   createdAt: string;
 }
 
@@ -47,7 +48,6 @@ interface ApiKey {
   id: string;
   name: string;
   prefix: string;
-  environment: string;
   type: string;
   lastUsedAt: string | null;
   createdAt: string;
@@ -146,7 +146,6 @@ export function AdminPanel({
   const [newKeyType, setNewKeyType] = useState<'publishable' | 'secret'>(
     'secret'
   );
-  const [newKeyEnv, setNewKeyEnv] = useState<'test' | 'live'>('test');
   const [createdKeyValue, setCreatedKeyValue] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     type: string;
@@ -214,7 +213,6 @@ export function AdminPanel({
       const res = await client.admin.createKey({
         name: newKeyName.trim(),
         type: newKeyType,
-        environment: newKeyEnv,
       });
       setCreatedKeyValue(res.key);
       setNewKeyName('');
@@ -226,7 +224,7 @@ export function AdminPanel({
     } finally {
       setCreatingKey(false);
     }
-  }, [client, newKeyName, newKeyType, newKeyEnv]);
+  }, [client, newKeyName, newKeyType]);
 
   const handleRevokeKey = useCallback(
     async (keyId: string) => {
@@ -830,25 +828,14 @@ export function AdminPanel({
                 </div>
                 <div
                   className="slx-admin-create-field"
-                  style={{ minWidth: 100 }}
+                  style={{ minWidth: 180 }}
                 >
-                  <label
-                    className="slx-admin-create-label"
-                    htmlFor="slx-admin-key-env"
-                  >
-                    Env
-                  </label>
-                  <select
-                    id="slx-admin-key-env"
-                    className="slx-admin-select"
-                    value={newKeyEnv}
-                    onChange={(e) =>
-                      setNewKeyEnv(e.target.value as 'test' | 'live')
-                    }
-                  >
-                    <option value="test">Test</option>
-                    <option value="live">Live</option>
-                  </select>
+                  <span className="slx-admin-create-label">
+                    Project environment
+                  </span>
+                  <span className="slx-admin-hint">
+                    Keys use the project&apos;s current test/live mode.
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -920,7 +907,7 @@ export function AdminPanel({
                         {k.type}
                       </span>
                       <span className="slx-admin-badge slx-admin-badge--gray">
-                        {k.environment}
+                        project?.environment ?? 'test'
                       </span>
                       {k.lastUsedAt && (
                         <span

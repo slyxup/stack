@@ -283,6 +283,66 @@ export function applyTheme(theme: SlyxUpTheme, root?: HTMLElement): () => void {
   };
 }
 
+/**
+ * Ready-made full themes (Week 3-4 customization API).
+ * Pass any of these straight to `applyTheme()` / `<SlyxupProvider theme>`.
+ *
+ * ```tsx
+ * import { THEME_PRESETS, applyTheme } from '@slyxup/ui';
+ * applyTheme(THEME_PRESETS.clerk);
+ * ```
+ */
+export const THEME_PRESETS: Record<string, SlyxUpTheme> = {
+  default: { mode: 'auto', accent: 'violet', primary: 'ink', density: 'comfortable' },
+  /** Clerk-style: indigo accent, Inter, gradient primaries. */
+  clerk: {
+    mode: 'auto',
+    accent: 'blue',
+    font: 'inter',
+    radius: 8,
+    primary: 'accent',
+    density: 'comfortable',
+  },
+  /** Supabase-style: emerald accent, compact dark-friendly. */
+  supabase: {
+    mode: 'auto',
+    accent: 'emerald',
+    font: 'inter',
+    radius: 6,
+    primary: 'accent',
+    density: 'compact',
+  },
+  /** Minimal monochrome: system font, ink buttons. */
+  minimal: {
+    mode: 'auto',
+    accent: 'mono',
+    font: 'system',
+    radius: 10,
+    primary: 'ink',
+    density: 'comfortable',
+  },
+  /** Warm: amber accent for friendly consumer apps. */
+  warm: {
+    mode: 'light',
+    accent: 'amber',
+    font: 'dm',
+    radius: 14,
+    primary: 'accent',
+    density: 'comfortable',
+  },
+  /** High-contrast dark-first dashboard theme. */
+  midnight: {
+    mode: 'dark',
+    accent: 'cyan',
+    font: 'inter',
+    radius: 10,
+    primary: 'accent',
+    density: 'compact',
+  },
+};
+
+export type ThemePresetName = keyof typeof THEME_PRESETS;
+
 /** Read the currently applied theme from an element (default: document root). */
 export function getTheme(root?: HTMLElement): Required<
   Omit<SlyxUpTheme, 'font' | 'radius'>

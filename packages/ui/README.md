@@ -12,19 +12,26 @@ npm install @slyxup/ui @slyxup/core
 
 ## Setup
 
-Inject the stylesheet once at your app root:
+Wrap auth and billing UI in a provider at your app root:
 
 ```tsx
-import { SlyxupClient } from '@slyxup/core';
-import { SlyxUpStyles } from '@slyxup/ui';
+import { SlyxUpProvider, SlyxUpStyles } from '@slyxup/ui';
 
-const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
-
-<SlyxUpStyles />
-<App />
+<SlyxUpProvider
+  publishableKey="pk_your_project_key"
+  apiUrl="https://your-auth-worker.example.workers.dev"
+  billingApiUrl="https://your-billing-worker.example.workers.dev"
+>
+  <SlyxUpStyles />
+  <App />
+</SlyxUpProvider>
 ```
 
 (Components also auto-inject on first mount if you skip this.)
+
+The default stylesheet inherits host typography and does not load external fonts. Webfonts are loaded only when you explicitly select a font theme that has a stylesheet URL.
+
+Pass configuration explicitly through your app's environment/configuration. Tokens are memory-only by default. Browser apps can opt into `tokenStorage="sessionStorage"` for same-tab reload persistence, scoped by auth URL and project key. This remains script-readable; a same-origin server with HttpOnly cookies is the preferred sensitive-app integration. Billing hooks inherit the provider's key, current token, and `billingApiUrl`; they do not use a global localStorage token. `useInvoices()` returns `{ invoices, loading, error, reload }`, so failures can be shown with a retry action instead of an empty invoice history.
 
 ## Components
 
@@ -35,7 +42,7 @@ import { SignIn, SignUp } from '@slyxup/ui';
 
 <SignIn
   social                       // show Google/GitHub buttons (default true)
-  onSuccess={() => router.push('/dashboard')}
+  onSuccess={() => window.location.assign('/account')}
   onSignUpClick={() => setMode('sign-up')}
   onForgotPasswordClick={() => setMode('forgot')}
 />
@@ -44,8 +51,8 @@ import { SignIn, SignUp } from '@slyxup/ui';
 ```
 
 Notes:
-- `SignIn` accepts **either an email or a username** in the identifier field.
-- When the account has 2FA enabled, `SignIn` auto-detects the `2FA_REQUIRED` response and swaps to an authenticator-code step, then completes the sign-in with `completeSignIn`.
+- `SignIn username` accepts **either an email or a username** and sends the corresponding field. Without this prop the field validates an email address.
+- When the account has 2FA enabled, `SignIn` swaps to an authenticator-code step with a **Use a recovery code** alternative. Errors remain visible until the next attempt. Each instance has unique input IDs for accessible labels.
 - `SignUp` includes an optional **username** field (used for password sign-in as an alternative to email).
 
 ### `<UserButton />` — avatar + dropdown
@@ -95,11 +102,11 @@ Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GE
 
 ```tsx
 <ForgotPassword onBackToSignIn={...} />
-<ResetPassword token={searchParams.token} onSuccess={...} />
-<EmailVerification token={searchParams.token} />
+<ResetPassword token={searchParams.token} onSuccess={...} onBackToSignIn={...} />
+<EmailVerification token={searchParams.token} onSuccess={...} onBackToSignIn={...} />
 ```
 
-`ForgotPassword` always shows a neutral success state (never reveals whether an account exists). `EmailVerification` auto-verifies from the emailed token and offers a resend form otherwise.
+`ForgotPassword` always shows a neutral success state (never reveals whether an account exists) with a 30s resend cooldown. `ResetPassword` shows a live `PasswordStrength` meter plus a one-hour-expiry note. `EmailVerification` auto-verifies from the emailed token (spinner → success → auto-continue) and offers a resend form with cooldown otherwise. All three render an eyebrow badge, a tinted state icon (`MailIcon` / `ShieldCheckIcon` / success / error), an info box with expiry guidance, and an optional `onBackToSignIn` footer link — all responsive down to 360px and themeable via `applyTheme({ font: 'inter' })`.
 
 ### `<SocialButtons />`
 
@@ -112,13 +119,17 @@ Requires the endpoints shipped in the auth worker (`POST /v1/user/password`, `GE
 
 Redirects to the hosted OAuth flow.
 
+**Release update:** project-scoped OAuth is now implemented. SignIn/SignUp call `client.auth.startOAuth`; the provider exchanges the callback code using the initiating tab's verifier. `useAuth()` exposes `oauthChallenge` and `authError`; SignIn displays the second-factor step when OAuth requires it. Register the return hostname on the project; test projects also allow localhost. Use the current SDK flow rather than hand-built OAuth links.
+
+`SocialButtons` uses the same proof-key flow and displays start errors. For custom servers configure the provider `apiUrl`; a conflicting legacy `basePath` is rejected rather than bypassing the callback exchange.
+
 ### `<PricingTable />` — billing plans grid
 
 ```tsx
 import { PricingTable } from '@slyxup/ui';
 import { SlyxupClient } from '@slyxup/core';
 
-const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
+const client = new SlyxupClient({ publishableKey: 'pk_xxx', apiUrl: '...' });
 
 // Fetch plans via client API and handle checkout with Paddle
 <PricingTable
@@ -156,16 +167,17 @@ openPaddleCheckout(priceId, customerEmail?, { userId, planId, projectId });
 import { BillingPortal } from '@slyxup/ui';
 import { SlyxupClient } from '@slyxup/core';
 
-const client = new SlyxupClient({ publishableKey: 'pk_test_xxx', apiUrl: '...' });
+const client = new SlyxupClient({ publishableKey: 'pk_xxx', apiUrl: '...' });
 
 <BillingPortal
   subscription={subscription}
   invoices={invoices}
   onCancel={cancelSubscription}
+  onResume={resumeSubscription}
 />
 ```
 
-Shows current plan, status, renewal date, invoice history, and an optional cancel action.
+Shows current plan, status, renewal date, invoice history, and optional cancel/resume actions. Invoice amounts use currency-aware formatting; totals are grouped by currency rather than adding unrelated currencies together.
 
 ### Granular billing parts — compose your own layouts
 
@@ -231,6 +243,21 @@ Three levels, weakest first:
 />
 ```
 
+Ready-made presets — one line, full theme:
+
+```tsx
+import { THEME_PRESETS, applyTheme } from '@slyxup/ui';
+applyTheme(THEME_PRESETS.clerk); // default | clerk | supabase | minimal | warm | midnight
+```
+
+`<ErrorDisplay />` — accessible error with troubleshooting hints:
+
+```tsx
+import { ErrorDisplay } from '@slyxup/ui';
+<ErrorDisplay code="TOO_MANY_REQUESTS" message="Too many attempts." onRetry={retry} />
+// Known codes (CSRF_TOKEN_INVALID, EMAIL_NOT_VERIFIED, …) get hints automatically.
+```
+
 Shared utility classes (auto-injected stylesheet, theme-aware):
 `slx-card-hover` (lift on hover) · `slx-card-featured` (accent ring glow) ·
 `slx-badge-float` / `slx-badge-current` (floating pills) · `slx-skeleton`
@@ -279,20 +306,20 @@ import { CheckoutButton } from '@slyxup/ui';
 
 ### `<AdminPanel />` — admin dashboard with sk key
 
-A full-featured, responsive admin panel for managing users, sessions, and API keys using a **secret key** (`sk_test_xxx` / `sk_live_xxx`).
+A full-featured, responsive admin panel for managing users, sessions, and API keys using a **secret key** (`sk_xxx`). The project environment controls whether requests use test or live behavior.
 
 ```tsx
 import { AdminPanel } from '@slyxup/ui';
 
 // Full-page admin dashboard
 <AdminPanel
-  secretKey="sk_test_xxx"
-  apiUrl="https://auth.slyxup.online"   // optional; defaults to production
+  secretKey="sk_xxx"
+  apiUrl="https://your-auth-worker.example.workers.dev"   // optional; set your Auth Worker URL
 />
 
 // Inline (card-style, no full-page wrapper)
 <AdminPanel
-  secretKey="sk_test_xxx"
+  secretKey="sk_xxx"
   fullPage={false}
 />
 ```
@@ -440,7 +467,7 @@ import { OtpInput, PasswordStrength, CopyField, EmptyState, passwordScore } from
 if (passwordScore(pw) < 2) return "Pick something stronger"
 
 // Masked value + copy button (API keys, secrets)
-<CopyField label="Secret key" value="sk_live_abc..." />
+<CopyField label="Secret key" value="sk_abc..." />
 
 // Friendly placeholder for empty lists
 <EmptyState title="No keys yet" desc="Create one to get started." action={<button>Create key</button>} />

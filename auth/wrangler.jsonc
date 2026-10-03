@@ -11,16 +11,18 @@
     "head_sampling_rate": 1
   },
   "vars": {
-    "APP_URL": "https://stack.slyxup.online",
-    "API_URL": "https://auth.slyxup.online",
-    "HOSTED_AUTH_URL": "https://auth.slyxup.online",
-    "CORS_ORIGINS": "https://stack.slyxup.online,https://billing.slyxup.online,https://prompt.slyxup.online,https://automation.slyxup.online,https://api-prompt.slyxup.online,https://api-automation.slyxup.online,https://example-nextjs.pages.dev,https://example-react-3j8.pages.dev,http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,http://localhost:8787",
-    "ALLOWED_REDIRECT_ORIGINS": "https://prompt.slyxup.online,https://automation.slyxup.online,https://stack.slyxup.online,https://myapp.com,https://example-nextjs.pages.dev,https://example-react-3j8.pages.dev,http://localhost:3000,http://localhost:3001,http://localhost:8787,https://auth.slyxup.online",
+    "APP_URL": "https://stack.slyxup.com",
+    "API_URL": "https://auth-slyxup-com.auth-0f4.workers.dev",
+    "HOSTED_AUTH_URL": "https://auth-slyxup-com.auth-0f4.workers.dev",
+    "CORS_ORIGINS": "https://stack.slyxup.com,https://billing.slyxup.com,https://prompt.slyxup.com,https://automation.slyxup.com,https://api-prompt.slyxup.com,https://api-automation.slyxup.com,https://example-nextjs.pages.dev,https://example-react-3j8.pages.dev,http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,http://localhost:8787,https://soffice.slyxup.com,https://soffice-frontend.pages.dev",
+    "ALLOWED_REDIRECT_ORIGINS": "https://prompt.slyxup.com,https://automation.slyxup.com,https://stack.slyxup.com,https://soffice.slyxup.com,https://soffice-frontend.pages.dev,https://myapp.com,https://example-nextjs.pages.dev,https://example-react-3j8.pages.dev,http://localhost:3000,http://localhost:3001,http://localhost:8787,https://auth.slyxup.com",
+    // NOTE: OAuth client IDs are PUBLIC identifiers (exposed in redirect URLs).
+    // Client SECRETS must use `wrangler secret put` — never commit them. See scripts/setup-secrets.sh.
     "GOOGLE_CLIENT_ID": "733897164108-o1reljhjoi3oho61hcksv5lv693u09ji.apps.googleusercontent.com",
     "GITHUB_CLIENT_ID": "Ov23liAPqCFTwbp2umVu",
-    "EMAIL_FROM": "noreply@slyxup.online",
+    "EMAIL_FROM": "noreply@slyxup.com",
     "EMAIL_FROM_NAME": "SlyxUp",
-    "BREVO_SENDER": "noreply@slyxup.online",
+    "BREVO_SENDER": "noreply@slyxup.com",
     "SINGLE_TENANT_MODE": "true",
     "ALLOW_PUBLIC_DEVELOPER_REGISTRATION": "false",
     "BOOTSTRAP_ADMIN_EMAIL": "slyxup@gmail.com"
@@ -39,16 +41,10 @@
       "id": "99d2ebe401894b328c75745ffca9eb19"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "STORAGE",
-      "bucket_name": "slyxup-storage"
-    }
-  ],
   "routes": [
     {
-      "pattern": "auth.slyxup.online/*",
-      "zone_name": "slyxup.online"
+      "pattern": "auth.slyxup.com/*",
+      "zone_name": "slyxup.com"
     }
   ]
 }

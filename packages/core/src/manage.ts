@@ -1,5 +1,4 @@
-// Merged from @slyxup/cli api.ts — same project/keys/domains ops, now callable from web UI.
-// This replaces the CLI: web dashboard calls these directly. Old `slyxup` CLI re-exports this.
+// Project/keys/domains management API — callable from web UI or any client.
 
 export interface ManagedProject {
   id: string;
@@ -12,7 +11,6 @@ export interface ManagedKey {
   id: string;
   name: string;
   prefix: string;
-  environment: 'test' | 'live';
   type: 'publishable' | 'secret';
 }
 
@@ -76,7 +74,6 @@ export function manageApi(apiUrl: string, token: string) {
       projectId: string;
       name: string;
       type: 'publishable' | 'secret';
-      environment: 'test' | 'live';
     }) =>
       req<{ ok: true; id: string; key: string; prefix: string }>(
         base,

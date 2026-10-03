@@ -45,6 +45,8 @@ export async function enableTOTP(
   const user = await db.select().from(users).where(eq(users.id, userId)).get();
   if (!user) throw new Error('User not found');
 
+  if (user.twoFactorEnabled)
+    throw new Error('Disable the existing second factor before replacing it');
   const ok = await verifyTOTP(secret, code);
   if (!ok) throw new Error('Invalid authenticator code');
 

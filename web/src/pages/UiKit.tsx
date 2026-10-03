@@ -23,14 +23,16 @@ import {
   UserButton,
   applyTheme,
 } from '@slyxup/ui';
-import { Blocks, BookOpen } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { Component, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CodeBlock } from '../components/CodeBlock';
+import { Seo } from '../components/Seo';
 import { Input } from '../components/ui';
+import { Logo } from '../components/marketing';
 import { AUTH_URL } from '../lib/api';
 
-const UI_VERSION = '2.5.0';
+const UI_VERSION = '3.0.1';
 
 const DEMO_PLANS = [
   {
@@ -180,7 +182,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
         id: 'signin',
         name: 'SignIn',
         desc: 'Email/password + optional OAuth + 2FA challenge. Submitting here talks to the real API, so a random email shows a genuine error state.',
-        code: 'import { SignIn } from "@slyxup/ui"\n\n<SignIn layout="split" social username\n  onSuccess={() => router.push("/dashboard")} />',
+         code: 'import { SignIn } from "@slyxup/ui"\n\n<SignIn layout="split" social username\n  onSuccess={() => window.location.assign("/account")} />',
         props: [
           ['social', 'boolean', 'true'],
           ['layout', 'centered | split | minimal', 'centered'],
@@ -195,7 +197,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
         id: 'signup',
         name: 'SignUp',
         desc: 'Registration with verification states. The username field is real — passed to signUp when filled.',
-        code: 'import { SignUp } from "@slyxup/ui"\n\n<SignUp layout="split" username\n  onSuccess={() => router.push("/verify")} />',
+         code: 'import { SignUp } from "@slyxup/ui"\n\n<SignUp layout="split" username\n  onSuccess={() => window.location.assign("/verify")} />',
         props: [
           ['social', 'boolean', 'true'],
           ['layout', 'centered | split | minimal', 'centered'],
@@ -214,7 +216,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
         id: 'forgot',
         name: 'ForgotPassword',
         desc: 'Reset-email request with cooldown handling.',
-        code: 'import { ForgotPassword } from "@slyxup/ui"\n\n<ForgotPassword onBackToSignIn={() => router.push("/sign-in")} />',
+         code: 'import { ForgotPassword } from "@slyxup/ui"\n\n<ForgotPassword onBackToSignIn={() => window.location.assign("/sign-in")} />',
         props: [
           ['apiUrl?', 'string', 'provider url'],
           ['onSuccess?', '() => void', '—'],
@@ -245,46 +247,6 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
           ['onSuccess?', '() => void', '—'],
         ],
         demo: <EmailVerification />,
-      },
-      {
-        id: 'pwfield',
-        name: 'PasswordField',
-        desc: 'Password input with reveal toggle. Drop into any custom form.',
-        code: 'import { PasswordField } from "@slyxup/ui"\n\n<PasswordField id="pw" value={pw} onChange={setPw}\n  required minLength={8} />',
-        props: [
-          ['id* / value* / onChange*', 'string', '—'],
-          ['showToggle', 'boolean', 'true'],
-          [
-            'autoComplete / placeholder / required / minLength',
-            'input attrs',
-            '—',
-          ],
-        ],
-        demo: <StandalonePasswordDemo />,
-      },
-      {
-        id: 'pwstrength',
-        name: 'PasswordStrength',
-        desc: '5-segment meter scored by length + variety. Try typing above — plus a pure passwordScore() helper.',
-        code: 'import { PasswordStrength, passwordScore } from "@slyxup/ui"\n\n<PasswordStrength password={pw} />\nif (passwordScore(pw) < 2) return "Pick something stronger"',
-        props: [
-          ['password*', 'string', '—'],
-          ['showLabel', 'boolean', 'true'],
-        ],
-        demo: <PasswordStrengthDemo />,
-      },
-      {
-        id: 'otp',
-        name: 'OtpInput',
-        desc: 'One-time-code boxes with paste + arrow-key navigation. Fill all six to fire onComplete.',
-        code: 'import { OtpInput } from "@slyxup/ui"\n\n<OtpInput length={6} onComplete={(code) => verify(code)} />',
-        props: [
-          ['length', 'number', '6'],
-          ['value? / onChange?', 'controlled', '—'],
-          ['onComplete?', '(code) => void', '—'],
-          ['autoFocus? / disabled? / label?', '—', '—'],
-        ],
-        demo: <OtpDemo />,
       },
     ],
   },
@@ -335,7 +297,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
         id: 'copy',
         name: 'CopyField',
         desc: 'Masked value + copy button. Built for API keys, tokens, webhook secrets.',
-        code: 'import { CopyField } from "@slyxup/ui"\n\n<CopyField label="Secret key" value="sk_live_abc123..." />',
+        code: 'import { CopyField } from "@slyxup/ui"\n\n<CopyField label="Secret key" value="sk_abc123..." />',
         props: [
           ['value*', 'string', '—'],
           ['label?', 'string', '—'],
@@ -345,7 +307,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
           <div className="mx-auto max-w-[360px]">
             <CopyField
               label="Secret key"
-              value="sk_live_9f2c7d4a1b5e8f0a3c6d"
+              value="sk_9f2c7d4a1b5e8f0a3c6d"
             />
           </div>
         ),
@@ -384,7 +346,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
         id: 'pricing',
         name: 'PricingTable',
         desc: 'Plans grid with popular badge. Same shape as GET /v1/billing/plans.',
-        code: 'import { PricingTable } from "@slyxup/ui"\n\nconst { plans } = await client.billing.plans.list()\n<PricingTable plans={plans} onSelect={(p) => checkout(p.id)} />',
+         code: 'import { PricingTable } from "@slyxup/ui"\n\nconst plans = await billing.listPlans(projectId)\n<PricingTable plans={plans} onSelect={(p) => checkout(p.id)} />',
         props: [
           ['plans*', 'Plan[]', '—'],
           ['onSelect?', '(plan) => void', '—'],
@@ -397,7 +359,7 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
         id: 'portal',
         name: 'BillingPortal',
         desc: 'Current plan + invoices + cancel. Pure props — no session needed.',
-        code: 'import { BillingPortal } from "@slyxup/ui"\n\nconst { subscription, invoices } = await client.billing.get()\n<BillingPortal subscription={subscription} invoices={invoices} />',
+         code: 'import { BillingPortal } from "@slyxup/ui"\n\nconst subscription = await billing.getSubscription(projectId)\nconst invoices = await billing.listInvoices()\n<BillingPortal subscription={subscription} invoices={invoices} />',
         props: [
           ['subscription', 'Subscription | null', '—'],
           ['invoices', 'Invoice[]', '—'],
@@ -423,39 +385,6 @@ const GROUPS: Array<{ label: string; items: Item[] }> = [
           <div className="flex justify-center py-4">
             <UserButton />
           </div>
-        ),
-      },
-      {
-        id: 'copy',
-        name: 'CopyField',
-        desc: 'Masked value + copy button. Built for API keys, tokens, webhook secrets.',
-        code: 'import { CopyField } from "@slyxup/ui"\n\n<CopyField label="Secret key" value="sk_live_abc123..." />',
-        props: [
-          ['value*', 'string', '—'],
-          ['label?', 'string', '—'],
-          ['masked', 'boolean', 'true'],
-        ],
-        demo: (
-          <div className="mx-auto max-w-[360px]">
-            <CopyField
-              label="Secret key"
-              value="sk_live_9f2c7d4a1b5e8f0a3c6d"
-            />
-          </div>
-        ),
-      },
-      {
-        id: 'empty',
-        name: 'EmptyState',
-        desc: 'Friendly placeholder for empty lists and results.',
-        code: 'import { EmptyState } from "@slyxup/ui"\n\n<EmptyState title="No keys yet"\n  desc="Create one to get started."\n  action={<button>Create key</button>} />',
-        props: [
-          ['title*', 'string', '—'],
-          ['desc?', 'string', '—'],
-          ['action? / icon?', 'ReactNode', '—'],
-        ],
-        demo: (
-          <EmptyState title="No keys yet" desc="Create one to get started." />
         ),
       },
       {
@@ -584,15 +513,21 @@ applyTheme({
 
   return (
     <div className="min-h-screen bg-[#0b0b10] text-white overflow-x-clip">
-      {/* Topbar */}
+      <Seo
+        title="UI Kit — 15 live components"
+        description="Every @slyxup/ui component live: SignIn, SignUp, billing, OTP, theming playground with applyTheme. Copy-paste snippets included."
+        path="/ui"
+      />
+      {/* Topbar — glass, versioned, docs-linked */}
       <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0b10]/85 backdrop-blur">
         <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-3 flex items-center gap-2 min-w-0">
-          <div className="size-8 rounded-lg bg-white text-black flex items-center justify-center shrink-0">
-            <Blocks className="size-4" />
-          </div>
+          <Logo size={32} />
           <span className="text-[14px] font-bold truncate">SlyxUp UI Kit</span>
           <span className="font-mono text-[11px] bg-white/10 px-2 py-0.5 rounded-md text-white/60 shrink-0">
             v{UI_VERSION}
+          </span>
+          <span className="hidden md:inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-0.5 text-[11px] font-semibold text-emerald-200">
+            <span className="size-1.5 rounded-full bg-emerald-400 pulse-dot" /> live previews
           </span>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <Link
@@ -602,10 +537,16 @@ applyTheme({
               Home
             </Link>
             <Link
-              to="/docs"
+              to="/docs/ui-kit"
               className="hidden sm:flex items-center gap-1.5 text-[12.5px] font-semibold text-white/60 hover:text-white"
             >
               <BookOpen className="size-3.5" /> Docs
+            </Link>
+            <Link
+              to="/docs"
+              className="hidden sm:block text-[12.5px] font-semibold text-white/60 hover:text-white"
+            >
+              All guides
             </Link>
             <Link
               to="/admin"
@@ -618,41 +559,65 @@ applyTheme({
       </div>
 
       <div className="mx-auto max-w-[1200px] px-4 sm:px-8 py-8 sm:py-10 min-w-0">
-        {/* Hero */}
+        {/* Hero — aurora, stats, docs cross-link */}
         <div className="relative overflow-hidden rounded-3xl border border-white/10 p-6 sm:p-8 min-w-0">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
               background:
-                'radial-gradient(640px 300px at 12% 0%, rgba(255,255,255,0.09), transparent 65%)',
+                'radial-gradient(640px 300px at 12% 0%, rgba(255,255,255,0.09), transparent 65%), radial-gradient(520px 260px at 88% 100%, rgba(139,92,246,0.14), transparent 60%), radial-gradient(420px 220px at 70% 0%, rgba(56,189,248,0.10), transparent 60%)',
             }}
           />
           <div className="relative min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11.5px] font-bold uppercase tracking-[0.12em] text-white/70">
-              {GROUPS.reduce((n, g) => n + g.items.length, 0)} components · live
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11.5px] font-bold uppercase tracking-[0.12em] text-white/70">
+                {GROUPS.reduce((n, g) => n + g.items.length, 0)} components · live
+              </div>
+              <Link to="/docs/ui-kit" className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11.5px] font-semibold text-white/70 hover:text-white hover:border-white/30 transition-colors">
+                <BookOpen className="size-3.5" /> UI kit guide
+              </Link>
+              <a href="/llms.txt" className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11.5px] font-semibold text-white/70 hover:text-white hover:border-white/30 transition-colors">
+                llms.txt
+              </a>
             </div>
-            <h1 className="font-display mt-4 text-[28px] sm:text-[40px] font-extrabold leading-[1.02] text-balance">
-              Every component, <span className="text-gradient">live.</span>
+            <h1 className="font-display mt-4 text-[28px] sm:text-[44px] font-extrabold leading-[1.0] text-balance">
+              Every component, <span className="text-gradient">live and themed.</span>
             </h1>
             <p className="text-[14px] text-white/60 mt-3 leading-relaxed max-w-2xl">
-              Pick a component on the left, see it on the right. Tune the theme
-              — fonts, accents, density — and watch everything follow.
+              Pick a component on the left, see it on the right. Tune mode,
+              accent, font, radius and density — then copy the{' '}
+              <span className="font-mono text-[12.5px] text-white/85">applyTheme()</span>{' '}
+              snippet straight into your app.
             </p>
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+              {[
+                ['15', 'drop-in components'],
+                ['3', 'auth layouts'],
+                ['7+', 'accents + custom'],
+              ].map(([k, v]) => (
+                <div key={v} className="flex items-baseline gap-1.5">
+                  <span className="font-display text-[20px] font-bold">{k}</span>
+                  <span className="text-[12px] text-white/45">{v}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Theme playground */}
-        <section className="mt-4 rounded-2xl border border-[#e4e6eb] bg-white p-5 sm:p-6 min-w-0 text-black">
+        <section className="mt-4 rounded-2xl border border-white/10 bg-white p-5 sm:p-6 min-w-0 text-black shadow-[0_24px_60px_-30px_rgba(0,0,0,0.7)]">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-[15px] font-bold tracking-tight">
+            <h2 className="flex items-center gap-2 text-[15px] font-bold tracking-tight">
               Theme playground
+              <span className="rounded-full bg-black px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wider text-white">live</span>
             </h2>
             <span className="text-[12px] text-[#63666f]">
               Applies to the preview via{' '}
-              <span className="font-mono">applyTheme()</span>
+              <span className="font-mono">applyTheme()</span> · full API in{' '}
+              <Link to="/docs/ui-kit" className="font-semibold text-black underline underline-offset-2">the UI kit guide</Link>
             </span>
           </div>
-          <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-5">
             <div className="min-w-0">
               <FieldLabel>Mode</FieldLabel>
               <div className="flex rounded-full border border-[#e4e6eb] p-1">
@@ -669,32 +634,33 @@ applyTheme({
               </div>
             </div>
             <div className="min-w-0">
-              <FieldLabel>Density + Primary</FieldLabel>
-              <div className="flex gap-2">
-                <div className="flex flex-1 rounded-full border border-[#e4e6eb] p-1">
-                  {(['comfortable', 'compact'] as Density[]).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setDensity(d)}
-                      className={`flex-1 min-w-0 rounded-full px-2 py-1.5 text-[11.5px] font-semibold capitalize cursor-pointer truncate ${density === d ? 'bg-black text-white' : 'text-[#63666f]'}`}
-                    >
-                      {d === 'comfortable' ? 'Comfy' : 'Compact'}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex flex-1 rounded-full border border-[#e4e6eb] p-1">
-                  {(['ink', 'accent'] as PrimaryStyle[]).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPrimary(p)}
-                      className={`flex-1 min-w-0 rounded-full px-2 py-1.5 text-[11.5px] font-semibold capitalize cursor-pointer truncate ${primary === p ? 'bg-black text-white' : 'text-[#63666f]'}`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
+              <FieldLabel>Density</FieldLabel>
+              <div className="flex rounded-full border border-[#e4e6eb] p-1">
+                {(['comfortable', 'compact'] as Density[]).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDensity(d)}
+                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${density === d ? 'bg-black text-white' : 'text-[#63666f]'}`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <FieldLabel>Primary buttons</FieldLabel>
+              <div className="flex rounded-full border border-[#e4e6eb] p-1">
+                {(['ink', 'accent'] as PrimaryStyle[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPrimary(p)}
+                    className={`flex-1 min-w-0 rounded-full px-3 py-1.5 text-[12.5px] font-semibold capitalize cursor-pointer truncate ${primary === p ? 'bg-black text-white' : 'text-[#63666f]'}`}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="min-w-0">
@@ -763,11 +729,11 @@ applyTheme({
                 className="w-full accent-black cursor-pointer"
               />
             </div>
-            <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+            <div className="min-w-0 sm:col-span-2 lg:col-span-3">
               <FieldLabel>Your theme, copy-paste</FieldLabel>
               <CodeBlock title="theme.ts" lang="ts" code={themeCode} />
             </div>
-            <div className="min-w-0 sm:col-span-2 xl:col-span-2">
+            <div className="min-w-0 sm:col-span-2 lg:col-span-3 rounded-xl border border-[#e4e6eb] bg-[#fafafa] p-4">
               <FieldLabel>
                 Auth pages (applies to SignIn + SignUp below)
               </FieldLabel>
@@ -837,7 +803,7 @@ applyTheme({
             </div>
           </aside>
 
-          <SlyxUpProvider publishableKey="pk_test_preview" apiUrl={AUTH_URL}>
+                    <SlyxUpProvider publishableKey="pk_preview" apiUrl={AUTH_URL}>
             <div ref={galleryRef} className="flex-1 min-w-0 w-full">
               <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-7 min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -922,10 +888,15 @@ applyTheme({
           </SlyxUpProvider>
         </div>
 
-        <p className="text-center text-[12px] text-white/40">
-          {ALL_IDS.length} components · self-injecting styles · 360px-safe ·
-          motion-respecting
-        </p>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
+          <p className="text-[12px] text-white/40">
+            {ALL_IDS.length} components · self-injecting styles · 360px-safe · motion-respecting
+          </p>
+          <div className="flex gap-2 shrink-0">
+            <Link to="/docs/quickstart" className="rounded-full border border-white/15 px-4 py-2 text-[12px] font-semibold text-white/70 hover:text-white hover:border-white/30 transition-colors">Quickstart</Link>
+            <Link to="/docs/api-reference" className="rounded-full bg-white px-4 py-2 text-[12px] font-bold text-black hover:bg-white/85 transition-colors">API reference</Link>
+          </div>
+        </div>
       </div>
     </div>
   );

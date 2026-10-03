@@ -8,10 +8,10 @@
 
 ### Hinglish Summary (tumhare liye)
 - **Pehle sab dev me:** `feat/*` branch pe code likho, `pnpm typecheck/build` local pe pass karwao, `wrangler dev --local` + `D1 local` pe test karo, `npm publish --dry-run` se SDK check karo. Changes dikhenge local `git diff` + `wrangler d1 execute` + `curl /v1/health` se.
-- **Verify karo:** `pnpm typecheck && pnpm lint && pnpm build` 7/7 green hona chahiye, `pnpm cf:typegen` se `Env` types bane, `npx wrangler deploy --dry-run --config auth.slyxup.online/wrangler.jsonc` se CF bindings sahi dikhe. SDK ke liye `npm view @slyxup/core version` local `dist` check.
+- **Verify karo:** `pnpm typecheck && pnpm lint && pnpm build` green hona chahiye, `pnpm cf:typegen` se `Env` types bane, and `npx wrangler deploy --dry-run --config auth/wrangler.com-workers-dev.jsonc` validates the active Auth Worker bindings. SDK ke liye `npm view @slyxup/core version` local `dist` check.
 - **Jab sab sahi lage tab hi `main` pe push:** `gh pr create` → CI green → `gh pr merge` / `git push origin main`. Tabhi `main` push se **prod** ka kaam start hoga.
-- **Prod pe auto:** `ci.yml` (typecheck/lint/build), `release.yml` (changeset version bump + `npm publish` **only if** `.changeset/*.md` hai ya unpublished package hai, warna `No changesets` → publish skip, no new version), `deploy.yml` (only `auth.slyxup.online/` change pe `wrangler deploy`). Agar **koi change nahi** (already latest, jaise `35591c7` billing 0.1.1 pe `Release success 49s` bina new publish ke), to **naya version deploy nahi hoga** — yahi verified hai.
-- **Kaise check ki prod sahi hua?** `gh run list --repo slyxup/stack`, `gh run view <ID> --log`, `npm view @slyxup/core version` (new version dikhe), `curl https://auth.slyxup.online/v1/health`, `wrangler tail`, `npx wrangler d1 execute slyxup_auth --remote --config auth.slyxup.online/wrangler.jsonc --command "SELECT count(*) FROM users;"`
+- **Prod pe auto:** `ci.yml` (typecheck/lint/build), `release.yml` (changeset version bump + `npm publish` **only if** `.changeset/*.md` hai ya unpublished package hai, warna `No changesets` → publish skip, no new version), `deploy.yml` (only `auth.slyxup.com/` change pe `wrangler deploy`). Agar **koi change nahi** (already latest, jaise `35591c7` billing 0.1.1 pe `Release success 49s` bina new publish ke), to **naya version deploy nahi hoga** — yahi verified hai.
+- **Kaise check ki prod sahi hua?** `gh run list --repo slyxup/stack`, `gh run view <ID> --log`, `npm view @slyxup/core version` (new version dikhe), the deployed `/v1/health` endpoint, `wrangler tail`, and `npx wrangler d1 execute` with the active config.
 
 ### Step-by-Step Commands (Dev → Verify → Prod)
 
@@ -21,18 +21,18 @@ git checkout main && git pull origin main
 git checkout -b feat/auth-sessions
 
 # 2. CODE: schema/api/sdk banao (AGENTS.md build order follow)
-# ... edit auth.slyxup.online/src/lib/schema.ts etc.
+# ... edit auth/src/lib/schema.ts etc.
 
 # 3. LOCAL VERIFY (push se pehle mandatory)
 pnpm typecheck                          # 7/7 pass
 pnpm lint                               # biome 19 files
 pnpm build                              # turbo 7/7
 pnpm cf:typegen                         # wrangler types auth+billing
-pnpm --filter auth.slyxup.online db:generate
-pnpm --filter auth.slyxup.online db:migrate:local   # local D1
-npx wrangler d1 execute slyxup_auth --local --config auth.slyxup.online/wrangler.jsonc --command "SELECT name FROM sqlite_master WHERE type='table';"
+pnpm --filter auth db:generate
+pnpm --filter auth db:migrate:local   # local D1
+npx wrangler d1 execute slyxup_auth_com --local --config auth/wrangler.com-workers-dev.jsonc --command "SELECT name FROM sqlite_master WHERE type='table';"
 pnpm --filter @slyxup/core exec npm publish --dry-run --access public # SDK dry-run
-npx wrangler deploy --dry-run --config auth.slyxup.online/wrangler.jsonc # 19.96 KiB gzip
+npx wrangler deploy --dry-run --config auth/wrangler.com-workers-dev.jsonc
 
 # 4. SDK version bump (agar packages/* change kiya to)
 pnpm changeset                          # select patch/minor/major, .changeset/*.md banta hai
@@ -57,15 +57,15 @@ gh pr merge --squash --delete-branch    # ya: git checkout main && git merge fea
 gh run list --repo slyxup/stack --limit 3 # ci success, release success/skip, deploy skipped/in_progress
 gh run view <RELEASE_ID> --log | grep -E "Publishing|success"
 npm view @slyxup/core version            # new version dikhe to publish OK
-curl https://auth.slyxup.online/v1/health
-npx wrangler d1 execute slyxup_auth --remote --config auth.slyxup.online/wrangler.jsonc --command "SELECT count(*) FROM users;"
+curl https://auth-slyxup-com.auth-0f4.workers.dev/v1/health
+npx wrangler d1 execute slyxup_auth_com --remote --config auth/wrangler.com-workers-dev.jsonc --command "SELECT count(*) FROM users;"
 ```
 
 **Important Rules:**
 - **Direct `main` pe push only jab verify ho gaya** — warna CI fail hoga aur `main` red. Best: `feat/*` → PR → CI green → merge.
 - **No changeset = no version bump** — agar `packages/*` me koi change nahi aur `.changeset/*.md` nahi banaya, to `release.yml` bolega `No changesets found` → publish skip, `success` but no new npm version (verified `35591c7` pe `Release success 49s` bina publish). Yahi chahiye tha.
 - **SDK version auto:** `pnpm changeset version` `package.json` bump karta hai (`0.1.0 -> 0.1.1`), `pnpm changeset publish` `npm publish --access public` se `NPM_TOKEN` se publish. Local me `dist` build hona chahiye pehle.
-- **Deploy only on change:** `deploy.yml` `if: contains(head_commit.modified, 'auth.slyxup.online/')` — agar auth folder change nahi to `skipped`, warna `wrangler deploy` prod D1 `cfa91e79` pe.
+- **Deploy only on change:** deploy the Worker whose package changed, using its active Wrangler config and intended Cloudflare account.
 
 ## 1. Branching & Commits (Conventional)
 
@@ -111,7 +111,7 @@ Pre-commit hook runs `biome check --write` on staged files — fix before commit
 ```bash
 git init (already done in stack/)
 git config user.name "ysr-hameed"
-git config user.email "ysr@slyxup.online"
+git config user.email "ysr@slyxup.com"
 git branch -M main
 git remote add origin https://github.com/slyxup/stack.git  # created via gh
 git add .
@@ -142,7 +142,7 @@ Version `0.1.0` → `0.2.0` until `1.0.0` stable.
 
 - `ci.yml` on PR/push `main`: install → typecheck → lint → build → test → drizzle check → wrangler types
 - `release.yml` on push `main`: changesets version/publish
-- `deploy.yml` on `auth.slyxup.online/` changes: `wrangler deploy` (needs `CLOUDFLARE_API_TOKEN`)
+- `deploy.yml` on `auth.slyxup.com/` changes: `wrangler deploy` (needs `CLOUDFLARE_API_TOKEN`)
 
 All must be green before merge — branch protection enforces.
 

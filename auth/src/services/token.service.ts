@@ -1,8 +1,13 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
-import { hashPassword } from '../lib/password';
-import { passwordResetTokens, users, verificationTokens } from '../lib/schema';
+import { CURRENT_HASH_VERSION, hashPassword } from '../lib/password';
+import {
+  passwordResetTokens,
+  sessions,
+  users,
+  verificationTokens,
+} from '../lib/schema';
 import {
   resetPasswordEmailHtml,
   trySend,
@@ -68,11 +73,15 @@ export async function createVerificationToken(
 
 export async function verifyEmail(env: { DB: D1Database }, token: string) {
   const db = getDb(env);
-  const row = await db
-    .select()
-    .from(verificationTokens)
-    .where(eq(verificationTokens.token, token))
-    .get();
+  const [row] = await db
+    .delete(verificationTokens)
+    .where(
+      and(
+        eq(verificationTokens.token, token),
+        gt(verificationTokens.expiresAt, new Date())
+      )
+    )
+    .returning();
   if (!row) throw new Error('Invalid token');
   if (row.expiresAt < new Date()) throw new Error('Token expired');
   if (row.userId) {
@@ -81,46 +90,64 @@ export async function verifyEmail(env: { DB: D1Database }, token: string) {
       .set({ emailVerified: true, updatedAt: new Date() })
       .where(eq(users.id, row.userId));
   }
-  await db.delete(verificationTokens).where(eq(verificationTokens.id, row.id));
   return { email: row.email };
 }
 
 export async function resendVerification(
   env: { DB: D1Database },
-  email: string
+  email: string,
+  projectId: string | null = null
 ) {
   const db = getDb(env);
+  const normalizedEmail = email.trim().toLowerCase();
   const user = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(
+      and(
+        sql`lower(${users.email}) = ${normalizedEmail}`,
+        projectId ? eq(users.projectId, projectId) : isNull(users.projectId)
+      )
+    )
     .get();
   // Do not reveal existence — always succeed silently
-  if (!user) return null;
+  if (!user || !user.passwordHash) return null;
   const token = await createVerificationToken(env, user.id, user.email);
   await sendVerificationEmail(env as unknown as Env, user.email, token);
   return token;
 }
 
-export async function forgotPassword(env: { DB: D1Database }, email: string) {
+export async function forgotPassword(
+  env: { DB: D1Database },
+  email: string,
+  projectId: string | null = null
+) {
   const db = getDb(env);
+  const normalizedEmail = email.trim().toLowerCase();
   const user = await db
     .select()
     .from(users)
-    .where(eq(users.email, email))
+    .where(
+      and(
+        sql`lower(${users.email}) = ${normalizedEmail}`,
+        projectId ? eq(users.projectId, projectId) : isNull(users.projectId)
+      )
+    )
     .get();
-  if (!user) return null; // silent
+  // OAuth-only users cannot create a password through reset. Keep this silent
+  // so the endpoint does not reveal which emails are registered.
+  if (!user || !user.passwordHash) return null;
   const token = randomToken(32);
   await db.insert(passwordResetTokens).values({
     id: randomUUID(),
     userId: user.id,
-    email,
+    email: normalizedEmail,
     token,
     expiresAt: new Date(Date.now() + RESET_TTL_MS),
     used: false,
     createdAt: new Date(),
   });
-  await sendResetEmail(env as unknown as Env, email, token);
+  await sendResetEmail(env as unknown as Env, user.email, token);
   return token;
 }
 
@@ -138,15 +165,38 @@ export async function resetPassword(
   if (!row || row.used) throw new Error('Invalid or used token');
   if (row.expiresAt < new Date()) throw new Error('Token expired');
   if (!row.userId) throw new Error('Invalid token');
+  const user = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, row.userId))
+    .get();
+  if (!user?.passwordHash)
+    throw new Error('Password reset is not available for this account');
   const passwordHash = await hashPassword(newPassword);
-  await db
-    .update(users)
-    .set({ passwordHash, updatedAt: new Date() })
-    .where(eq(users.id, row.userId));
-  await db
+  // Claim the single-use token atomically before changing credentials.
+  const claimed = await db
     .update(passwordResetTokens)
     .set({ used: true })
-    .where(eq(passwordResetTokens.id, row.id));
+    .where(
+      and(
+        eq(passwordResetTokens.id, row.id),
+        eq(passwordResetTokens.used, false)
+      )
+    )
+    .returning({ id: passwordResetTokens.id });
+  if (claimed.length !== 1) throw new Error('Invalid or used token');
+  await db.batch([
+    db
+      .update(users)
+      .set({
+        passwordHash,
+        passwordHashVersion: CURRENT_HASH_VERSION,
+        mustChangePassword: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, row.userId)),
+    db.delete(sessions).where(eq(sessions.userId, row.userId)),
+  ]);
   return { email: row.email };
 }
 

@@ -1,5 +1,5 @@
 // SlyxUp Billing — WebCrypto helpers (Workers-compatible)
-// NOTE: This is a deduplicated copy of auth.slyxup.online/src/lib/crypto.ts hmac/timing helpers.
+// NOTE: This is a deduplicated copy of auth.slyxup.com/src/lib/crypto.ts hmac/timing helpers.
 // Canonical implementation lives in auth — billing keeps a lightweight copy for Workers isolation.
 // If updating logic, sync both files or extract to @slyxup/shared/crypto (TODO).
 
@@ -20,6 +20,12 @@ export async function hmacSha256Hex(
   return Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/** CSPRNG hex token (Workers-compatible). */
+export function randomToken(bytes = 32): string {
+  const arr = crypto.getRandomValues(new Uint8Array(bytes));
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Constant-time string compare (length-independent early exit only on length) */

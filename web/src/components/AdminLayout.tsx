@@ -1,8 +1,10 @@
-import { Blocks, BookOpen, FolderKanban, LogOut } from 'lucide-react';
-import type { ComponentType } from 'react';
+import { Blocks, BookOpen, FolderKanban, KeyRound, LogOut } from 'lucide-react';
+import { type ComponentType, type FormEvent, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { AUTH_URL } from '../lib/api';
+import { AUTH_URL, changePassword } from '../lib/api';
 import { useAuth } from '../store/auth';
+import { Logo } from './marketing';
+import { Alert, Button, Dialog, Input, Label } from './ui';
 
 function SideLink({
   to,
@@ -38,10 +40,56 @@ function SideLink({
 export function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
   const out = () => {
     logout();
     navigate('/login', { replace: true });
+  };
+
+  const openPasswordDialog = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    setPasswordOpen(true);
+  };
+
+  const closePasswordDialog = () => {
+    if (passwordBusy) return;
+    setPasswordOpen(false);
+  };
+
+  const submitPasswordChange = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+    setPasswordBusy(true);
+    const result = await changePassword(currentPassword, newPassword);
+    setPasswordBusy(false);
+    if (!result.ok) {
+      setPasswordError(result.error || 'Unable to change password.');
+      return;
+    }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordSuccess(true);
   };
 
   return (
@@ -49,9 +97,7 @@ export function AdminLayout() {
       {/* Sidebar */}
       <aside className="hidden lg:flex w-[248px] shrink-0 flex-col bg-white border-r border-black/[0.08] min-h-screen sticky top-0 h-screen">
         <div className="flex items-center gap-2.5 px-5 pt-5 pb-4">
-          <div className="size-8 rounded-lg bg-black flex items-center justify-center font-extrabold text-[13px] text-white">
-            S
-          </div>
+          <Logo size={32} />
           <div className="min-w-0">
             <div className="text-[13.5px] font-semibold leading-none">
               SlyxUp Admin
@@ -93,8 +139,15 @@ export function AdminLayout() {
             </div>
             <button
               type="button"
-              onClick={out}
+              onClick={openPasswordDialog}
               className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white py-2 text-[12px] font-medium text-[#71717a] hover:text-black hover:bg-black/[0.03] cursor-pointer"
+            >
+              <KeyRound className="size-3.5" /> Change password
+            </button>
+            <button
+              type="button"
+              onClick={out}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white py-2 text-[12px] font-medium text-[#71717a] hover:text-black hover:bg-black/[0.03] cursor-pointer"
             >
               <LogOut className="size-3.5" /> Sign out
             </button>
@@ -104,9 +157,7 @@ export function AdminLayout() {
 
       {/* Mobile topbar */}
       <div className="lg:hidden sticky top-0 z-30 border-b border-black/[0.08] bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-2">
-        <div className="size-8 rounded-lg bg-black flex items-center justify-center font-extrabold text-white text-[13px]">
-          S
-        </div>
+        <Logo size={32} />
         <span className="text-[14px] font-semibold">SlyxUp Admin</span>
         <div className="ml-auto flex items-center gap-0.5">
           <NavLink
@@ -129,6 +180,14 @@ export function AdminLayout() {
           </NavLink>
           <button
             type="button"
+            onClick={openPasswordDialog}
+            className="rounded-md p-2 text-[#71717a]"
+            aria-label="Change password"
+          >
+            <KeyRound className="size-4" />
+          </button>
+          <button
+            type="button"
             onClick={out}
             className="rounded-md p-2 text-[#71717a]"
             aria-label="Sign out"
@@ -144,6 +203,69 @@ export function AdminLayout() {
           <Outlet />
         </div>
       </main>
+      <Dialog
+        open={passwordOpen}
+        onClose={closePasswordDialog}
+        title="Change password"
+        desc="Use your current password, then choose a new password with at least 8 characters."
+      >
+        <form onSubmit={submitPasswordChange} className="space-y-4">
+          <div>
+            <Label htmlFor="current-admin-password">Current password</Label>
+            <Input
+              id="current-admin-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-admin-password">New password</Label>
+            <Input
+              id="new-admin-password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="confirm-admin-password">Confirm new password</Label>
+            <Input
+              id="confirm-admin-password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </div>
+          {passwordError && <Alert>{passwordError}</Alert>}
+          {passwordSuccess && (
+            <Alert tone="green">
+              Password changed. Your current session remains active.
+            </Alert>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closePasswordDialog}
+              disabled={passwordBusy}
+            >
+              Close
+            </Button>
+            <Button type="submit" disabled={passwordBusy}>
+              {passwordBusy ? 'Updating…' : 'Update password'}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

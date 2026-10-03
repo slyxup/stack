@@ -8,7 +8,11 @@ import {
   ne,
 } from 'drizzle-orm';
 import { getDb } from '../lib/db';
-import { hashPassword, verifyPassword } from '../lib/password';
+import {
+  CURRENT_HASH_VERSION,
+  hashPassword,
+  verifyPassword,
+} from '../lib/password';
 import {
   auditLogs,
   oauthAccounts,
@@ -145,7 +149,11 @@ export async function changePassword(
   const passwordHash = await hashPassword(newPassword);
   await db
     .update(users)
-    .set({ passwordHash, updatedAt: new Date() })
+    .set({
+      passwordHash,
+      passwordHashVersion: CURRENT_HASH_VERSION,
+      updatedAt: new Date(),
+    })
     .where(eq(users.id, userId));
   return { ok: true };
 }

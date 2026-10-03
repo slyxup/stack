@@ -2,12 +2,12 @@
   "name": "@slyxup/stack-monorepo",
   "private": true,
   "version": "0.1.0",
-  "description": "SlyxUp Stack — Cloudflare Workers + D1 (github.com/slyxup/stack) — domain-based: slyxup.online/stack/*",
+  "description": "SlyxUp Stack — Cloudflare Workers + D1 (github.com/slyxup/stack) — domain-based: slyxup.com/stack/*",
   "repository": "github:slyxup/stack",
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=20",
-    "pnpm": ">=9"
+    "node": ">=22",
+    "pnpm": ">=10"
   },
   "workspaces": [
     "auth",
@@ -34,12 +34,14 @@
     "deploy:platform": "pnpm --filter web build && pnpm --filter web deploy",
     "deploy:examples": "pnpm --filter example-url-shortner build",
     "db:generate": "pnpm --filter auth exec drizzle-kit generate",
-    "db:generate:all": "pnpm --filter auth exec drizzle-kit generate && pnpm --filter billing exec drizzle-kit generate --config=drizzle.config.ts || true",
-    "db:migrate": "wrangler d1 migrations apply slyxup_auth --remote",
+    "db:generate:all": "pnpm --filter auth db:generate && pnpm --filter billing db:generate",
+    "db:migrate": "pnpm --filter auth db:migrate:remote",
     "db:migrate:auth:local": "pnpm --filter auth db:migrate:local",
     "db:migrate:auth:remote": "pnpm --filter auth db:migrate:remote",
     "cf:typegen": "pnpm --filter auth typegen && pnpm --filter billing typegen",
     "test": "turbo test",
+    "test:runtime": "node scripts/release-runtime-test.mjs",
+    "e2e": "playwright test",
     "typecheck": "turbo typecheck",
     "lint": "biome lint .",
     "format": "biome format . --write",
@@ -53,6 +55,7 @@
     "@changesets/cli": "^2.27.0",
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
+    "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16",
@@ -62,6 +65,6 @@
     "turbo": "^2.0.0",
     "typescript": "^5.5.0",
     "vitest": "^4.1.11",
-    "wrangler": "^3.80.0"
+    "wrangler": "^4.130.0"
   }
 }

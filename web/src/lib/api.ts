@@ -1,13 +1,17 @@
 /**
- * Typed client for auth.slyxup.online + billing.slyxup.online.
+ * Typed client for the deployed Auth and Billing Workers.
  * Session token (Bearer) is authoritative; cookies are sent too.
  * No mock data anywhere — every function hits the real API.
  */
 
 export const AUTH_URL =
-  import.meta.env.VITE_API_URL || 'https://auth.slyxup.online';
+  import.meta.env.VITE_AUTH_API_URL ||
+  import.meta.env.VITE_API_URL ||
+  'https://auth-slyxup-com.auth-0f4.workers.dev';
 export const BILLING_URL =
-  import.meta.env.VITE_BILLING_URL || 'https://billing.slyxup.online';
+  import.meta.env.VITE_BILLING_API_URL ||
+  import.meta.env.VITE_BILLING_URL ||
+  'https://billing-slyxup-com.billing-86c.workers.dev';
 
 const TOKEN_KEY = 'slyxup_session_token';
 
@@ -95,6 +99,25 @@ export async function currentUser(): Promise<ApiResult<{ user: ApiUser }>> {
   return auth('/v1/user');
 }
 
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<ApiResult<{ ok: true }>> {
+  return auth('/v1/user/password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export async function forgotPassword(
+  email: string
+): Promise<ApiResult<{ ok: true }>> {
+  return auth('/v1/verification/password/forgot', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  });
+}
+
 /* ── Projects ── */
 
 export interface Project {
@@ -134,6 +157,19 @@ export async function goLiveProject(id: string) {
   });
 }
 
+export async function setProjectEnvironment(
+  id: string,
+  environment: 'test' | 'live'
+) {
+  return auth<{ environment: 'test' | 'live' }>(
+    `/v1/projects/${id}/environment`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ environment }),
+    }
+  );
+}
+
 export async function listDomains(projectId: string) {
   return auth<{ domains: string[]; environment: string }>(
     `/v1/projects/${projectId}/domains`
@@ -164,7 +200,28 @@ export interface ProjectUser {
   role: string;
   emailVerified: boolean;
   blocked: boolean;
+  blockedReason?: string | null;
+  twoFactorEnabled: boolean;
+  authMethod: 'email_password' | 'oauth';
+  oauthProviders: string[];
+  updatedAt: string;
   createdAt: string;
+}
+
+export interface ProjectUserDetail extends Omit<ProjectUser, 'oauthProviders'> {
+  passwordEnabled: boolean;
+  profile: {
+    bio: string | null;
+    phone: string | null;
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  sessionCount: number;
+  oauthProviders: Array<{
+    provider: string;
+    createdAt: string;
+  }>;
 }
 
 export async function listProjectUsers(
@@ -176,6 +233,33 @@ export async function listProjectUsers(
   params.set('limit', String(opts?.limit ?? 20));
   params.set('offset', String(opts?.offset ?? 0));
   return auth(`/v1/projects/${projectId}/users?${params}`);
+}
+
+export async function getProjectUser(
+  projectId: string,
+  userId: string
+): Promise<ApiResult<{ user: ProjectUserDetail }>> {
+  const result = await auth<{
+    user: Omit<
+      ProjectUserDetail,
+      'profile' | 'sessionCount' | 'oauthProviders'
+    >;
+    profile: ProjectUserDetail['profile'];
+    sessionCount: number;
+    oauthProviders: ProjectUserDetail['oauthProviders'];
+  }>(`/v1/projects/${projectId}/users/${userId}`);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    data: {
+      user: {
+        ...result.data.user,
+        profile: result.data.profile,
+        sessionCount: result.data.sessionCount,
+        oauthProviders: result.data.oauthProviders,
+      },
+    },
+  };
 }
 
 export async function updateProjectUser(
@@ -293,7 +377,6 @@ export interface ApiKey {
   id: string;
   name: string;
   prefix: string;
-  environment: string;
   type: string;
   createdAt: string;
 }
@@ -309,12 +392,11 @@ export async function createKey(
   input: {
     name: string;
     type: 'publishable' | 'secret';
-    environment?: 'test' | 'live';
   }
 ): Promise<ApiResult<{ id: string; key: string; prefix: string }>> {
   return auth('/v1/keys', {
     method: 'POST',
-    body: JSON.stringify({ projectId, environment: 'live', ...input }),
+    body: JSON.stringify({ projectId, ...input }),
   });
 }
 
@@ -351,6 +433,13 @@ export interface PlanInput {
   isActive?: boolean;
   paddlePriceId?: string;
   sortOrder?: number;
+}
+
+export async function syncPlanToPaddle(planId: string) {
+  return billing<{ plan: BillingPlan }>(
+    `/v1/admin/plans/${encodeURIComponent(planId)}/sync`,
+    { method: 'POST', body: '{}' }
+  );
 }
 
 export interface Subscription {
@@ -443,13 +532,13 @@ export async function startCheckout(
   projectId?: string,
   origin?: string
 ): Promise<ApiResult<{ transactionId?: string; checkoutUrl: string }>> {
-  // Use billing domain for Paddle success redirect (approved in Paddle dashboard),
-  // forwarding the origin so the success page can send the user back.
+  // Keep Paddle's redirect on the approved Stack website; the origin is only
+  // used to return the customer to the app that started checkout.
   const params = new URLSearchParams();
   if (projectId) params.set('project_id', projectId);
   if (origin) params.set('origin', origin);
   const q = params.toString();
-  const successUrl = `https://billing.slyxup.online/${q ? `?${q}` : ''}`;
+  const successUrl = `https://stack.slyxup.com/checkout/success${q ? `?${q}` : ''}`;
   return billing('/v1/billing/checkout', {
     method: 'POST',
     body: JSON.stringify({
@@ -461,10 +550,11 @@ export async function startCheckout(
 }
 
 /** Paddle.js overlay config (client token — safe to expose). */
-export async function getBillingConfig(): Promise<
-  ApiResult<{ environment: string; clientToken: string }>
-> {
-  return billing('/v1/billing/config');
+export async function getBillingConfig(
+  projectId?: string
+): Promise<ApiResult<{ environment: string; clientToken: string }>> {
+  const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  return billing(`/v1/billing/config${query}`);
 }
 
 /** Verify a checkout transaction with Paddle (public, capability-token auth).
@@ -525,6 +615,42 @@ export async function deletePlan(
   planId: string
 ): Promise<ApiResult<{ plan: BillingPlan }>> {
   return billing(`/v1/admin/plans/${planId}`, { method: 'DELETE' });
+}
+
+export interface BillingStats {
+  subscribers: {
+    active: number;
+    trialing: number;
+    past_due: number;
+    paused: number;
+    canceled: number;
+    total: number;
+    paying: number;
+  };
+  revenue: {
+    byCurrency: Record<string, number>;
+    paidCount: number;
+    invoiceCount: number;
+  };
+  mrr: { byCurrency: Record<string, number> };
+  plans: Array<{
+    planId: string;
+    name: string;
+    amount: number;
+    currency: string;
+    interval: string;
+    isActive: boolean;
+    subscribers: number;
+  }>;
+}
+
+/** Project aggregates: subscribers by status, MRR, paid revenue, per-plan counts. */
+export async function getBillingStats(
+  projectId: string
+): Promise<ApiResult<{ stats: BillingStats }>> {
+  return billing(
+    `/v1/billing/stats?projectId=${encodeURIComponent(projectId)}`
+  );
 }
 
 export async function listInvoices(

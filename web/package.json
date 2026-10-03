@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "SlyxUp Admin — control panel + docs for the SlyxUp Stack (React 19 + Vite + Tailwind v4)",
   "type": "module",
   "scripts": {
@@ -10,8 +10,7 @@
     "preview": "vite preview --port 4173",
     "lint": "oxlint",
     "typecheck": "tsc -b --noEmit",
-    "deploy": "pnpm build && wrangler pages deploy dist --project-name=stack-slyxup-online --branch main --commit-dirty=true",
-    "deploy:preview": "pnpm build && wrangler pages deploy dist --project-name=stack-slyxup-online --branch preview --commit-dirty=true",
+    "deploy": "pnpm build && wrangler deploy --config wrangler.stack-frontend.jsonc",
     "cf:typegen": "wrangler types"
   },
   "dependencies": {
@@ -21,6 +20,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",
+    "shiki": "^4.4.3",
     "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.15"
   },

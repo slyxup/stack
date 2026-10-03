@@ -1,5 +1,26 @@
 # @slyxup/core
 
+## 3.0.1
+
+### Patch Changes
+
+- Centralize auth and billing URLs, modernize UI, fix Slyxup.online references
+
+  - Single source of truth for auth and billing URLs via packages/core/src/urls.ts
+  - All UI components now use correct slyxup.com workers.dev endpoints
+  - Modern responsive redesign across auth flows and billing primitives
+  - Only one env place needed to change auth and billing URLs platform-wide
+
+## 3.0.0
+
+### Major Changes
+
+- Add project OAuth start/callback exchange with S256 proof keys, same-tab verifier storage and second-factor challenges. Backend migrations must be deployed before enabling these methods.
+
+- Make session transport explicit and project-scoped, validate Next.js middleware sessions, connect billing hooks to their auth provider, preserve actionable SDK errors, and complete username/recovery-code sign-in. Correct currency totals and remove automatic external font loading.
+
+  Migration: legacy localStorage session tokens are no longer read. Sign in again; use memory sessions, explicitly opt into project-scoped tab storage, or use a same-origin HttpOnly server integration. Standalone billing clients must receive getToken. Middleware now accepts Request and returns Promise<Response>. See INTEGRATION_GUIDE.md and package READMEs before upgrading.
+
 ## 0.2.1
 
 ### Patch Changes
@@ -10,7 +31,7 @@
 
 ### Minor Changes
 
-- [`7cf24ff`](https://github.com/slyxup/stack/commit/7cf24ffe37fe6f2bca41fdc0281618c2db02b3ae) - Full V1 SDKs: SlyxupClient with cookie jar, React provider + hooks, Next.js server helpers/middleware, themed UI components, slyxup CLI
+- [`7cf24ff`](https://github.com/slyxup/stack/commit/7cf24ffe37fe6f2bca41fdc0281618c2db02b3ae) - Full V1 core and UI SDK release with authenticated client helpers and themed components
 
 ### Patch Changes
 

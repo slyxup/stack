@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `password_hash_version` text DEFAULT 'pbkdf2' NOT NULL;

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { randomToken, randomUUID, sha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
-import { hashPassword } from '../lib/password';
+import { CURRENT_HASH_VERSION, hashPassword } from '../lib/password';
 import {
   apiKeys,
   developers,
@@ -103,6 +103,7 @@ export async function bootstrapAdmin(
     email: input.email.toLowerCase(),
     emailVerified: true,
     passwordHash,
+    passwordHashVersion: CURRENT_HASH_VERSION,
     firstName: input.name ?? null,
     lastName: null,
     role: 'admin',
@@ -160,15 +161,15 @@ export async function bootstrapAdmin(
         .get();
       project = fetched ?? null;
       if (project) {
-        // Create initial keys (pk_test + sk_test live)
+        // Create initial keys. The project environment is the only mode switch.
         const pkSecret = randomToken(24);
-        const pkFull = `pk_live_${pkSecret}`;
+        const pkFull = `pk_${pkSecret}`;
         const pkHash = await sha256Hex(pkFull);
         await db.insert(apiKeys).values({
           id: randomUUID(),
           projectId: project.id,
           name: 'platform-publishable',
-          prefix: 'pk_live',
+          prefix: 'pk',
           hashedKey: pkHash,
           environment: 'live',
           type: 'publishable',
@@ -176,13 +177,13 @@ export async function bootstrapAdmin(
           updatedAt: now,
         });
         const skSecret = randomToken(24);
-        const skFull = `sk_live_${skSecret}`;
+        const skFull = `sk_${skSecret}`;
         const skHash = await sha256Hex(skFull);
         await db.insert(apiKeys).values({
           id: randomUUID(),
           projectId: project.id,
           name: 'platform-secret',
-          prefix: 'sk_live',
+          prefix: 'sk',
           hashedKey: skHash,
           environment: 'live',
           type: 'secret',

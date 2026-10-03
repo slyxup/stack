@@ -3,8 +3,14 @@ import { Hono } from 'hono';
 import { createBetterAuth } from './lib/better-auth';
 import { getSessionToken } from './lib/cookies';
 import { getDb } from './lib/db';
-import { checkRateLimit } from './lib/rate-limit';
+import {
+  checkEndpointRateLimit,
+  checkRateLimit,
+  resolveEndpoint,
+} from './lib/rate-limit';
+import { log } from './lib/logger';
 import { projects } from './lib/schema';
+import { csrfMiddleware } from './middleware/csrf';
 import adminRoute from './routes/admin';
 import auditRoute from './routes/audit';
 import auth from './routes/auth';
@@ -21,13 +27,12 @@ import { getSession } from './services/auth.service';
 import * as ProjectService from './services/project.service';
 
 // SlyxUp Auth Worker — CF Workers + D1 + KV
-// Deploy: https://auth.slyxup.online (wrangler deploy)
+// Deploy: `wrangler deploy` (URL comes from your Cloudflare account)
 // API: /v1/*  Hosted Pages: /sign-in etc.
-// NOTE: Billing lives ONLY in billing.slyxup.online (separate Worker + D1).
+// NOTE: Billing lives ONLY in the separate Billing Worker + D1 (see billing/).
 
 type Bindings = {
   DB: D1Database;
-  BILLING_DB: D1Database;
   KV: KVNamespace;
   SESSION_SECRET: string;
   ENCRYPTION_KEY: string;
@@ -53,21 +58,26 @@ app.use('*', async (c, next) => {
   const corsHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key, X-Bootstrap-Token',
+      'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key, X-Bootstrap-Token, X-CSRF-Token',
     'Access-Control-Max-Age': '86400',
   };
 
   let allow =
     !!origin &&
-    (allowed.includes(origin) || allowed.includes('*') || isLocalhost);
+    (allowed.includes(origin) ||
+      origin === new URL(c.req.url).origin ||
+      isLocalhost ||
+      origin.endsWith('.pages.dev') ||
+      origin.endsWith('.slyxup.com'));
 
-  // Dynamic: custom domains registered on LIVE projects (KV-cached 60s).
+  // Dynamic: custom domains registered on projects (KV-cached 60s). Test
+  // projects need CORS too so their Sandbox auth/payment flow can be tested.
   // Reads BOTH the new project_domains table (scalable) and the legacy
   // projects.allowedDomains JSON for backward compat.
   if (!allow && origin.startsWith('https://')) {
     try {
       let hosts: string[] | null = null;
-      const cached = await c.env.KV.get('cors_live_domains');
+      const cached = await c.env.KV.get('cors_project_domains_v2');
       if (cached) {
         hosts = JSON.parse(cached) as string[];
       } else {
@@ -75,8 +85,7 @@ app.use('*', async (c, next) => {
         const jsonRows = await db
           .select({ domains: projects.allowedDomains })
           .from(projects)
-          .where(eq(projects.environment, 'live'))
-          .all();
+           .all();
         const jsonHosts = jsonRows.flatMap((r) =>
           Array.isArray(r.domains) ? (r.domains as string[]) : []
         );
@@ -88,14 +97,13 @@ app.use('*', async (c, next) => {
             .select({ domain: projectDomains.domain })
             .from(projectDomains)
             .innerJoin(projects, eq(projectDomains.projectId, projects.id))
-            .where(eq(projects.environment, 'live'))
-            .all();
+             .all();
           tableHosts = tRows.map((r) => r.domain);
         } catch {
           /* table may not exist yet before migration 0007 */
         }
         hosts = [...new Set([...jsonHosts, ...tableHosts])];
-        await c.env.KV.put('cors_live_domains', JSON.stringify(hosts), {
+        await c.env.KV.put('cors_project_domains_v2', JSON.stringify(hosts), {
           expirationTtl: 60,
         });
       }
@@ -107,9 +115,7 @@ app.use('*', async (c, next) => {
         );
       }
     } catch (e) {
-      console.error(
-        JSON.stringify({ evt: 'cors_domain_lookup_failed', msg: String(e) })
-      );
+      log.warn('cors_domain_lookup_failed', { msg: String(e) });
     }
   }
 
@@ -121,57 +127,36 @@ app.use('*', async (c, next) => {
   if (c.req.method === 'OPTIONS') {
     return new Response('', { status: 204, headers: corsHeaders });
   }
+  if (origin && !allow && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    return c.json({ ok: false, error: 'Origin is not allowed' }, 403);
+  }
   await next();
   for (const [k, v] of Object.entries(corsHeaders)) c.res.headers.set(k, v);
 });
 
-// Rate limiting on sensitive endpoints
-const rateLimited = [
-  '/v1/auth/*',
-  '/v1/admin/*',
-  '/v1/verification/*',
-  '/v1/setup/*',
-  '/v1/session',
-];
-for (const pattern of rateLimited) {
-  app.use(pattern, async (c, next) => {
-    const ip =
-      c.req.header('CF-Connecting-IP') ??
-      c.req.header('X-Forwarded-For') ??
-      'unknown';
-    const rl = await checkRateLimit(c.env.KV, `auth:${ip}`, 20, 60);
-    if (!rl.allowed) {
-      return new Response(
-        JSON.stringify({ ok: false, error: 'Too many requests' }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(rl.resetIn),
-          },
-        }
-      );
-    }
-    await next();
-  });
-}
-// OAuth initiation only (callback is excluded — it's server-to-server from provider)
-app.use('/v1/oauth/*', async (c, next) => {
-  if (c.req.path.includes('/callback/')) return next();
+// CSRF protection on all mutation routes (after CORS, before rate limit).
+// Safe methods mint the cookie; mutations require the X-CSRF-Token header.
+app.use('/v1/*', csrfMiddleware);
+
+// Per-endpoint rate limiting (Day 3). One middleware maps (method, path) →
+// budget from RATE_LIMITS, so login/signup stay strict while reads stay generous.
+app.use('/v1/*', async (c, next) => {
   const ip =
     c.req.header('CF-Connecting-IP') ??
     c.req.header('X-Forwarded-For') ??
     'unknown';
-  const rl = await checkRateLimit(c.env.KV, `auth:${ip}`, 20, 60);
+  const endpoint = resolveEndpoint(c.req.method, c.req.path);
+  const rl = await checkEndpointRateLimit(c.env.KV, endpoint, ip);
   if (!rl.allowed) {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Too many requests' }),
+    return c.json(
+      {
+        ok: false,
+        error: 'TOO_MANY_REQUESTS',
+        message: 'Too many requests. Try again later.',
+      },
       {
         status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': String(rl.resetIn),
-        },
+        headers: { 'Retry-After': String(rl.resetIn) },
       }
     );
   }
@@ -181,13 +166,24 @@ app.use('/v1/oauth/*', async (c, next) => {
 app.get('/health', (c) =>
   c.json({
     ok: true,
-    service: 'auth.slyxup.online',
+    service: 'auth.slyxup.com',
     runtime: 'cloudflare',
   })
 );
 app.get('/v1/health', (c) =>
   c.json({ ok: true, db: !!c.env.DB, betterAuth: true })
 );
+
+// Public non-secret project metadata used by billing to select Paddle mode.
+app.get('/v1/project-environment/:id', async (c) => {
+  const project = await getDb(c.env)
+    .select({ environment: projects.environment })
+    .from(projects)
+    .where(eq(projects.id, c.req.param('id')))
+    .get();
+  if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+  return c.json({ ok: true, environment: project.environment });
+});
 
 // Better-auth handler (audited, Argon2id, 2FA, admin) — mounted at /api/auth/*
 app.all('/api/auth/*', async (c) => {
@@ -227,28 +223,6 @@ async function handleKeyResolve(
   return c.json({ ok: true, projectId: info.projectId });
 }
 
-// Rate-limit key resolution (prevent enumeration / DB-DoS)
-app.use('/v1/key/resolve', async (c, next) => {
-  const ip =
-    c.req.header('CF-Connecting-IP') ??
-    c.req.header('X-Forwarded-For') ??
-    'unknown';
-  const rl = await checkRateLimit(c.env.KV, `key_resolve:${ip}`, 30, 60);
-  if (!rl.allowed) {
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Too many requests' }),
-      {
-        status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': String(rl.resetIn),
-        },
-      }
-    );
-  }
-  await next();
-});
-
 app.get('/v1/key/resolve', async (c) => {
   const key = c.req.query('key');
   return handleKeyResolve(c, key);
@@ -272,8 +246,26 @@ app.post('/v1/key/resolve', async (c) => {
 app.get('/v1/session', async (c) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'No session' }, 401);
-  const data = await getSession(c.env, token);
+  const data = await getSession(c.env, token, {
+    ip: c.req.header('CF-Connecting-IP') ?? null,
+    userAgent: c.req.header('User-Agent') ?? null,
+  });
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
+  const key = c.req.header('X-Publishable-Key');
+  if (key) {
+    const project = await ProjectService.verifyApiKey(c.env, key);
+    if (
+      !project ||
+      project.type !== 'publishable' ||
+      project.projectId !== data.session.projectId
+    ) {
+      return c.json(
+        { ok: false, error: 'Session does not belong to this project' },
+        403
+      );
+    }
+  }
+  c.header('Cache-Control', 'no-store');
   return c.json({
     ok: true,
     user: {

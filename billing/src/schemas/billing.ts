@@ -5,6 +5,8 @@ export const planCreateSchema = z.object({
   projectId: z.string().min(1),
   name: z.string().min(1).max(100),
   paddlePriceId: z.string().max(100).default(''),
+  paddleTestPriceId: z.string().max(100).optional(),
+  paddleLivePriceId: z.string().max(100).optional(),
   amount: z.number().int().min(0), // cents
   currency: z.string().length(3).default('USD'),
   interval: z.enum(['month', 'year']).default('month'),
@@ -18,6 +20,16 @@ export const planCreateSchema = z.object({
 export const planUpdateSchema = planCreateSchema
   .omit({ projectId: true })
   .partial();
+
+// ── Refunds (approval-based, 7-day window, full-amount only) ──
+export const refundRequestSchema = z.object({
+  invoiceId: z.string().min(1).max(100),
+  reason: z.string().min(10, 'Please explain in at least 10 characters').max(1000),
+});
+
+export const refundDecisionSchema = z.object({
+  note: z.string().max(1000).optional(),
+});
 
 // ── Checkout ──
 export const checkoutSchema = z.object({

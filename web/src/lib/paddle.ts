@@ -46,11 +46,11 @@ function loadScript(): Promise<void> {
 }
 
 /** Idempotent: load script + fetch client token + initialize. */
-export async function ensurePaddle(): Promise<void> {
+export async function ensurePaddle(projectId?: string): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     await loadScript();
-    const r = await getBillingConfig();
+    const r = await getBillingConfig(projectId);
     if (!r.ok) throw new Error(r.error);
     if (!window.Paddle)
       throw new Error('Paddle.js loaded but Paddle global missing');
