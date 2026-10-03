@@ -11,15 +11,15 @@ import {
   webhookEvents,
 } from '../lib/schema';
 import {
-  type PaddleConfig,
-  getTransaction,
-  verifyWebhookSignature,
-} from '../services/paddle.service';
-import {
   getPaddleConfig,
   getPaddleWebhookSecrets,
   resolveProjectEnvironment,
 } from '../services/paddle-config';
+import {
+  type PaddleConfig,
+  getTransaction,
+  verifyWebhookSignature,
+} from '../services/paddle.service';
 
 // ── POST /v1/webhooks/paddle — Paddle Billing notifications ──
 // Configure in Paddle Dashboard > Developer tools > Notifications.
@@ -536,8 +536,38 @@ app.post('/paddle', async (c) => {
   // Only ack success. processedAt is set after processing (B7).
   try {
     if (event.event_type.startsWith('subscription.')) {
-      const projectId = (event.data as unknown as SubData).custom_data?.projectId;
-      if (!projectId) throw new Error('Subscription project attribution missing');
+      const subData = event.data as unknown as SubData;
+      // Preferred: checkout attribution. Fallback: stored subscription, then
+      // plan (recurring/ migrated events carry no custom_data). Throw only
+      // when nothing resolves — never process an unattributed subscription.
+      let projectId = subData.custom_data?.projectId ?? null;
+      if (!projectId && typeof subData.id === 'string') {
+        const stored = await db
+          .select({ projectId: subscriptions.projectId })
+          .from(subscriptions)
+          .where(eq(subscriptions.paddleSubscriptionId, subData.id))
+          .get();
+        projectId = stored?.projectId ?? null;
+      }
+      if (!projectId) {
+        const priceId = subData.items?.[0]?.price?.id;
+        if (priceId) {
+          const planRow = await db
+            .select({ projectId: plans.projectId })
+            .from(plans)
+            .where(
+              or(
+                eq(plans.paddlePriceId, priceId),
+                eq(plans.paddleTestPriceId, priceId),
+                eq(plans.paddleLivePriceId, priceId)
+              )
+            )
+            .get();
+          projectId = planRow?.projectId ?? null;
+        }
+      }
+      if (!projectId)
+        throw new Error('Subscription project attribution missing');
       const config = getPaddleConfig(
         c.env,
         await resolveProjectEnvironment(c.env, projectId)

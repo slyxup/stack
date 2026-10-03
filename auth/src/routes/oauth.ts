@@ -248,14 +248,12 @@ oauth.post('/exchange', async (c) => {
   }
   const sessionToken = randomToken(32);
   const expiresAt = new Date(Date.now() + 7 * 86400000);
-  await db
-    .insert(sessions)
-    .values({
-      userId: user.id,
-      projectId: user.projectId,
-      token: sessionToken,
-      expiresAt,
-    });
+  await db.insert(sessions).values({
+    userId: user.id,
+    projectId: user.projectId,
+    token: sessionToken,
+    expiresAt,
+  });
   if (!user.projectId) setSessionCookie(c, sessionToken, expiresAt);
   return c.json({
     ok: true,
@@ -368,25 +366,41 @@ oauth.get('/callback/:provider', async (c) => {
   const base = c.env.HOSTED_AUTH_URL ?? c.env.APP_URL;
   const redirectUri = `${base}/v1/oauth/callback/${provider}`;
 
+  // Distinct machine-readable codes (missing_code, invalid_state,
+  // browser_mismatch, used_state) so clients can diagnose; the runtime
+  // release test and INTEGRATION_GUIDE depend on them. Redirects go back to
+  // the app's redirectUrl (safe-allowlisted) instead of hosted /sign-in.
   if (!code || !state) {
-    const fallback = c.req.query('redirect_url') ? safeRedirect(c.req.query('redirect_url'), c.env.APP_URL, c.env) : c.env.APP_URL;
-    return c.redirect(`${fallback}${fallback.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+    const fallback = c.req.query('redirect_url')
+      ? safeRedirect(c.req.query('redirect_url'), c.env.APP_URL, c.env)
+      : c.env.APP_URL;
+    return c.redirect(
+      `${fallback}${fallback.includes('?') ? '&' : '?'}error=missing_code`
+    );
   }
   const pending = await readChallenge(c.env, 'oauth_state', state);
   if (!pending) {
     const fallback = c.env.APP_URL;
-    return c.redirect(`${fallback}${fallback.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+    return c.redirect(
+      `${fallback}${fallback.includes('?') ? '&' : '?'}error=invalid_state`
+    );
   }
   const cookieName = `slyxup_oauth_${state.slice(0, 16)}`;
   if (getCookie(c, cookieName) !== pending.payload.browserBinding) {
-    const redirectUrl = (pending.payload as { redirectUrl?: string }).redirectUrl;
+    const redirectUrl = (pending.payload as { redirectUrl?: string })
+      .redirectUrl;
     const dest = safeRedirect(redirectUrl, c.env.APP_URL, c.env);
-    return c.redirect(`${dest}${dest.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+    return c.redirect(
+      `${dest}${dest.includes('?') ? '&' : '?'}error=browser_mismatch`
+    );
   }
   if (!(await consumeChallenge(c.env, 'oauth_state', state))) {
-    const redirectUrl = (pending.payload as { redirectUrl?: string }).redirectUrl;
+    const redirectUrl = (pending.payload as { redirectUrl?: string })
+      .redirectUrl;
     const dest = safeRedirect(redirectUrl, c.env.APP_URL, c.env);
-    return c.redirect(`${dest}${dest.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+    return c.redirect(
+      `${dest}${dest.includes('?') ? '&' : '?'}error=used_state`
+    );
   }
   deleteCookie(c, cookieName, { path: '/v1/oauth' });
   const stateObj = pending.payload as {
@@ -581,9 +595,14 @@ oauth.get('/callback/:provider', async (c) => {
         stack: e instanceof Error ? e.stack : undefined,
       })
     );
-    const pendingState = pending?.payload as { redirectUrl?: string } | undefined;
-    const maybeState = pendingState || (typeof stateObj !== 'undefined' ? stateObj : undefined);
-    const dest = maybeState?.redirectUrl ? safeRedirect(maybeState.redirectUrl, c.env.APP_URL, c.env) : c.env.APP_URL;
+    const pendingState = pending?.payload as
+      | { redirectUrl?: string }
+      | undefined;
+    const maybeState =
+      pendingState || (typeof stateObj !== 'undefined' ? stateObj : undefined);
+    const dest = maybeState?.redirectUrl
+      ? safeRedirect(maybeState.redirectUrl, c.env.APP_URL, c.env)
+      : c.env.APP_URL;
     const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(
       `${dest}${joiner}error=${encodeURIComponent(msg || 'OAuth sign-in failed. Please try again.')}`
