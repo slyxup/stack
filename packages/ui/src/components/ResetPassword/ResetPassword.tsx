@@ -1,5 +1,5 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { DEFAULT_AUTH_API_URL } from '@slyxup/core';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import {
   AlertIcon,
   ArrowLeftIcon,
@@ -36,6 +36,7 @@ export function ResetPassword({
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: refocuses the title when the view flips to success.
   useEffect(() => {
     titleRef.current?.focus();
   }, [done]);

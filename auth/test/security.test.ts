@@ -20,7 +20,7 @@ describe('security: CSRF bypass attempts', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Cookie: 'slyxup_csrf=abc123',
+        Cookie: 'slyxup_session=sess; slyxup_csrf=abc123',
         'X-CSRF-Token': '',
       },
       body: '{}',
@@ -37,7 +37,7 @@ describe('security: CSRF bypass attempts', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Cookie: 'slyxup_csrf=cookie-value-xyz',
+        Cookie: 'slyxup_session=sess; slyxup_csrf=cookie-value-xyz',
         'x-csrf-token': 'wrong-value',
       },
       body: '{}',
@@ -45,8 +45,9 @@ describe('security: CSRF bypass attempts', () => {
     expect(res.status).toBe(403);
   });
 
-  it('publishable keys (pk_) are NOT exempt — only secret keys are', async () => {
-    const res = await server().request('/v1/user', {
+  it('publishable keys (pk_) do not bypass enforcement when a session cookie is present', async () => {
+    // No session cookie → Bearer-only request is not CSRF-able → passes.
+    const cookieless = await server().request('/v1/user', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -54,7 +55,18 @@ describe('security: CSRF bypass attempts', () => {
       },
       body: '{}',
     });
-    expect(res.status).toBe(403);
+    expect(cookieless.status).toBe(200);
+    // Session cookie present → CSRF applies even with a pk_ Bearer header.
+    const withCookie = await server().request('/v1/user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: 'slyxup_session=sess',
+        Authorization: 'Bearer pk_test123',
+      },
+      body: '{}',
+    });
+    expect(withCookie.status).toBe(403);
   });
 
   it('X-Bootstrap-Token exemption exists but matches server behavior', async () => {

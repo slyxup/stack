@@ -1109,6 +1109,7 @@ export const CSS = `
 }
 .slx-info-box.is-success svg { color: var(--slx-success); }
 .slx-success-text {
+  display: block;
   font-size: 13px; line-height: 1.5; color: var(--slx-ink);
   background: color-mix(in srgb, var(--slx-success) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--slx-success) 28%, transparent);

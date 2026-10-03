@@ -1,5 +1,5 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { DEFAULT_AUTH_API_URL } from '@slyxup/core';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import {
   AlertIcon,
   ArrowLeftIcon,
@@ -46,6 +46,7 @@ export function EmailVerification({
   const [cooldown, setCooldown] = useState(0);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: refocuses the title when verification state changes.
   useEffect(() => {
     titleRef.current?.focus();
   }, [status]);
@@ -126,7 +127,7 @@ export function EmailVerification({
         <div className="slx-state-icon is-loading" aria-hidden="true">
           <span className="slx-spinner-lg" />
         </div>
-        <p className="slx-eyebrow">Email verification</p>
+        <span className="slx-eyebrow">Email verification</span>
         <h1 className="slx-title" ref={titleRef} tabIndex={-1}>
           Verifying your email…
         </h1>
@@ -147,9 +148,17 @@ export function EmailVerification({
         >
           <CheckIcon />
         </div>
-        <p className="slx-eyebrow" style={{ marginLeft: 'auto', marginRight: 'auto', display: 'flex', width: 'fit-content' }}>
+        <span
+          className="slx-eyebrow"
+          style={{
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            display: 'flex',
+            width: 'fit-content',
+          }}
+        >
           Verified
-        </p>
+        </span>
         <h1
           className="slx-title slx-title-centered"
           ref={titleRef}
@@ -176,7 +185,7 @@ export function EmailVerification({
         <div className="slx-state-icon is-error" aria-hidden="true">
           <AlertIcon />
         </div>
-        <p className="slx-eyebrow">Email verification</p>
+        <span className="slx-eyebrow">Email verification</span>
         <h1 className="slx-title" ref={titleRef} tabIndex={-1}>
           That link didn&apos;t work
         </h1>
@@ -228,19 +237,14 @@ export function EmailVerification({
       <div className="slx-state-icon" aria-hidden="true">
         <MailIcon />
       </div>
-      <p className="slx-eyebrow">Email verification</p>
+      <span className="slx-eyebrow">Email verification</span>
       <h1 className="slx-title" ref={titleRef} tabIndex={-1}>
         Check your inbox
       </h1>
       <p className="slx-subtitle">
-        Enter your account email and we&apos;ll send you a secure sign-in
-        link.
+        Enter your account email and we&apos;ll send you a secure sign-in link.
       </p>
-      {message && (
-        <p className="slx-success-text" role="status">
-          {message}
-        </p>
-      )}
+      {message && <output className="slx-success-text">{message}</output>}
       <form onSubmit={resend}>
         <div className="slx-field">
           <label className="slx-label" htmlFor="slx-verify-email2">
@@ -258,7 +262,11 @@ export function EmailVerification({
           />
           <p className="slx-hint">We&apos;ll never share your email.</p>
         </div>
-        <button className="slx-btn" type="submit" disabled={busy || cooldown > 0}>
+        <button
+          className="slx-btn"
+          type="submit"
+          disabled={busy || cooldown > 0}
+        >
           {busy && <span className="slx-spinner" aria-hidden="true" />}
           {busy
             ? 'Sending…'
@@ -270,8 +278,8 @@ export function EmailVerification({
       <div className="slx-info-box">
         <ShieldCheckIcon />
         <span>
-          The link expires in 24 hours and works once. Can&apos;t find it?
-          Check spam, then try resending.
+          The link expires in 24 hours and works once. Can&apos;t find it? Check
+          spam, then try resending.
         </span>
       </div>
       <div className="slx-info-box">

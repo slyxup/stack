@@ -3,11 +3,11 @@ import { and, desc, eq, gte } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { getDb } from '../lib/db';
+import { checkRateLimit } from '../lib/rate-limit';
 import { invoices, refundRequests, subscriptions } from '../lib/schema';
 import { isoOrNull } from '../lib/serialize';
 import type { Env } from '../middleware/auth';
 import { requireAdmin, requireUser } from '../middleware/auth';
-import { checkRateLimit } from '../lib/rate-limit';
 import { refundDecisionSchema, refundRequestSchema } from '../schemas/billing';
 import {
   getPaddleConfig,
@@ -61,110 +61,121 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 app.use('*', requireUser);
 
 /** POST / — request a refund for one of your paid invoices (7-day window). */
-app.post('/', createLimit, zValidator('json', refundRequestSchema), async (c) => {
-  const userId = c.get('userId');
-  const { invoiceId, reason } = c.req.valid('json');
-  const db = getDb(c.env);
+app.post(
+  '/',
+  createLimit,
+  zValidator('json', refundRequestSchema),
+  async (c) => {
+    const userId = c.get('userId');
+    const { invoiceId, reason } = c.req.valid('json');
+    const db = getDb(c.env);
 
-  // Ownership first — unknown or another user's invoice is a flat 404 (no oracle).
-  const inv = await db
-    .select()
-    .from(invoices)
-    .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId)))
-    .get();
-  if (!inv) return c.json({ ok: false, error: 'Invoice not found' }, 404);
+    // Ownership first — unknown or another user's invoice is a flat 404 (no oracle).
+    const inv = await db
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId)))
+      .get();
+    if (!inv) return c.json({ ok: false, error: 'Invoice not found' }, 404);
 
-  if (inv.status !== 'paid')
-    return c.json(
-      { ok: false, error: 'Only paid invoices can be refunded' },
-      400
-    );
+    if (inv.status !== 'paid')
+      return c.json(
+        { ok: false, error: 'Only paid invoices can be refunded' },
+        400
+      );
 
-  const billedMs = inv.billedAt ? inv.billedAt.getTime() : NaN;
-  if (!Number.isFinite(billedMs))
-    return c.json(
-      { ok: false, error: 'Invoice has no billing date — contact support' },
-      400
-    );
-  const ageDays = (Date.now() - billedMs) / 86_400_000;
-  if (ageDays > REFUND_WINDOW_DAYS)
-    return c.json(
-      {
-        ok: false,
-        error: `Refunds are only available within ${REFUND_WINDOW_DAYS} days of billing (this charge is ${Math.floor(ageDays)} days old)`,
-      },
-      400
-    );
+    const billedMs = inv.billedAt ? inv.billedAt.getTime() : Number.NaN;
+    if (!Number.isFinite(billedMs))
+      return c.json(
+        { ok: false, error: 'Invoice has no billing date — contact support' },
+        400
+      );
+    const ageDays = (Date.now() - billedMs) / 86_400_000;
+    if (ageDays > REFUND_WINDOW_DAYS)
+      return c.json(
+        {
+          ok: false,
+          error: `Refunds are only available within ${REFUND_WINDOW_DAYS} days of billing (this charge is ${Math.floor(ageDays)} days old)`,
+        },
+        400
+      );
 
-  // One live request per invoice (rejected/failed may be re-filed once reviewed).
-  const existing = await db
-    .select({ id: refundRequests.id, status: refundRequests.status })
-    .from(refundRequests)
-    .where(eq(refundRequests.invoiceId, inv.id))
-    .all();
-  if (existing.some((r) => r.status === 'pending' || r.status === 'approved'))
-    return c.json(
-      { ok: false, error: 'A refund request for this invoice is already under review' },
-      409
-    );
-  if (existing.some((r) => r.status === 'completed'))
-    return c.json({ ok: false, error: 'This invoice was already refunded' }, 409);
+    // One live request per invoice (rejected/failed may be re-filed once reviewed).
+    const existing = await db
+      .select({ id: refundRequests.id, status: refundRequests.status })
+      .from(refundRequests)
+      .where(eq(refundRequests.invoiceId, inv.id))
+      .all();
+    if (existing.some((r) => r.status === 'pending' || r.status === 'approved'))
+      return c.json(
+        {
+          ok: false,
+          error: 'A refund request for this invoice is already under review',
+        },
+        409
+      );
+    if (existing.some((r) => r.status === 'completed'))
+      return c.json(
+        { ok: false, error: 'This invoice was already refunded' },
+        409
+      );
 
-  // Abuse guard: max N requests per rolling 90 days.
-  const windowStart = new Date(Date.now() - 90 * 86_400_000);
-  const recent = await db
-    .select({ id: refundRequests.id })
-    .from(refundRequests)
-    .where(
-      and(
-        eq(refundRequests.userId, userId),
-        gte(refundRequests.requestedAt, windowStart)
+    // Abuse guard: max N requests per rolling 90 days.
+    const windowStart = new Date(Date.now() - 90 * 86_400_000);
+    const recent = await db
+      .select({ id: refundRequests.id })
+      .from(refundRequests)
+      .where(
+        and(
+          eq(refundRequests.userId, userId),
+          gte(refundRequests.requestedAt, windowStart)
+        )
       )
-    )
-    .all();
-  if (recent.length >= REFUND_MAX_REQUESTS_PER_90D)
+      .all();
+    if (recent.length >= REFUND_MAX_REQUESTS_PER_90D)
+      return c.json(
+        {
+          ok: false,
+          error: `Refund request limit reached (${REFUND_MAX_REQUESTS_PER_90D} per 90 days) — contact support for manual review`,
+        },
+        429
+      );
+
+    const created = await db
+      .insert(refundRequests)
+      .values({
+        userId,
+        projectId: inv.projectId,
+        invoiceId: inv.id,
+        paddleTransactionId: inv.paddleTransactionId,
+        amount: inv.amount,
+        currency: inv.currency,
+        reason: reason.trim(),
+        status: 'pending',
+      })
+      .returning()
+      .get();
+
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        msg: 'refund_requested',
+        refundId: created.id,
+        userId,
+        invoiceId: inv.id,
+        amount: inv.amount,
+      })
+    );
     return c.json(
       {
-        ok: false,
-        error: `Refund request limit reached (${REFUND_MAX_REQUESTS_PER_90D} per 90 days) — contact support for manual review`,
+        ok: true,
+        refund: serialize(created),
+        reviewEta: 'within 5 business days',
       },
-      429
+      201
     );
-
-  const created = await db
-    .insert(refundRequests)
-    .values({
-      userId,
-      projectId: inv.projectId,
-      invoiceId: inv.id,
-      paddleTransactionId: inv.paddleTransactionId,
-      amount: inv.amount,
-      currency: inv.currency,
-      reason: reason.trim(),
-      status: 'pending',
-    })
-    .returning()
-    .get();
-
-  console.log(
-    JSON.stringify({
-      level: 'info',
-      msg: 'refund_requested',
-      refundId: created.id,
-      userId,
-      invoiceId: inv.id,
-      amount: inv.amount,
-    })
-  );
-  return c.json(
-    {
-      ok: true,
-      refund: serialize(created),
-      reviewEta: 'within 5 business days',
-    },
-    201
-  );
-});
+  }
+);
 
 /** GET / — your own refund requests (newest first). */
 app.get('/', async (c) => {
@@ -186,7 +197,10 @@ export default app;
 // Same posture as /v1/admin/plans (secret bearer or valid session).
 // Self-approval is blocked: decidedBy must differ from the requester,
 // so a session user can never approve their own refund.
-export const adminRefunds = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+export const adminRefunds = new Hono<{
+  Bindings: Bindings;
+  Variables: Variables;
+}>();
 adminRefunds.use('*', requireAdmin);
 
 /** GET /v1/admin/refunds?status=&projectId= — review queue. */
@@ -203,9 +217,7 @@ adminRefunds.get('/', async (c) => {
     .from(refundRequests)
     .where(
       and(
-        status
-          ? eq(refundRequests.status, status as 'pending')
-          : undefined,
+        status ? eq(refundRequests.status, status as 'pending') : undefined,
         projectId ? eq(refundRequests.projectId, projectId) : undefined
       )
     )
@@ -224,14 +236,16 @@ adminRefunds.post(
     const { note } = c.req.valid('json');
     const db = getDb(c.env);
     const decidedBy =
-      c.get('userId') ?? `bearer:${(c.req.header('Authorization') ?? '').slice(0, 12)}`;
+      c.get('userId') ??
+      `bearer:${(c.req.header('Authorization') ?? '').slice(0, 12)}`;
 
     const req = await db
       .select()
       .from(refundRequests)
       .where(eq(refundRequests.id, id))
       .get();
-    if (!req) return c.json({ ok: false, error: 'Refund request not found' }, 404);
+    if (!req)
+      return c.json({ ok: false, error: 'Refund request not found' }, 404);
     if (req.status !== 'pending')
       return c.json(
         { ok: false, error: `Request is already ${req.status}` },
@@ -239,7 +253,10 @@ adminRefunds.post(
       );
     if (req.userId === decidedBy)
       return c.json(
-        { ok: false, error: 'Self-approval is not allowed — another admin must review' },
+        {
+          ok: false,
+          error: 'Self-approval is not allowed — another admin must review',
+        },
         403
       );
 
@@ -260,7 +277,12 @@ adminRefunds.post(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(
-        JSON.stringify({ level: 'error', msg: 'refund_paddle_failed', refundId: id, err: msg })
+        JSON.stringify({
+          level: 'error',
+          msg: 'refund_paddle_failed',
+          refundId: id,
+          err: msg,
+        })
       );
       await db
         .update(refundRequests)
@@ -272,10 +294,7 @@ adminRefunds.post(
           updatedAt: new Date(),
         })
         .where(eq(refundRequests.id, id));
-      return c.json(
-        { ok: false, error: `Paddle refund failed: ${msg}` },
-        502
-      );
+      return c.json({ ok: false, error: `Paddle refund failed: ${msg}` }, 502);
     }
 
     // 2) Record approval + completion (Paddle adjustments apply immediately;
@@ -348,7 +367,11 @@ adminRefunds.post(
         subscriptionCanceled,
       })
     );
-    return c.json({ ok: true, refund: serialize(updated), subscriptionCanceled });
+    return c.json({
+      ok: true,
+      refund: serialize(updated),
+      subscriptionCanceled,
+    });
   }
 );
 
@@ -366,14 +389,16 @@ adminRefunds.post(
       );
     const db = getDb(c.env);
     const decidedBy =
-      c.get('userId') ?? `bearer:${(c.req.header('Authorization') ?? '').slice(0, 12)}`;
+      c.get('userId') ??
+      `bearer:${(c.req.header('Authorization') ?? '').slice(0, 12)}`;
 
     const req = await db
       .select()
       .from(refundRequests)
       .where(eq(refundRequests.id, id))
       .get();
-    if (!req) return c.json({ ok: false, error: 'Refund request not found' }, 404);
+    if (!req)
+      return c.json({ ok: false, error: 'Refund request not found' }, 404);
     if (req.status !== 'pending')
       return c.json(
         { ok: false, error: `Request is already ${req.status}` },
@@ -381,7 +406,10 @@ adminRefunds.post(
       );
     if (req.userId === decidedBy)
       return c.json(
-        { ok: false, error: 'Self-review is not allowed — another admin must decide' },
+        {
+          ok: false,
+          error: 'Self-review is not allowed — another admin must decide',
+        },
         403
       );
 

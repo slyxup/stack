@@ -4,9 +4,7 @@ export const SITE_URL = 'https://stack.slyxup.com';
 const SITE_NAME = 'SlyxUp Stack';
 
 function setMeta(attr: 'name' | 'property', key: string, content: string) {
-  let el = document.querySelector<HTMLMetaElement>(
-    `meta[${attr}="${key}"]`
-  );
+  let el = document.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
   if (!el) {
     el = document.createElement('meta');
     el.setAttribute(attr, key);
@@ -33,13 +31,13 @@ export function Seo({
 }) {
   useEffect(() => {
     const url = `${SITE_URL}${path}`;
-    const fullTitle =
-      path === '/' ? title : `${title} — ${SITE_NAME}`;
+    const fullTitle = path === '/' ? title : `${title} — ${SITE_NAME}`;
     document.title = fullTitle;
     setMeta('name', 'description', description);
     setMeta('name', 'robots', robots);
-    let canon =
-      document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    let canon = document.querySelector<HTMLLinkElement>(
+      'link[rel="canonical"]'
+    );
     if (!canon) {
       canon = document.createElement('link');
       canon.setAttribute('rel', 'canonical');
@@ -64,7 +62,7 @@ export function Seo({
       script.textContent = JSON.stringify(jsonLd);
       document.head.appendChild(script);
     }
-  }, [title, description, path, type, jsonLd]);
+  }, [title, description, path, type, jsonLd, robots]);
 
   return null;
 }
@@ -105,6 +103,10 @@ export function articleJsonLd(opts: {
     headline: opts.title,
     description: opts.description,
     url: `${SITE_URL}${opts.path}`,
-    author: { '@type': 'Person', name: 'Yasir Hameed', url: 'https://ysr-hameed.github.io/' },
+    author: {
+      '@type': 'Person',
+      name: 'Yasir Hameed',
+      url: 'https://ysr-hameed.github.io/',
+    },
   };
 }

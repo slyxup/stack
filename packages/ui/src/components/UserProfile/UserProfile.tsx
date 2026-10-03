@@ -270,7 +270,8 @@ export function UserProfile({
     setPlansLoading(true);
     try {
       const rawApiUrl =
-        (client as unknown as { apiUrl?: string }).apiUrl ?? DEFAULT_AUTH_API_URL;
+        (client as unknown as { apiUrl?: string }).apiUrl ??
+        DEFAULT_AUTH_API_URL;
       const billingUrl = (() => {
         // Localhost: swap port 8787 → 8788 (auth → billing)
         if (/^https?:\/\/localhost(:\d+)?$/.test(rawApiUrl)) {
@@ -431,7 +432,7 @@ export function UserProfile({
       setBillingLoading(false);
       setPlansLoading(false);
     }
-  }, [client, user]);
+  }, [client, user, billingApiUrl]);
 
   useEffect(() => {
     if (tab === 'security') void loadSessions(0);
@@ -644,7 +645,8 @@ export function UserProfile({
       // Always use Paddle.js overlay checkout
       // authApiUrl is available via client apiUrl
       const rawApiUrl =
-        (client as unknown as { apiUrl?: string }).apiUrl ?? DEFAULT_AUTH_API_URL;
+        (client as unknown as { apiUrl?: string }).apiUrl ??
+        DEFAULT_AUTH_API_URL;
       await initPaddle(rawApiUrl);
       // Pass custom data so the billing webhook can attribute the created
       // subscription to this user + project + plan (Paddle copies custom_data

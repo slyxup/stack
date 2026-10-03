@@ -31,6 +31,7 @@ export function ForgotPassword({
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run trigger: refocuses the title when the view flips to success.
   useEffect(() => {
     titleRef.current?.focus();
   }, [sent]);
@@ -124,8 +125,8 @@ export function ForgotPassword({
           Check your email
         </h1>
         <p className="slx-subtitle slx-title-centered">
-          If an account exists for <strong>{email}</strong>, a reset link is
-          on its way.
+          If an account exists for <strong>{email}</strong>, a reset link is on
+          its way.
         </p>
         <button
           type="button"
@@ -147,8 +148,8 @@ export function ForgotPassword({
         <div className="slx-info-box">
           <ClockIcon />
           <span>
-            The link expires in 1 hour and works once. Can&apos;t find it?
-            Check spam and promotions folders.
+            The link expires in 1 hour and works once. Can&apos;t find it? Check
+            spam and promotions folders.
           </span>
         </div>
         {backLink}

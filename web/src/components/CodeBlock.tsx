@@ -132,6 +132,7 @@ export function CodeBlock({
         <div
           className="shiki-wrap overflow-x-auto p-4 font-mono text-[12.5px] leading-[1.75]"
           // Shiki output is generated from our own trusted code strings.
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: `html` is shiki-highlighted output of static docs samples, never user input.
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
