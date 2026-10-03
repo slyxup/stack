@@ -14,5 +14,8 @@
     "custom_domain": true
   }],
   "observability": { "enabled": true, "head_sampling_rate": 1 },
-  "vars": { "APP_NAME": "SlyxUp Stack" }
+  "vars": {
+    "APP_NAME": "SlyxUp Stack",
+    "BILLING_UPSTREAM": "https://billing-slyxup-com.billing-86c.workers.dev"
+  }
 }

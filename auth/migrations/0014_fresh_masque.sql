@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `fingerprint_hash` text;

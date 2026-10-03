@@ -11,7 +11,6 @@ export interface ManagedKey {
   id: string;
   name: string;
   prefix: string;
-  environment: 'test' | 'live';
   type: 'publishable' | 'secret';
 }
 
@@ -75,7 +74,6 @@ export function manageApi(apiUrl: string, token: string) {
       projectId: string;
       name: string;
       type: 'publishable' | 'secret';
-      environment: 'test' | 'live';
     }) =>
       req<{ ok: true; id: string; key: string; prefix: string }>(
         base,

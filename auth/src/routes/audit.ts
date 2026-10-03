@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getSessionToken } from '../lib/cookies';
 import { randomToken } from '../lib/crypto';
@@ -15,7 +15,10 @@ const audit = new Hono<{
 audit.use('*', async (c, next) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'Unauthorized' }, 401);
-  const data = await getSession(c.env, token);
+  const data = await getSession(c.env, token, {
+    ip: c.req.header('CF-Connecting-IP') ?? null,
+    userAgent: c.req.header('User-Agent') ?? null,
+  });
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
   if (data.user.role !== 'admin')
     return c.json({ ok: false, error: 'Admin required' }, 403);
@@ -27,31 +30,28 @@ audit.use('*', async (c, next) => {
 audit.get('/logs', async (c) => {
   const projectId = c.req.query('projectId');
   const action = c.req.query('action');
-  const limit = Math.min(Number(c.req.query('limit') ?? 50), 100);
-  const db = getDb(c.env);
-
-  let query = db.select().from(auditLogs).$dynamic();
-  if (projectId) query = query.where(eq(auditLogs.projectId, projectId));
-  if (action)
-    query = query.where(
-      eq(
-        auditLogs.action,
-        action as NonNullable<(typeof auditLogs.$inferInsert)['action']>
-      )
-    );
-  const logs = await query
-    .orderBy(desc(auditLogs.createdAt))
-    .limit(limit)
-    .all();
+  const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, 100);
+  const offset = Math.max(Number(c.req.query('offset') ?? 0) || 0, 0);
+  const { listAuditLogs } = await import('../services/audit.service');
+  const { logs, total } = await listAuditLogs(c.env, {
+    projectId: projectId || undefined,
+    action: action || undefined,
+    limit,
+    offset,
+  });
 
   return c.json({
     ok: true,
+    total,
     logs: logs.map((l) => ({
       id: l.id,
       action: l.action,
+      // legacy names + dashboard names (both accepted by readers)
       userId: l.userId,
+      actorId: l.userId,
       metadata: l.metadata,
       ipAddress: l.ipAddress,
+      ip: l.ipAddress,
       createdAt: l.createdAt,
     })),
   });

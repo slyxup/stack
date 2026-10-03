@@ -1,0 +1,1 @@
+CREATE INDEX `users_email_lower_project_idx` ON `users` (lower("email"),`project_id`);

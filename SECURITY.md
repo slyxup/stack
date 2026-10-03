@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-Email `security@slyxup.online` or open a private security advisory on GitHub.
+Email `security@slyxup.com` or open a private security advisory on GitHub.
 
 We use:
 - `crypto.randomUUID()` / `crypto.subtle` — never `Math.random()`

@@ -40,7 +40,7 @@ jobs:
     needs: [verify, deploy-auth, deploy-billing]
     runs-on: ubuntu-latest
     # Stack is dynamic (dashboard) — deploy via opennext Workers (not Pages static export)
-    # Project: stack-slyxup-online → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.online
+    # Project: stack-slyxup-online → https://stack-slyxup-online.pages.dev + custom domain stack.slyxup.com
     steps:
       - uses: actions/checkout@v4
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
@@ -69,3 +69,28 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # Week 7: staging deploys first on manual dispatch, so production pushes
+  # are pre-verified. Fill STAGING_* secrets + wrangler.staging.jsonc IDs first.
+  deploy-staging:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter auth exec wrangler d1 migrations apply slyxup_auth_staging --remote --config wrangler.staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: pnpm --filter auth exec wrangler deploy --config wrangler.staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: pnpm --filter billing exec wrangler deploy --config wrangler.staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: curl -f https://auth-staging.slyxup.com/v1/health && curl -f https://billing-staging.slyxup.com/v1/health

@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import { getBillingConfig } from '../lib/config';
 
 export type Env = {
   Bindings: {
@@ -8,11 +9,20 @@ export type Env = {
     APP_URL: string;
     AUTH_URL: string;
     API_URL: string;
+    PAYMENT_LINK_URL?: string;
+    PAYMENT_SUCCESS_URL?: string;
     CORS_ORIGINS: string;
     PADDLE_ENVIRONMENT?: string;
     PADDLE_API_KEY?: string;
     PADDLE_WEBHOOK_SECRET?: string;
     PADDLE_CLIENT_TOKEN?: string;
+    PADDLE_DEFAULT_ENVIRONMENT?: string;
+    PADDLE_SANDBOX_API_KEY?: string;
+    PADDLE_SANDBOX_WEBHOOK_SECRET?: string;
+    PADDLE_SANDBOX_CLIENT_TOKEN?: string;
+    PADDLE_PRODUCTION_API_KEY?: string;
+    PADDLE_PRODUCTION_WEBHOOK_SECRET?: string;
+    PADDLE_PRODUCTION_CLIENT_TOKEN?: string;
     BILLING_ADMIN_SECRET?: string;
   };
   Variables: { userId: string; userEmail: string };
@@ -51,7 +61,7 @@ interface SessionRow {
 }
 
 /**
- * Validates the auth session by calling auth.slyxup.online /v1/session
+ * Validates the auth session by calling the Auth Worker /v1/session
  * (works for both local and prod without duplicating auth tables into billing D1).
  * Falls back to direct AUTH_DB read for performance when available.
  */
@@ -85,7 +95,7 @@ export const requireUser = createMiddleware<Env>(async (c, next) => {
 
   // Fallback: call auth service via HTTP (no duplication, works for local dev with different D1 instances)
   try {
-    const authUrl = c.env.AUTH_URL ?? 'https://auth.slyxup.online';
+    const authUrl = getBillingConfig(c.env as unknown as Record<string, string | undefined>).authUrl;
     const res = await fetch(`${authUrl}/v1/session`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -134,7 +144,7 @@ export const requireAdmin = createMiddleware<Env>(async (c, next) => {
       }
     } catch {}
     try {
-      const authUrl = c.env.AUTH_URL ?? 'https://auth.slyxup.online';
+      const authUrl = getBillingConfig(c.env as unknown as Record<string, string | undefined>).authUrl;
       const res = await fetch(`${authUrl}/v1/session`, {
         headers: { Authorization: `Bearer ${token}` },
       });

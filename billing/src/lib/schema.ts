@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-// SlyxUp Billing schema — D1 (SQLite) — billing.slyxup.online
+// SlyxUp Billing schema — D1 (SQLite) — billing.slyxup.com
 // D1 quirks: no BOOL/DATETIME (integer 0/1 + unix seconds), FK always ON, 100 bound params, JSON as TEXT.
 // Cross-DB note: userId/projectId reference tables in slyxup_auth (AUTH_DB binding).
 // D1 cannot enforce FKs across databases -> stored as plain text + indexed, integrity via app layer.
@@ -18,11 +18,13 @@ export const customers = sqliteTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    // auth.slyxup.online users.id
+    // auth.slyxup.com users.id
     userId: text('user_id').notNull(),
     email: text('email').notNull(),
     name: text('name'),
     paddleCustomerId: text('paddle_customer_id').unique(),
+    paddleTestCustomerId: text('paddle_test_customer_id').unique(),
+    paddleLiveCustomerId: text('paddle_live_customer_id').unique(),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -45,10 +47,12 @@ export const plans = sqliteTable(
     id: text('id')
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    // auth.slyxup.online projects.id
+    // auth.slyxup.com projects.id
     projectId: text('project_id').notNull(),
     name: text('name').notNull(),
     paddlePriceId: text('paddle_price_id').notNull(),
+    paddleTestPriceId: text('paddle_test_price_id'),
+    paddleLivePriceId: text('paddle_live_price_id'),
     amount: integer('amount').notNull(), // cents
     currency: text('currency', { length: 3 }).notNull().default('USD'),
     interval: text('interval', { enum: ['month', 'year'] })
@@ -166,6 +170,51 @@ export const invoices = sqliteTable(
   })
 );
 
+// ── Refund requests (approval-based; money moves only via Paddle adjustments) ──
+export const refundRequests = sqliteTable(
+  'refund_requests',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id').notNull(),
+    projectId: text('project_id').notNull(),
+    invoiceId: text('invoice_id')
+      .notNull()
+      .references(() => invoices.id, { onDelete: 'restrict' }),
+    paddleTransactionId: text('paddle_transaction_id').notNull(),
+    amount: integer('amount').notNull(), // cents (copied from invoice at request time)
+    currency: text('currency', { length: 3 }).notNull().default('USD'),
+    reason: text('reason').notNull(),
+    status: text('status', {
+      enum: ['pending', 'approved', 'rejected', 'completed', 'failed'],
+    })
+      .notNull()
+      .default('pending'),
+    paddleAdjustmentId: text('paddle_adjustment_id'),
+    adminNote: text('admin_note'),
+    decidedBy: text('decided_by'),
+    requestedAt: integer('requested_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    decidedAt: integer('decided_at', { mode: 'timestamp' }),
+    refundedAt: integer('refunded_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    userIdx: index('refund_requests_user_idx').on(t.userId),
+    projectIdx: index('refund_requests_project_idx').on(t.projectId),
+    invoiceIdx: index('refund_requests_invoice_idx').on(t.invoiceId),
+    statusIdx: index('refund_requests_status_idx').on(t.status),
+  })
+);
+
 // ── Webhook events (Paddle delivery log, idempotency guard) ──
 export const webhookEvents = sqliteTable(
   'webhook_events',
@@ -244,3 +293,5 @@ export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
+export type RefundRequest = typeof refundRequests.$inferSelect;
+export type NewRefundRequest = typeof refundRequests.$inferInsert;

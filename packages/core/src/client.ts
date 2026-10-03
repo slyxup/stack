@@ -26,8 +26,7 @@ import type {
   UpdateUserInput,
   UserResponse,
 } from './types.js';
-
-const DEFAULT_API_URL = 'https://auth.slyxup.online';
+import { DEFAULT_AUTH_API_URL, normalizeApiUrl } from './urls.js';
 
 /** Minimal cookie jar so the SDK works in Node/SSR (browsers manage cookies natively). */
 function createCookieJar() {
@@ -50,7 +49,7 @@ function createCookieJar() {
  * SlyxUp Core Client.
  *
  * ```ts
- * const client = new SlyxupClient({ publishableKey: 'pk_test_xxx' });
+ * const client = new SlyxupClient({ publishableKey: 'pk_xxx' });
  * await client.auth.signIn({ email: 'a@b.com', password: '12345678' });
  * const session = await client.sessions.get();
  * ```
@@ -123,7 +122,12 @@ export class SlyxupClient {
     /** Get current project details */
     getProject: () => Promise<{
       ok: true;
-      project: { id: string; name: string; createdAt: string };
+      project: {
+        id: string;
+        name: string;
+        environment: 'test' | 'live';
+        createdAt: string;
+      };
     }>;
     /** Get project statistics */
     getStats: () => Promise<{
@@ -203,7 +207,6 @@ export class SlyxupClient {
         id: string;
         name: string;
         prefix: string;
-        environment: string;
         type: string;
         lastUsedAt: string | null;
         createdAt: string;
@@ -213,7 +216,6 @@ export class SlyxupClient {
     createKey: (input: {
       name: string;
       type: 'publishable' | 'secret';
-      environment: 'test' | 'live';
     }) => Promise<{ ok: true; id: string; key: string; prefix: string }>;
     /** Revoke an API key */
     revokeKey: (keyId: string) => Promise<{ ok: true }>;
@@ -252,7 +254,7 @@ export class SlyxupClient {
     const jar = createCookieJar();
     this.publishableKey = options.publishableKey;
     this.secretKey = options.secretKey;
-    this.apiUrl = (options.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
+    this.apiUrl = normalizeApiUrl(options.apiUrl ?? DEFAULT_AUTH_API_URL);
     if (options.secretKey && typeof window !== 'undefined') {
       throw new SlyxupError(
         'Secret keys must only be used on the server',
@@ -262,6 +264,13 @@ export class SlyxupClient {
     }
     const storageKey = `slyxup:session:${this.apiUrl}:${this.publishableKey ?? 'platform'}`;
     let storedToken = options.sessionToken;
+    let csrfToken: string | undefined;
+    try {
+      if (typeof document !== 'undefined') {
+        const m = document.cookie.match(/(?:^|;\s*)slyxup_csrf=([^;]+)/);
+        if (m) csrfToken = decodeURIComponent(m[1]);
+      }
+    } catch {}
     try {
       if (
         !storedToken &&
@@ -286,6 +295,45 @@ export class SlyxupClient {
     this._getToken = () => storedToken;
     // _request will be assigned after `request` is defined below
 
+    const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+    const doFetch = async (
+      path: string,
+      init: RequestInit & { body?: string },
+      csrf?: string
+    ): Promise<Response> => {
+      // Build headers: prefer cookie jar (SSR), fall back to stored Bearer token (browser cross-origin)
+      const authHeaders: Record<string, string> = {};
+      const jarHeader = jar.header();
+      if (storedToken) {
+        authHeaders.Authorization = `Bearer ${storedToken}`;
+      } else if (Object.keys(jarHeader).length > 0) {
+        Object.assign(authHeaders, jarHeader);
+      }
+      // Always send publishable key so server can scope auth to the correct project
+      // and reject requests with invalid / missing keys (fixes demo-with-wrong-pk bug).
+      if (this.publishableKey && this.publishableKey !== 'pk_missing') {
+        authHeaders['X-Publishable-Key'] = this.publishableKey;
+      }
+      // CSRF double-submit: echo the cookie value on mutations.
+      const method = (init.method ?? 'GET').toUpperCase();
+      if (csrf && MUTATING.has(method)) {
+        authHeaders['X-CSRF-Token'] = csrf;
+      }
+
+      const headers = new Headers({
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      });
+      new Headers(init.headers).forEach((value, key) =>
+        headers.set(key, value)
+      );
+      return fetch(`${this.apiUrl}${path}`, {
+        ...init,
+        headers: Object.fromEntries(headers),
+        credentials: 'include',
+      });
+    };
+
     const requestInner = async <T>(
       path: string,
       init: RequestInit & { body?: string } = {},
@@ -293,36 +341,24 @@ export class SlyxupClient {
     ): Promise<Result<T>> => {
       let res: Response;
       try {
-        // Build headers: prefer cookie jar (SSR), fall back to stored Bearer token (browser cross-origin)
-        const authHeaders: Record<string, string> = {};
-        const jarHeader = jar.header();
-        if (storedToken) {
-          authHeaders.Authorization = `Bearer ${storedToken}`;
-        } else if (Object.keys(jarHeader).length > 0) {
-          Object.assign(authHeaders, jarHeader);
+        res = await doFetch(path, init, csrfToken);
+        // First mutation without a token → fetch one via health, retry once.
+        if (res.status === 403 && !csrfToken) {
+          try {
+            const probe = await doFetch('/v1/health', {});
+            const fresh = probe.headers.get('X-CSRF-Token');
+            if (fresh) {
+              csrfToken = fresh;
+              res = await doFetch(path, init, csrfToken);
+            }
+          } catch {}
         }
-        // Always send publishable key so server can scope auth to the correct project
-        // and reject requests with invalid / missing keys (fixes demo-with-wrong-pk bug).
-        if (this.publishableKey && this.publishableKey !== 'pk_test_missing') {
-          authHeaders['X-Publishable-Key'] = this.publishableKey;
-        }
-
-        const headers = new Headers({
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        });
-        new Headers(init.headers).forEach((value, key) =>
-          headers.set(key, value)
-        );
-        res = await fetch(`${this.apiUrl}${path}`, {
-          ...init,
-          headers: Object.fromEntries(headers),
-          credentials: 'include',
-        });
       } catch {
         throw new NetworkError();
       }
       jar.capture(res);
+      const freshToken = res.headers.get('X-CSRF-Token');
+      if (freshToken) csrfToken = freshToken;
 
       const body: unknown = await res
         .json()
@@ -455,6 +491,13 @@ export class SlyxupClient {
         return this.oauthCompletion;
       },
       signUp: async (input) => {
+        const { validateSignUp } = await import('./validation.js');
+        const issues = validateSignUp(input);
+        if (issues.length > 0) {
+          throw new ValidationError(
+            issues.map((i) => `${i.field}: ${i.message}`).join('; ')
+          );
+        }
         const res = await post<AuthResponse>('/v1/auth/sign-up', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 400, 'api_error');
@@ -462,6 +505,13 @@ export class SlyxupClient {
         return res;
       },
       signIn: async (input) => {
+        const { validateSignIn } = await import('./validation.js');
+        const issues = validateSignIn(input);
+        if (issues.length > 0) {
+          throw new ValidationError(
+            issues.map((i) => `${i.field}: ${i.message}`).join('; ')
+          );
+        }
         // The server may answer 403 with code 2FA_REQUIRED — we must surface
         // the challenge back to the caller instead of throwing a generic error.
         const res = await post<SignInResponse>('/v1/auth/sign-in', input, {
@@ -698,7 +748,12 @@ export class SlyxupClient {
       getProject: async () => {
         const res = await adminRequest<{
           ok: true;
-          project: { id: string; name: string; createdAt: string };
+          project: {
+            id: string;
+            name: string;
+            environment: 'test' | 'live';
+            createdAt: string;
+          };
         }>('/v1/admin/project');
         return res;
       },
@@ -823,7 +878,6 @@ export class SlyxupClient {
             id: string;
             name: string;
             prefix: string;
-            environment: string;
             type: string;
             lastUsedAt: string | null;
             createdAt: string;
@@ -882,4 +936,5 @@ export class SlyxupClient {
 // Re-exports so consumers can import from '@slyxup/core'
 export * from './types.js';
 export * from './errors.js';
+export * from './urls.js';
 // test publish after fix

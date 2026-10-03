@@ -23,6 +23,19 @@ type Bindings = {
 
 const auth = new Hono<{ Bindings: Bindings }>();
 
+/** IP + UA for session fingerprinting (Day 4). */
+function requestMeta(c: {
+  req: { header: (n: string) => string | undefined };
+}): { ip: string | null; userAgent: string | null } {
+  return {
+    ip:
+      c.req.header('CF-Connecting-IP') ??
+      c.req.header('X-Forwarded-For') ??
+      null,
+    userAgent: c.req.header('User-Agent') ?? null,
+  };
+}
+
 async function resolveProjectId(c: {
   req: { header: (n: string) => string | undefined };
   env: { DB: D1Database };
@@ -69,7 +82,8 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
         ...input,
         projectId,
         bootstrapToken,
-      }
+      },
+      requestMeta(c)
     );
     void dispatchWebhooks(c.env, projectId ?? null, 'user.created', {
       id: user.id,
@@ -135,10 +149,14 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
   }
   const projectId = resolved ?? input.projectId;
   try {
-    const result = await AuthService.signIn(c.env, {
-      ...input,
-      projectId,
-    });
+    const result = await AuthService.signIn(
+      c.env,
+      {
+        ...input,
+        projectId,
+      },
+      requestMeta(c)
+    );
     if (result.requires2FA) {
       return c.json(
         {
@@ -238,7 +256,8 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
       c.env,
       challengeToken,
       code,
-      recoveryCode
+      recoveryCode,
+      requestMeta(c)
     );
     if (!result.user.projectId)
       setSessionCookie(c, result.sessionToken, result.expiresAt);
@@ -285,7 +304,7 @@ auth.post('/sign-out', async (c) => {
   let sessionData: Awaited<ReturnType<typeof AuthService.getSession>> | null =
     null;
   if (token) {
-    sessionData = await AuthService.getSession(c.env, token);
+    sessionData = await AuthService.getSession(c.env, token, requestMeta(c));
     await AuthService.signOut(c.env, token);
     if (sessionData) {
       void writeAuditLog(c.env, 'user.signed_out', {
@@ -308,7 +327,7 @@ auth.post('/sign-out', async (c) => {
 auth.get('/session', async (c) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'No session' }, 401);
-  const data = await AuthService.getSession(c.env, token);
+  const data = await AuthService.getSession(c.env, token, requestMeta(c));
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
   return c.json({
     ok: true,
@@ -336,7 +355,7 @@ auth.get('/session', async (c) => {
 auth.get('/user', async (c) => {
   const token = getSessionToken(c);
   if (!token) return c.json({ ok: false, error: 'No session' }, 401);
-  const data = await AuthService.getSession(c.env, token);
+  const data = await AuthService.getSession(c.env, token, requestMeta(c));
   if (!data) return c.json({ ok: false, error: 'Invalid session' }, 401);
   return c.json({ ok: true, user: sanitizeUser(data.user) });
 });

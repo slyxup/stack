@@ -15,8 +15,8 @@ npm install @slyxup/core
 import { SlyxupClient } from '@slyxup/core';
 
 const client = new SlyxupClient({
-  publishableKey: 'pk_test_xxx',          // from project key management
-  apiUrl: 'https://auth.slyxup.online',   // default; override for self-host/local
+  publishableKey: 'pk_xxx',               // from project key management
+    apiUrl: 'https://auth-slyxup-com.auth-0f4.workers.dev',   // override for self-host/local
 });
 
 // ── Auth ──
@@ -62,7 +62,7 @@ import { createBillingClient } from '@slyxup/core';
 const billing = createBillingClient({
   publishableKey: client.publishableKey,
   getToken: () => client.getToken(),
-  apiUrl: 'https://billing.slyxup.online',
+   apiUrl: 'https://billing-slyxup-com.billing-86c.workers.dev',
 });
 const plans = await billing.listPlans(projectId);
 const { transactionId, checkoutUrl } = await billing.checkout(planId, {
@@ -98,11 +98,16 @@ try {
 
 | Error | Status | Meaning |
 |---|---|---|
-| `ValidationError` | 400 | Bad input |
+| `ValidationError` | 400 | Bad input (client pre-validates via `validateSignUp`/`validateSignIn`) |
 | `UnauthorizedError` | 401 | No/expired session |
 | `RateLimitError` | 429 | Too many requests |
 | `NetworkError` | 0 | Fetch failed |
-| `SlyxupError` | * | Base class (`e.status`, `e.code`) |
+| `SlyxupError` | * | Base class (`e.status`, `e.code`, `e.hint`) |
+
+Every error carries a machine `code` plus an actionable `hint`
+(`getErrorHint(code)`, `isRetryableCode(code)`, `ERROR_CATALOG`).
+Full table: `docs/ERRORS.md`. Client validates sign-up/sign-in locally before
+sending (mirrors server Zod schemas; server stays authoritative).
 
 ## API surface
 
@@ -147,7 +152,7 @@ try {
 
 Full auth/billing setup, SPA versus server-cookie recipes and upgrade notes: [INTEGRATION_GUIDE.md](../../INTEGRATION_GUIDE.md). This is the 3.0.0 release candidate; confirm npm publication before upgrading external consumers.
 
-`@slyxup/core/next` exports `slyxupMiddleware`, `getServerSession`, `createSessionCookie`, and `clearSessionCookie`. Middleware accepts a standard `Request` (including `NextRequest`) and returns a `Response`; protected routes validate the session with `apiUrl`. Public routes match exact pathnames, with explicit `/docs/*` wildcards. Invalid sessions redirect; auth outages return 503. A cookie's presence alone never grants access. Use `getServerSession(request, { apiUrl, publishableKey })` inside protected route handlers as well. These helpers require your application to set its own HttpOnly cookie after server-side sign-in; a direct browser sign-in to a different auth origin cannot set your application's cookie.
+`@slyxup/core` also exports Web API server-session helpers: `slyxupMiddleware`, `getServerSession`, `createSessionCookie`, and `clearSessionCookie`. They accept a standard `Request` and return a `Response`; protected routes validate the session with `apiUrl`. Public routes match exact pathnames, with explicit `/docs/*` wildcards. Invalid sessions redirect; auth outages return 503. A cookie's presence alone never grants access. Use `getServerSession(request, { apiUrl, publishableKey })` inside protected route handlers as well. These helpers require your application to set its own HttpOnly cookie after server-side sign-in; a direct browser sign-in to a different auth origin cannot set your application's cookie.
 
 - Prebuilt UI cards: [`@slyxup/ui`](../ui)
 

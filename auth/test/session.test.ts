@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { requireSession } from '../src/middleware/auth';
+import { requireSecretKey, requireSession } from '../src/middleware/auth';
 import { getSession } from '../src/services/auth.service';
 import { verifyApiKey } from '../src/services/project.service';
 
@@ -28,5 +28,36 @@ describe('session project boundary', () => {
   it('rejects a revoked key even with an otherwise valid session', async () => {
     vi.mocked(verifyApiKey).mockResolvedValue(null);
     expect((await app.request('/', { headers: { Authorization: 'Bearer session', 'X-Publishable-Key': 'revoked' } })).status).toBe(403);
+  });
+});
+
+describe('canonical secret key format', () => {
+  const app = new Hono()
+    .use('*', requireSecretKey)
+    .get('/', (c) => c.json({ ok: true }));
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(verifyApiKey).mockResolvedValue({
+      projectId: 'project-a',
+      type: 'secret',
+      environment: 'test',
+    });
+  });
+
+  it('rejects legacy environment-encoded secret keys before lookup', async () => {
+    const response = await app.request('/', {
+      headers: { Authorization: 'Bearer sk_test_legacy' },
+    });
+    expect(response.status).toBe(401);
+    expect(verifyApiKey).not.toHaveBeenCalled();
+  });
+
+  it('accepts canonical secret key syntax', async () => {
+    const response = await app.request('/', {
+      headers: { Authorization: 'Bearer sk_canonical123' },
+    });
+    expect(response.status).toBe(200);
+    expect(verifyApiKey).toHaveBeenCalledWith(undefined, 'sk_canonical123');
   });
 });

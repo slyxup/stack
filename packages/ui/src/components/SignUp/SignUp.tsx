@@ -92,7 +92,7 @@ export function SignUp({
 
   const missingKey =
     !client.publishableKey ||
-    client.publishableKey === 'pk_test_missing' ||
+    client.publishableKey === 'pk_missing' ||
     client.publishableKey.includes('REPLACE');
 
   if (oauthChallenge)

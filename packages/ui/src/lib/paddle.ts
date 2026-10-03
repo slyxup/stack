@@ -1,5 +1,6 @@
 // Paddle.js loader — lazy-loads Paddle.js and initializes overlay checkout
 // Docs: https://developer.paddle.com/paddle-js
+import { DEFAULT_BILLING_API_URL } from '@slyxup/core';
 
 declare global {
   interface Window {
@@ -40,14 +41,14 @@ function loadScript(src: string): Promise<void> {
 }
 
 /**
- * Derive billing URL from auth API URL.
- * localhost:8787 → localhost:8788, auth.slyxup.online → billing.slyxup.online
+ * Resolve the shared billing Worker from the auth API URL.
+ * Local development keeps the separate billing port.
  */
 function deriveBillingUrl(authApiUrl: string): string {
   if (/^https?:\/\/localhost(:\d+)?$/.test(authApiUrl)) {
     return authApiUrl.replace(/:(\d+)$/, ':8788');
   }
-  return authApiUrl.replace('auth.slyxup.online', 'billing.slyxup.online');
+  return DEFAULT_BILLING_API_URL;
 }
 
 interface BillingConfig {

@@ -1,0 +1,51 @@
+# SlyxUp Stack — Docs index for LLMs
+
+> Open-source auth + billing on Cloudflare Workers (MIT). Auth Worker (Hono + D1 + KV) serves /v1/* identity; Billing Worker (separate D1 + Paddle) serves plans/checkout/subscriptions/invoices. SDKs: @slyxup/core (headless) + @slyxup/ui (15 React components). Admin: /admin. UI kit: /ui.
+> Each page below is also a route at https://stack.slyxup.com/docs/<slug> with a "Copy for LLM" button containing condensed Markdown. Full integration recipes: /docs/integration-guide (+ downloadable slyxup-integration.md in-app).
+
+## Get started
+- Introduction: What SlyxUp is, auth/billing split, vs Clerk/Auth0 — /docs/introduction
+- Quickstart: project → key → domain → SDK → sign-up in 5 steps — /docs/quickstart
+- Core concepts: projects, users, sessions, keys, domains, test vs live — /docs/core-concepts
+
+## Integrate
+- React integration: SlyxUpProvider, SignIn/SignUp, hooks (useAuth/useUser/useBilling/...) — /docs/react
+- Core SDK (headless): SlyxupClient + createBillingClient, server admin clients — /docs/core-sdk
+- UI kit: 15 components, 3 auth layouts, applyTheme / CSS vars — /docs/ui-kit
+- Management API: projects/keys/domains CRUD with developer session — /docs/management-api
+
+## Identity
+- Authentication: sign-up (24h verify mail), sign-in email|username, sign-out, bootstrap first admin — /docs/authentication
+- OAuth (Google + GitHub): hosted code flow, 10-min state, upsert-by-email, link/unlink — /docs/oauth
+- Passwords & verification: PBKDF2 100k, non-enumerating flows, 24h verify / 1h reset — /docs/passwords-verification
+- Sessions: 32-byte token, 7-day expiry, slyxup_session + __Host cookies, Bearer wins — /docs/sessions
+- Two-factor auth (TOTP): setup → enable → challenge, recovery codes, disable — /docs/two-factor
+- Users & members: search (q/limit/offset), roles owner/admin/member, block-revokes-all, delete — /docs/users-members
+- API keys: pk_ browser vs sk_ server, test vs live, create-once, instant revoke, rotation — /docs/api-keys
+- Domains & CORS: exact host match (www-insensitive), https only, localhost always, 60s KV cache — /docs/domains-cors
+
+## Monetize (Paddle)
+- Billing overview: list plans → checkout → subscription.created webhook → entitlements — /docs/billing-overview
+- Plans: amount/currency/interval/trialDays/features/popular/sortOrder; public active-only; admin CRUD + sync — /docs/plans
+- Checkout (Paddle): POST /v1/billing/checkout → checkoutUrl; overlay vs redirect; verify via transactions/:id — /docs/checkout
+- Subscriptions & invoices: status/period/cancel-at-end/resume; invoices newest-first — /docs/subscriptions-invoices
+- Entitlements & access: server-side getEntitlements → features.includes(); never trust client/URL — /docs/entitlements
+- Paddle setup: sandbox keys → price mapping → webhooks → test → production + go-live — /docs/paddle-setup
+- Webhooks: auth events (user.*/session.*/2fa.*) signed with sk_ vs Paddle sub events to billing — /docs/webhooks
+
+## Run & secure
+- Self-hosting: wrangler + D1 migrations, bootstrap admin, deploy web panel, secrets via secret put — /docs/self-hosting
+- Security model: HttpOnly sessions, PBKDF2, hashed keys, origin-checked pk_, instant block-revoke — /docs/security
+- API reference: all endpoints grouped (auth/users/keys/domains/oauth/billing), bases + Bearer scheme — /docs/api-reference
+- Troubleshooting: 401/403/CORS/expired-link/force-change fixes, curl -v + { ok:false, error } — /docs/troubleshooting
+- Complete integration guide: transports, SSR cookie flow, upgrade checklist, error table — /docs/integration-guide
+
+## Ops endpoints (dashboard)
+- Project audit timeline: GET /v1/projects/:id/audit?limit=&offset=&action= → { logs, total } (keys/users/domains/project events carry projectId)
+- Billing stats: GET /v1/billing/stats?projectId= → { subscribers by status, MRR, revenue by currency, per-plan counts }
+- Delete project: DELETE /v1/projects/:id (owner only; children deleted explicitly)
+
+## Base URLs (defaults; override via VITE_API_URL / VITE_BILLING_URL)
+- Auth: https://auth-slyxup-com.auth-0f4.workers.dev
+- Billing: https://billing-slyxup-com.billing-86c.workers.dev
+- Errors: { ok: false, error: "..." } with HTTP status. Never paste tokens/cookies/reset links/secret keys into logs.

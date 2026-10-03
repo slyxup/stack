@@ -305,8 +305,8 @@ export default function DashboardPage() {
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>Missing configuration</h1>
           <p style={{ color: '#71717a', marginTop: 8 }}>Set these in <code>.env.local</code>:</p>
           <pre style={{ background: '#18181b', border: '1px solid #27272a', padding: 16, borderRadius: 10, marginTop: 16, textAlign: 'left', fontSize: 13, color: '#a1a1aa' }}>
-{`NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online
-NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_test_...
+{`NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.com
+NEXT_PUBLIC_SLYXUP_PUBLISHABLE_KEY=pk_...
 NEXT_PUBLIC_SLYXUP_PROJECT_ID=...`}
           </pre>
         </div>

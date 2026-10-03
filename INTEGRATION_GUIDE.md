@@ -1,13 +1,13 @@
 # Integrating SlyxUp Auth and Billing
 
-This guide describes the published 3.0.0 SDK release. Install `@slyxup/core@3.0.0` and `@slyxup/ui@3.0.0`; both npm `latest` tags point to 3.0.0.
+This guide describes the shipped 3.0.0 packages. Install `@slyxup/core@3.0.0` for the headless TypeScript client or `@slyxup/ui@3.0.0` for the React components. There are no separate React, Next.js, Vue, Svelte, or CLI packages.
 
 ## Choose your session transport first
 
 | Application | Recommended integration | Persistence |
 | --- | --- | --- |
 | React/Vite client-only SPA | `SlyxUpProvider` with explicit auth URL, billing URL and publishable key | Memory by default; optional project-scoped `sessionStorage` |
-| Next.js or another server-rendered application | Same-origin server routes calling a request-scoped `SlyxupClient` | Application-owned HttpOnly cookie |
+| Any server-rendered application | Same-origin server routes calling a request-scoped `SlyxupClient` | Application-owned HttpOnly cookie |
 | Cloudflare Worker API | Validate the incoming user's session with the auth service, then enforce resource ownership | Incoming bearer token or application cookie |
 | Project administration | `SlyxupClient({ secretKey })` on the server | Secret binding; never browser code |
 
@@ -15,8 +15,8 @@ A publishable key identifies a project. It does **not** authenticate a user. An 
 
 The two services are separate:
 
-- Auth: `https://auth.slyxup.online`, local `http://localhost:8787`.
-- Billing: `https://billing.slyxup.online`, local `http://localhost:8788`.
+- Auth: use the Auth Worker URL from the active deployment config, local `http://localhost:8787`.
+- Billing: use the Billing Worker URL from the active deployment config, local `http://localhost:8788`.
 - Source folders and pnpm filters are `auth`, `billing`, and `web`.
 - Billing owns its D1 tables; auth SDK requests do not contain a `client.billing` namespace.
 
@@ -68,7 +68,7 @@ export default function App() {
 
 ```dotenv
 # Public Vite configuration; never put a secret key here.
-VITE_SLYXUP_PUBLISHABLE_KEY=pk_test_REPLACE_WITH_REAL_KEY
+VITE_SLYXUP_PUBLISHABLE_KEY=pk_REPLACE_WITH_REAL_KEY
 VITE_SLYXUP_API_URL=http://localhost:8787
 VITE_SLYXUP_BILLING_URL=http://localhost:8788
 ```
@@ -93,12 +93,12 @@ Enable social buttons after configuring Google/GitHub credentials and registerin
 import { SlyxupClient, createBillingClient, SlyxupError } from '@slyxup/core';
 
 const auth = new SlyxupClient({
-  publishableKey: 'pk_test_REPLACE_WITH_REAL_KEY',
-  apiUrl: 'https://auth.slyxup.online',
+  publishableKey: 'pk_REPLACE_WITH_REAL_KEY',
+   apiUrl: 'https://auth-slyxup-com.auth-0f4.workers.dev',
 });
 const billing = createBillingClient({
   publishableKey: auth.publishableKey,
-  apiUrl: 'https://billing.slyxup.online',
+   apiUrl: 'https://billing-slyxup-com.billing-86c.workers.dev',
   getToken: () => auth.getToken(),
 });
 
@@ -161,9 +161,9 @@ Render inside `SlyxUpProvider`, after auth is loaded and signed in. The hooks in
 
 Use `CurrentPlanCard`, `InvoicesTable`, `PlanCard`, and `SubscriptionStatus` for custom layouts. Invoice totals are grouped by currency. Styles inherit the host font; external webfonts are opt-in through theme configuration. See `packages/ui/README.md` for component props and theme options.
 
-## 5. Next.js: server-owned sessions
+## 5. Server-owned sessions
 
-The SDK provides helpers, not an automatic Next.js auth backend. Implement same-origin server routes for sign-in, second-factor completion, sign-out and refresh/read before protecting pages:
+The core package provides Web API session helpers, not an automatic application auth backend. Implement same-origin server routes for sign-in, second-factor completion, sign-out and session reads before protecting pages:
 
 1. Validate request method, content type, request size and input schema; enforce same-origin/CSRF checks on cookie-authenticated mutations.
 2. Create a request-scoped `SlyxupClient({ apiUrl, publishableKey })` and call sign-in.
@@ -173,8 +173,8 @@ The SDK provides helpers, not an automatic Next.js auth backend. Implement same-
 6. Call `getServerSession(request, options)` in each protected route handler and enforce resource ownership. Never authorize by cookie presence alone.
 
 ```ts
-// middleware.ts — requires the application-owned cookie described above.
-import { slyxupMiddleware } from '@slyxup/core/next';
+// Server middleware — requires the application-owned cookie described above.
+import { slyxupMiddleware } from '@slyxup/core';
 
 export default slyxupMiddleware({
   apiUrl: process.env.SLYXUP_AUTH_URL,
@@ -186,7 +186,7 @@ export const config = { matcher: ['/account/:path*', '/billing/:path*'] };
 
 ```ts
 // app/api/account/route.ts
-import { getServerSession } from '@slyxup/core/next';
+import { getServerSession } from '@slyxup/core';
 
 export async function GET(request: Request) {
   const session = await getServerSession(request, {
@@ -198,16 +198,16 @@ export async function GET(request: Request) {
 }
 ```
 
-Middleware accepts `Request`/`NextRequest`, returns `Promise<Response>`, matches exact public paths (or explicit `/*` subtrees), redirects invalid sessions, and returns 503 for auth outages. `getServerSession` returns null for missing/rejected sessions and throws on network/service failures. Static-export Next.js sites cannot run middleware or server routes; use the SPA integration or deploy a server-capable application.
+The middleware helper accepts a standard `Request`, returns `Promise<Response>`, matches exact public paths (or explicit `/*` subtrees), redirects invalid sessions, and returns 503 for auth outages. `getServerSession` returns null for missing/rejected sessions and throws on network/service failures. Use these helpers from a server-capable runtime; client-only static sites should use the browser integration instead.
 
-There are no `createClient()`, `currentUser()` or `slyxup.billing.plans.list()` exports. Use the concrete APIs above.
+There are no `createClient()`, `currentUser()` or `slyxup.billing.plans.list()` exports. Use `SlyxupClient`, `createBillingClient`, and the concrete APIs above.
 
 ## 6. Upgrade checklist for consuming platforms
 
 - Upgrade core and UI together to the reviewed major release; record exact versions in each consumer's lockfile.
 - Remove reliance on global `slyxup_session_token`. Sign in again and select the intended persistence mode.
 - Standalone billing clients: provide `getToken`. React: configure `billingApiUrl` on the provider.
-- Replace old synchronous middleware/plain-object adapters with the `Request → Promise<Response>` helper.
+- Use the standard `Request → Promise<Response>` server helper rather than a custom cookie-presence check.
 - Test sign-up → verification → sign-in → second factor → reload → sign-out in every consumer.
 - Test that a token from project A is rejected when project B's key is supplied.
 - Test checkout in Paddle sandbox, webhook delivery, entitlement activation, cancellation and expired access.
@@ -225,7 +225,7 @@ There are no `createClient()`, `currentUser()` or `slyxup.billing.plans.list()` 
 | `2FA_REQUIRED` | Finish the challenge; do not treat it as a successful login |
 | `CUSTOMER_IDENTITY_CONFLICT` | A Paddle customer already belongs to another auth identity; resolve with the operator, never merge ownership client-side |
 | Paid redirect but no feature access | Wait for authoritative webhook/entitlements; confirm environment, plan mapping and period end |
-| Middleware never runs | Next.js static export, matcher configuration, or consumer using an older package |
+| Server middleware never runs | The consumer is client-only/static, the runtime route is not wired, or the package is outdated |
 | CORS fails | Exact allowed origin/domain and live project; neither a key nor a client-side test header bypasses origin checks |
 
 Do not paste tokens, cookies, reset links or secret keys into support logs. Report the endpoint, HTTP status, safe error code, package versions, and a redacted reproduction.

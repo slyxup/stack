@@ -15,6 +15,11 @@ import {
   getTransaction,
   verifyWebhookSignature,
 } from '../services/paddle.service';
+import {
+  getPaddleConfig,
+  getPaddleWebhookSecrets,
+  resolveProjectEnvironment,
+} from '../services/paddle-config';
 
 // ── POST /v1/webhooks/paddle — Paddle Billing notifications ──
 // Configure in Paddle Dashboard > Developer tools > Notifications.
@@ -117,7 +122,11 @@ async function applySubscriptionEvent(
     .from(plans)
     .where(
       and(
-        eq(plans.paddlePriceId, priceId),
+        or(
+          eq(plans.paddlePriceId, priceId),
+          eq(plans.paddleTestPriceId, priceId),
+          eq(plans.paddleLivePriceId, priceId)
+        ),
         data.custom_data?.planId
           ? eq(plans.id, data.custom_data.planId)
           : undefined
@@ -403,7 +412,7 @@ app.use('/paddle', bodyLimit({ maxSize: 1024 * 1024 }));
 // GET /v1/webhooks/status — check if webhooks have been received (diagnostic)
 app.get('/status', async (c) => {
   const db = getDb(c.env);
-  const hasSecret = !!c.env.PADDLE_WEBHOOK_SECRET;
+  const hasSecret = getPaddleWebhookSecrets(c.env).length > 0;
   const recentEvents = await db
     .select({
       eventType: webhookEvents.eventType,
@@ -423,22 +432,31 @@ app.get('/status', async (c) => {
     webhookConfigured: hasSecret,
     totalEvents: totalEvents.length,
     recentEvents,
-    webhookUrl: 'https://billing.slyxup.online/v1/webhooks/paddle',
+    webhookUrl: `${new URL(c.req.url).origin}/v1/webhooks/paddle`,
   });
 });
 
 app.post('/paddle', async (c) => {
-  const secret = c.env.PADDLE_WEBHOOK_SECRET;
-  if (!secret)
+  const secrets = getPaddleWebhookSecrets(c.env);
+  if (!secrets.length)
     return c.json({ ok: false, error: 'Billing not configured' }, 501);
 
   const raw = await c.req.text();
-  const error = await verifyWebhookSignature(
-    c.req.header('Paddle-Signature'),
-    raw,
-    secret
-  );
-  if (error) return c.json({ ok: false, error }, 401);
+  let validSignature = false;
+  for (const secret of secrets) {
+    if (
+      !(await verifyWebhookSignature(
+        c.req.header('Paddle-Signature'),
+        raw,
+        secret
+      ))
+    ) {
+      validSignature = true;
+      break;
+    }
+  }
+  if (!validSignature)
+    return c.json({ ok: false, error: 'signature mismatch' }, 401);
 
   let event: PaddleEvent;
   try {
@@ -518,19 +536,17 @@ app.post('/paddle', async (c) => {
   // Only ack success. processedAt is set after processing (B7).
   try {
     if (event.event_type.startsWith('subscription.')) {
-      if (!c.env.PADDLE_API_KEY)
-        throw new Error('Paddle API key required for attribution');
+      const projectId = (event.data as unknown as SubData).custom_data?.projectId;
+      if (!projectId) throw new Error('Subscription project attribution missing');
+      const config = getPaddleConfig(
+        c.env,
+        await resolveProjectEnvironment(c.env, projectId)
+      );
       await applySubscriptionEvent(
         db,
         event.data as unknown as SubData,
         occurredAt,
-        {
-          apiKey: c.env.PADDLE_API_KEY,
-          environment:
-            c.env.PADDLE_ENVIRONMENT === 'production'
-              ? 'production'
-              : 'sandbox',
-        }
+        config
       );
     } else if (
       event.event_type === 'transaction.completed' ||

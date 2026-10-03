@@ -1,6 +1,6 @@
 {
   "name": "@slyxup/core",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "@slyxup/core — SlyxUp SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -37,7 +37,7 @@
   "bugs": {
     "url": "https://github.com/slyxup/stack/issues"
   },
-  "author": "SlyxUp <hello@slyxup.online>",
+  "author": "SlyxUp <hello@slyxup.com>",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

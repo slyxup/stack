@@ -18,7 +18,7 @@ gh repo create slyxup/stack --public --description "SlyxUp Stack — CF Workers 
 3. Then locally:
 
 ```bash
-cd slyxup.online/stack
+cd slyxup.com/stack
 git remote add origin https://github.com/slyxup/stack.git
 git push -u origin main
 ```

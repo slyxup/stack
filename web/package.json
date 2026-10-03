@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SlyxUp Admin — control panel + docs for the SlyxUp Stack (React 19 + Vite + Tailwind v4)",
   "type": "module",
   "scripts": {
@@ -20,6 +20,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",
+    "shiki": "^4.4.3",
     "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.15"
   },

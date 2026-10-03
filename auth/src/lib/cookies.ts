@@ -2,7 +2,7 @@ export const SESSION_COOKIE = 'slyxup_session';
 /** Host-only cookie name (preferred) — prevents cross-subdomain leakage */
 export const SESSION_COOKIE_HOST = '__Host-slyxup_session';
 
-/** Apex domain of the requesting host (e.g. `slyxup.online`) so the session
+/** Apex domain of the requesting host (e.g. `slyxup.com`) so the session
  * cookie is shared across product subdomains. Empty for localhost/IPs and
  * when isolation is desired (per-platform cookies). */
 function parentDomain(host: string): string {
@@ -21,7 +21,7 @@ function parentDomain(host: string): string {
  * 2) Host-only cookie (__Host-) preferred
  * 3) Legacy slyxup_session fallback (for old clients)
  *
- * Domain cookies (`.slyxup.online`) are deprecated for isolation — host-only
+ * Domain cookies (`.slyxup.com`) are deprecated for isolation — host-only
  * is default. Cookie is host-only unless explicitly shared via env flag.
  */
 export function getSessionToken(c: {
@@ -63,8 +63,8 @@ export function setSessionCookie(
     host.endsWith('.localhost') ||
     /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
   const expires = expiresAt.toUTCString();
-  // Host-only Secure cookie — isolated per host (auth.slyxup.online vs stack.slyxup.online)
-  // No Domain attribute = host-only, prevents `.slyxup.online` cross-platform overwrite.
+  // Host-only Secure cookie — isolated per host (auth.slyxup.com vs stack.slyxup.com)
+  // No Domain attribute = host-only, prevents `.slyxup.com` cross-platform overwrite.
   // For local dev we also omit Domain.
   // Use __Host- prefix when secure (requires Secure + Path=/ + no Domain) — ideal isolation.
   const useHostPrefix = !isLocalhost; // __Host requires Secure, which localhost dev may lack over http
@@ -79,7 +79,7 @@ export function setSessionCookie(
   ];
   // IMPORTANT: do NOT set Domain for isolation. Only set Domain if explicitly
   // enabled via legacy behavior — currently disabled to fix overwrite bug.
-  // Previously we set Domain=.slyxup.online which made every login overwrite
+  // Previously we set Domain=.slyxup.com which made every login overwrite
   // the single shared cookie across all platforms in same browser.
   const value = parts.join('; ');
   c.header('Set-Cookie', value);

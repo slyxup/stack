@@ -39,6 +39,7 @@ admin.get('/project', async (c) => {
     project: {
       id: project.id,
       name: project.name,
+      environment: project.environment,
       createdAt: project.createdAt,
     },
   });
@@ -266,7 +267,6 @@ admin.get('/keys', async (c) => {
       id: k.id,
       name: k.name,
       prefix: k.prefix,
-      environment: k.environment,
       type: k.type,
       lastUsedAt: k.lastUsedAt,
       createdAt: k.createdAt,
@@ -278,18 +278,27 @@ admin.get('/keys', async (c) => {
 const createKeySchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['publishable', 'secret']),
-  environment: z.enum(['test', 'live']),
 });
 
 admin.post('/keys', zValidator('json', createKeySchema), async (c) => {
   const projectId = c.get('projectId');
   const input = c.req.valid('json');
-  const key = await createApiKey(c.env, {
-    projectId,
-    name: input.name,
-    type: input.type,
-    environment: input.environment,
-  });
+  let key: Awaited<ReturnType<typeof createApiKey>>;
+  try {
+    key = await createApiKey(c.env, {
+      projectId,
+      name: input.name,
+      type: input.type,
+    });
+  } catch (error) {
+    return c.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to create key',
+      },
+      409
+    );
+  }
   return c.json(
     { ok: true, id: key.id, key: key.key, prefix: key.prefix },
     201

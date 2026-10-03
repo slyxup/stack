@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { notConfigured } from '../lib/http';
 import { checkRateLimit } from '../lib/rate-limit';
 import type { Env } from '../middleware/auth';
 import { getTransaction } from '../services/paddle.service';
+import { getDb } from '../lib/db';
+import { checkoutIntents } from '../lib/schema';
+import { eq } from 'drizzle-orm';
+import { getPaddleConfig, resolveProjectEnvironment } from '../services/paddle-config';
 
 // ── GET /v1/billing/transactions/:id — verify a checkout transaction ──
 // Source of truth for "did this buyer actually pay?". The success page and
@@ -34,20 +37,21 @@ const rateLimit = createMiddleware<Env>(async (c, next) => {
 });
 
 app.get('/:id', rateLimit, async (c) => {
-  const apiKey = c.env.PADDLE_API_KEY;
-  if (!apiKey) throw notConfigured();
-
   const id = c.req.param('id');
   if (!id || !/^txn_[A-Za-z0-9]+$/.test(id)) {
     return c.json({ ok: false, error: 'Invalid transaction id' }, 400);
   }
 
-  const config = {
-    apiKey,
-    environment: (c.env.PADDLE_ENVIRONMENT === 'production'
-      ? 'production'
-      : 'sandbox') as 'sandbox' | 'production',
-  };
+  const intent = await getDb(c.env)
+    .select({ projectId: checkoutIntents.projectId })
+    .from(checkoutIntents)
+    .where(eq(checkoutIntents.paddleTransactionId, id))
+    .get();
+  if (!intent) return c.json({ ok: false, error: 'Transaction not found' }, 404);
+  const config = getPaddleConfig(
+    c.env,
+    await resolveProjectEnvironment(c.env, intent.projectId)
+  );
 
   try {
     const tx = await getTransaction(config, id);

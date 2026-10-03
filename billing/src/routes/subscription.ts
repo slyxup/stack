@@ -6,6 +6,10 @@ import { subscriptions } from '../lib/schema';
 import { isoOrNull } from '../lib/serialize';
 import type { Env } from '../middleware/auth';
 import { requireUser } from '../middleware/auth';
+import {
+  getPaddleConfig,
+  resolveProjectEnvironment,
+} from '../services/paddle-config';
 
 // ── Current-user subscription endpoints (session cookie or Bearer) ──
 const app = new Hono<{
@@ -83,10 +87,6 @@ app.get('/', async (c) => {
 
 /** POST /v1/billing/subscription/cancel — cancel at period end */
 app.post('/cancel', async (c) => {
-  const apiKey = c.env.PADDLE_API_KEY;
-  if (!apiKey)
-    return c.json({ ok: false, error: 'Billing not configured' }, 501);
-
   const userId = c.get('userId');
   const projectId = c.req.query('projectId');
   const db = getDb(c.env);
@@ -112,12 +112,10 @@ app.post('/cancel', async (c) => {
       404
     );
 
-  const config = {
-    apiKey,
-    environment: (c.env.PADDLE_ENVIRONMENT === 'production'
-      ? 'production'
-      : 'sandbox') as 'sandbox' | 'production',
-  };
+  const config = getPaddleConfig(
+    c.env,
+    await resolveProjectEnvironment(c.env, sub.projectId)
+  );
   const { cancelSubscriptionAtPeriodEnd } = await import(
     '../services/paddle.service'
   );
@@ -134,10 +132,6 @@ app.post('/cancel', async (c) => {
 
 /** POST /v1/billing/subscription/resume — undo scheduled cancellation */
 app.post('/resume', async (c) => {
-  const apiKey = c.env.PADDLE_API_KEY;
-  if (!apiKey)
-    return c.json({ ok: false, error: 'Billing not configured' }, 501);
-
   const userId = c.get('userId');
   const projectId = c.req.query('projectId');
   const db = getDb(c.env);
@@ -145,6 +139,7 @@ app.post('/resume', async (c) => {
   const sub = await db
     .select({
       id: subscriptions.id,
+      projectId: subscriptions.projectId,
       paddleSubscriptionId: subscriptions.paddleSubscriptionId,
     })
     .from(subscriptions)
@@ -163,12 +158,10 @@ app.post('/resume', async (c) => {
   if (!sub?.paddleSubscriptionId)
     return c.json({ ok: false, error: 'Nothing to resume' }, 404);
 
-  const config = {
-    apiKey,
-    environment: (c.env.PADDLE_ENVIRONMENT === 'production'
-      ? 'production'
-      : 'sandbox') as 'sandbox' | 'production',
-  };
+  const config = getPaddleConfig(
+    c.env,
+    await resolveProjectEnvironment(c.env, sub.projectId)
+  );
   const { resumeSubscription } = await import('../services/paddle.service');
   await resumeSubscription(config, sub.paddleSubscriptionId);
 

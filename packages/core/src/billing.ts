@@ -6,6 +6,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from './errors.js';
+import { DEFAULT_BILLING_API_URL, normalizeApiUrl } from './urls.js';
 
 // Minimal ambient declarations (no @types/node dependency in browsers).
 declare const process: { env?: Record<string, string | undefined> } | undefined;
@@ -92,9 +93,9 @@ export class BillingClient {
     const raw = (
       options.apiUrl ??
       getEnvApiUrl() ??
-      'https://billing.slyxup.online'
-    ).replace(/\/$/, '');
-    this.apiUrl = raw;
+      DEFAULT_BILLING_API_URL
+    );
+    this.apiUrl = normalizeApiUrl(raw);
     this.publishableKey = options.publishableKey;
     this.getToken = options.getToken;
   }
@@ -103,7 +104,7 @@ export class BillingClient {
     const token = this.getToken?.();
     const authHeaders: Record<string, string> = {};
     if (token) authHeaders.Authorization = `Bearer ${token}`;
-    if (this.publishableKey && this.publishableKey !== 'pk_test_missing')
+    if (this.publishableKey && this.publishableKey !== 'pk_missing')
       authHeaders['X-Publishable-Key'] = this.publishableKey;
     let res: Response;
     const headers = new Headers({

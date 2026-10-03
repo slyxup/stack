@@ -1,6 +1,6 @@
 'use client';
 
-import { SlyxupClient, type SlyxupClientOptions } from '@slyxup/core';
+import { DEFAULT_BILLING_API_URL, SlyxupClient, type SlyxupClientOptions } from '@slyxup/core';
 import {
   type ReactNode,
   useCallback,
@@ -61,6 +61,16 @@ function resolveEnvApiUrl(): string | undefined {
   return undefined;
 }
 
+function resolveEnvBillingUrl(): string | undefined {
+  try {
+    const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })?.process?.env;
+    if (env) {
+      return env.NEXT_PUBLIC_SLYXUP_BILLING_URL ?? env.VITE_SLYXUP_BILLING_URL ?? env.REACT_APP_SLYXUP_BILLING_URL ?? env.EXPO_PUBLIC_SLYXUP_BILLING_URL ?? env.SLYXUP_BILLING_URL;
+    }
+  } catch {}
+  return undefined;
+}
+
 export function SlyxUpProvider({
   publishableKey,
   apiUrl,
@@ -72,6 +82,7 @@ export function SlyxUpProvider({
   const [oauthChallenge, setOAuthChallenge] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const resolvedApiUrl = apiUrl ?? resolveEnvApiUrl();
+  const resolvedBillingApiUrl = billingApiUrl ?? resolveEnvBillingUrl() ?? DEFAULT_BILLING_API_URL;
   const client = useMemo(() => {
     if (!resolvedKey && typeof window !== 'undefined') {
       console.warn(
@@ -79,7 +90,7 @@ export function SlyxUpProvider({
       );
     }
     return new SlyxupClient({
-      publishableKey: resolvedKey ?? 'pk_test_missing',
+      publishableKey: resolvedKey ?? 'pk_missing',
       apiUrl: resolvedApiUrl,
       tokenStorage,
     });
@@ -163,7 +174,7 @@ export function SlyxUpProvider({
 
   const value: AuthContextValue = {
     client,
-    billingApiUrl,
+    billingApiUrl: resolvedBillingApiUrl,
     oauthChallenge,
     authError,
     clearOAuthChallenge: () => setOAuthChallenge(null),

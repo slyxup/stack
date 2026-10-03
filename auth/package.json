@@ -2,18 +2,18 @@
   "name": "auth",
   "private": true,
   "version": "0.1.1",
-  "description": "SlyxUp Auth Worker — Hono + D1 + KV (https://auth.slyxup.online) — CF Workers",
+  "description": "SlyxUp Auth Worker — Hono + D1 + KV — Cloudflare Workers",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local",
-    "deploy": "wrangler deploy",
-    "typegen": "wrangler types",
+    "deploy": "wrangler deploy --config wrangler.com-workers-dev.jsonc",
+    "typegen": "wrangler types --config wrangler.com-workers-dev.jsonc",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "wrangler d1 migrations apply slyxup_auth --local",
-    "db:migrate:remote": "wrangler d1 migrations apply slyxup_auth --remote"
+    "db:migrate:local": "wrangler d1 migrations apply slyxup_auth_com --local --config wrangler.com-workers-dev.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply slyxup_auth_com --remote --config wrangler.com-workers-dev.jsonc"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.0",

@@ -9,30 +9,30 @@ export const FONT_LINK = '';
 export const CSS = `
 .slyxup-root {
   /* ── Tokens ── */
-  --slx-accent: #5b5bd6;
-  --slx-accent-hover: #4c4cc4;
-  --slx-accent-soft: rgba(91, 91, 214, 0.12);
-  --slx-accent-2: #8b5cf6;
+  --slx-accent: #5965f2;
+  --slx-accent-hover: #4753d9;
+  --slx-accent-soft: rgba(89, 101, 242, 0.13);
+  --slx-accent-2: #8b7cf6;
   --slx-bg: #ffffff;
-  --slx-bg-subtle: #f7f7fb;
-  --slx-bg-page: #e9eaf6;
-  --slx-ink: #16161d;
-  --slx-ink-strong: #0c0c12;
-  --slx-muted: #6f6f7b;
-  --slx-border: #e3e3ee;
-  --slx-border-strong: #d3d3e2;
+  --slx-bg-subtle: #f7f8fc;
+  --slx-bg-page: #eef1f8;
+  --slx-ink: #202533;
+  --slx-ink-strong: #0e1422;
+  --slx-muted: #687287;
+  --slx-border: #e2e7f0;
+  --slx-border-strong: #cfd7e6;
   --slx-danger: #cc333f;
   --slx-success: #177245;
-  --slx-radius-sm: 8px;
-  --slx-radius: 10px;
-  --slx-radius-lg: 14px;
+  --slx-radius-sm: 10px;
+  --slx-radius: 14px;
+  --slx-radius-lg: 20px;
   --slx-font: inherit;
   --slx-display: inherit;
   --slx-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --slx-shadow-card:
     0 1px 2px rgba(18,18,28,.05),
-    0 8px 24px -6px rgba(18,18,28,.09),
-    0 24px 64px -16px rgba(18,18,28,.13);
+    0 12px 30px -12px rgba(27,39,64,.14),
+    0 28px 70px -24px rgba(27,39,64,.16);
   --slx-shadow-pop:
     0 2px 6px rgba(18,18,28,.08),
     0 16px 48px -12px rgba(18,18,28,.18);
@@ -95,7 +95,8 @@ export const CSS = `
   background: var(--slx-bg);
   border: 1px solid var(--slx-border);
   border-radius: var(--slx-radius-lg);
-  padding: 34px 34px 30px;
+  padding: 36px 36px 32px;
+  backdrop-filter: blur(18px);
   box-shadow: var(--slx-shadow-card);
   box-sizing: border-box;
   animation: slx-rise .38s cubic-bezier(.22,.9,.32,1) both;
@@ -117,11 +118,14 @@ export const CSS = `
 .slx-mark svg { display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.18)); }
 .slx-title {
   font-family: var(--slx-display);
-  font-size: 21px; font-weight: 650; letter-spacing: -0.022em;
+  /* Fluid type: 20px on 320px viewports → 24px on desktop */
+  font-size: clamp(20px, 4.5vw + 8px, 24px);
+  font-weight: 700; letter-spacing: -0.035em;
   color: var(--slx-ink-strong);
   margin: 0 0 6px;
+  line-height: 1.2;
 }
-.slx-subtitle { font-size: 13.5px; color: var(--slx-muted); margin: 0 0 24px; line-height: 1.55; }
+.slx-subtitle { font-size: clamp(13px, 1vw + 11px, 14px); color: var(--slx-muted); margin: 0 0 24px; line-height: 1.55; }
 
 /* ── Fields ── */
 .slx-field { margin-bottom: 15px; }
@@ -134,7 +138,7 @@ export const CSS = `
   font-size: 12.5px; font-weight: 550; letter-spacing: 0.01em;
   color: var(--slx-ink);
 }
-.slx-input {
+ .slx-input {
   width: 100%; box-sizing: border-box;
   font: inherit; font-size: 14px; line-height: 1.4; color: var(--slx-ink);
   background: var(--slx-bg-subtle);
@@ -142,7 +146,8 @@ export const CSS = `
   border-radius: var(--slx-radius);
   padding: 10px 13px;
   outline: none;
-  transition: border-color .15s, box-shadow .15s, background .15s;
+  min-height: 44px;
+  transition: border-color .18s, box-shadow .18s, background .18s, transform .18s;
 }
 .slx-input::placeholder { color: var(--slx-muted); opacity: .7; }
 .slx-input:hover { border-color: var(--slx-border-strong); }
@@ -150,6 +155,7 @@ export const CSS = `
   background: var(--slx-bg);
   border-color: var(--slx-accent);
   box-shadow: 0 0 0 3.5px var(--slx-accent-soft);
+  transform: translateY(-1px);
 }
 .slx-hint { font-size: 12px; color: var(--slx-muted); margin-top: 5px; }
 .slx-error-text {
@@ -160,6 +166,16 @@ export const CSS = `
   border-radius: var(--slx-radius-sm);
   padding: 10px 12px; margin: 0 0 16px; line-height: 1.45;
 }
+.slx-error { margin: 0 0 16px; }
+.slx-error .slx-error-text { margin-bottom: 8px; }
+.slx-error-code {
+  display: inline-block;
+  font-family: var(--slx-mono); font-size: 11px; font-weight: 600;
+  color: var(--slx-danger);
+  background: color-mix(in srgb, var(--slx-danger) 10%, transparent);
+  border-radius: 6px; padding: 2px 8px; margin-bottom: 8px;
+}
+.slx-error-action { display: flex; gap: 8px; margin-top: 12px; }
 .slx-setup-note {
   font-size: 12px; line-height: 1.45;
   color: #7a5c00;
@@ -183,7 +199,7 @@ export const CSS = `
   font-family: var(--slx-font); font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
   color: #fff; background: linear-gradient(180deg, #23232e 0%, #0a0a0f 100%);
   border: 1px solid #0a0a0f; border-radius: var(--slx-radius);
-  padding: 11px 14px; cursor: pointer;
+  min-height: 46px; padding: 11px 14px; cursor: pointer;
   box-shadow: 0 1px 2px rgba(10,10,15,.35), inset 0 1px 0 rgba(255,255,255,.08);
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   transition: filter .15s, transform .06s, box-shadow .15s;
@@ -235,7 +251,7 @@ export const CSS = `
   font: inherit; font-size: 13.5px; font-weight: 550;
   color: var(--slx-ink); background: var(--slx-bg);
   border: 1px solid var(--slx-border-strong); border-radius: var(--slx-radius);
-  padding: 10px 14px; cursor: pointer;
+  min-height: 44px; padding: 10px 14px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   transition: background .15s, border-color .15s, transform .06s, box-shadow .15s;
 }
@@ -1028,6 +1044,97 @@ export const CSS = `
   font-family: var(--slx-display);
   background: linear-gradient(180deg, var(--slx-ink-strong), var(--slx-ink));
   -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ── Verify / reset polish: eyebrow, state icon, info box ── */
+.slx-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--slx-accent);
+  background: var(--slx-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--slx-accent) 22%, transparent);
+  border-radius: 999px;
+  padding: 4px 12px; margin: 0 0 14px;
+}
+.slx-state-icon {
+  width: 56px; height: 56px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+  color: #fff;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--slx-accent) 78%, #0c0c12) 0%, color-mix(in srgb, var(--slx-accent-2) 55%, #0c0c12) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.28),
+    0 8px 20px -8px color-mix(in srgb, var(--slx-accent) 60%, transparent);
+}
+.slx-state-icon.is-centered { margin-left: auto; margin-right: auto; }
+.slx-state-icon.is-success {
+  border-radius: 50%;
+  color: var(--slx-success);
+  background: color-mix(in srgb, var(--slx-success) 12%, transparent);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--slx-success) 7%, transparent);
+  animation: slx-pop .45s cubic-bezier(.22,.9,.32,1) both;
+}
+.slx-state-icon.is-error {
+  border-radius: 50%;
+  color: var(--slx-danger);
+  background: color-mix(in srgb, var(--slx-danger) 10%, transparent);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--slx-danger) 6%, transparent);
+  animation: slx-pop .45s cubic-bezier(.22,.9,.32,1) both;
+}
+.slx-state-icon.is-loading {
+  border-radius: 50%;
+  color: var(--slx-accent);
+  background: var(--slx-accent-soft);
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--slx-accent) 6%, transparent);
+}
+.slx-spinner-lg {
+  width: 22px; height: 22px; flex: none;
+  border: 2.5px solid color-mix(in srgb, var(--slx-accent) 25%, transparent);
+  border-top-color: var(--slx-accent);
+  border-radius: 50%; animation: slx-spin .7s linear infinite;
+}
+.slx-info-box {
+  display: flex; gap: 10px; align-items: flex-start;
+  font-size: 12.5px; line-height: 1.55; color: var(--slx-muted);
+  background: var(--slx-bg-subtle);
+  border: 1px solid var(--slx-border);
+  border-radius: var(--slx-radius-sm);
+  padding: 11px 13px; margin: 18px 0 0;
+}
+.slx-info-box svg { flex: none; margin-top: 1px; color: var(--slx-accent); }
+.slx-info-box.is-success {
+  color: var(--slx-ink);
+  background: color-mix(in srgb, var(--slx-success) 7%, transparent);
+  border-color: color-mix(in srgb, var(--slx-success) 28%, transparent);
+}
+.slx-info-box.is-success svg { color: var(--slx-success); }
+.slx-success-text {
+  font-size: 13px; line-height: 1.5; color: var(--slx-ink);
+  background: color-mix(in srgb, var(--slx-success) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slx-success) 28%, transparent);
+  border-left: 3px solid var(--slx-success);
+  border-radius: var(--slx-radius-sm);
+  padding: 10px 12px; margin: 0 0 16px;
+}
+.slx-footer-row {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 22px; padding-top: 16px;
+  border-top: 1px solid var(--slx-border);
+  font-size: 13px; color: var(--slx-muted);
+}
+.slx-back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--slx-ink); font-weight: 600; font-size: 13px;
+  background: none; border: none; cursor: pointer; padding: 6px 8px; margin: -6px -8px;
+  border-radius: 8px; font-family: var(--slx-font);
+}
+.slx-back-link:hover { color: var(--slx-accent); }
+.slx-back-link:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--slx-accent-soft); }
+.slx-title-centered { text-align: center; }
+.slx-cooldown { font-variant-numeric: tabular-nums; }
+@media (max-width: 460px) {
+  .slx-state-icon { width: 50px; height: 50px; border-radius: 16px; margin-bottom: 16px; }
+  .slx-info-box { font-size: 12px; }
 }
 `;
 

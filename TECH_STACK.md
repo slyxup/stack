@@ -7,16 +7,15 @@
 | Web | `web/`: React 19 + Vite + Tailwind v4, deployed to the `stack-frontend` Cloudflare Worker |
 | Core SDK | `packages/core/`: TypeScript ESM, typed fetch client, billing client, management helpers, Web API server helpers |
 | UI SDK | `packages/ui/`: React 18/19 components, hooks, self-contained stylesheet and theme tokens |
-| Example | `examples/url-shortner/`: Next.js 15 static export, client-only SDK usage |
 | Tooling | pnpm 10.34.5 (Corepack), Turborepo, TypeScript, Biome, Vitest, Wrangler 4 |
 
-Use `package.json` and `pnpm-lock.yaml` for exact versions. Backend dependency upgrades include Drizzle 0.45.2, current Hono patches and Wrangler 4.130.0. Next.js example is 15.5.25.
+Use `package.json` and `pnpm-lock.yaml` for exact versions. Backend dependency upgrades include Drizzle 0.45.2, current Hono patches and Wrangler 4.130.0.
 
 ## Authentication behavior
 
-The `/v1/*` SDK API is implemented by custom auth routes/services. Better Auth is separately mounted under `/api/auth/*`; do not assume its security properties, plugins or session format automatically apply to `/v1`.
+The `/v1/*` API is implemented by custom auth routes/services. Better Auth is separately mounted under `/api/auth/*`; do not assume its security properties, plugins or session format automatically apply to `/v1`.
 
-Read `auth/src/lib/password.ts` for the actual custom-route password algorithm; documentation must not label it Argon2id without checking that implementation. Sessions are database-backed random bearer tokens with expiry. Platform login sets host-only HttpOnly cookies; project login returns bearer tokens. SDK tokens are memory-only by default, with explicit project/URL-scoped sessionStorage opt-in. Server consumers should own their HttpOnly cookies through same-origin routes.
+Read `auth/src/lib/password.ts` for the actual custom-route password algorithm; it currently uses PBKDF2-HMAC-SHA-256 with a per-user salt. Sessions are database-backed random bearer tokens with expiry. Platform login sets host-only HttpOnly cookies and returns a bearer token for the operator web app; project login returns bearer tokens. The published packages manage their own client-side token transport, while server consumers should own their HttpOnly cookies.
 
 Never use browser secret keys, cross-user server-client singletons, `Math.random()` for secrets, or cookie presence as authorization. Full transport and migration recipes: `INTEGRATION_GUIDE.md`.
 

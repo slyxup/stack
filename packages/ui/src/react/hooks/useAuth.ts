@@ -45,6 +45,7 @@ export function useAuth() {
     userId,
     sessionToken,
     client,
+    billingApiUrl: ctx.billingApiUrl,
     oauthChallenge: ctx.oauthChallenge,
     authError: ctx.authError,
     signIn,

@@ -9,7 +9,7 @@ Docs/UI preview deployed successfully: https://f6c5e6ef.stack-slyxup-online.page
 ## Implemented
 
 - Request-scoped server session support, memory-default client tokens, optional project/URL-scoped tab persistence, explicit billing token transport.
-- Next.js Request/Response middleware with real session validation, exact public path matching, and fail-closed outage handling; exported `/next` package entry.
+- Web API Request/Response middleware with real session validation, exact public path matching, and fail-closed outage handling.
 - Project-key/session matching on protected auth routes and `/v1/session`.
 - Correct multiple Set-Cookie handling and malformed-cookie rejection.
 - Project-scoped verification/reset requests, atomic reset-token/recovery-code claims, session revocation on password reset, blocked-user recheck at second-factor completion, and prevention of replacing an enabled second factor without disabling it first.
@@ -18,7 +18,7 @@ Docs/UI preview deployed successfully: https://f6c5e6ef.stack-slyxup-online.page
 - OAuth: verified provider email, project-scoped identity lookup, registered return domains, browser-state binding, provider PKCE, one-time app exchange and second-factor continuation. No new stored provider access tokens and no session tokens in callback URLs.
 - Billing ownership-conflict rejection, conservative entitlement expiry/status checks, failed-webhook retry state, rejection of plan/price mismatches and existing-subscription identity reassignment.
 - Explicit production billing origins; removed client-controlled test-mode CORS bypass; rejected unapproved-origin mutations.
-- Updated Next.js, Drizzle, Hono, Wrangler and vulnerable transitives; pnpm pinned to 10.34.5.
+- Updated Drizzle, Hono, Wrangler and vulnerable transitives; pnpm pinned to 10.34.5.
 - Correct deployment package filters and CI gating; manual SDK publication using reviewed Changesets versions instead of auto-patch guessing and swallowed failures.
 - Source-backed integration guide, public docs rendering/download, corrected fictitious SDK examples and package READMEs.
 

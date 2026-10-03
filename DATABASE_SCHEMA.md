@@ -10,3 +10,14 @@ Billing migration `0002_tidy_trish_tilby.sql`:
 - `webhook_events.lease_until`, `lease_token`: expiry plus random owner token for retry ownership; a completed event is never claimed again. Failure/completion writes require the matching owner token.
 
 Generated with Drizzle. Apply auth and billing migrations locally, validate `pnpm test:runtime`, then apply the reviewed migrations remotely before deploying the new Workers. Existing legacy subscriptions remain readable; new subscription attribution requires checkout through the server endpoint.
+
+## V4 security + perf additions
+
+Auth migration `0013_massive_virginia_dare.sql`:
+- `users.password_hash_version`: `'pbkdf2'` (legacy 100k) or `'pbkdf2-600k'` (current). Logins auto-rehash opportunistically.
+
+Auth migration `0014_fresh_masque.sql`:
+- `sessions.fingerprint_hash`: HMAC-SHA256(IP + normalized UA, SESSION_SECRET), null when no secret configured. Validated in `getSession()` with 5-minute rotation grace.
+
+Auth migration `0015_rapid_weapon_omega.sql`:
+- `users_email_lower_project_idx`: expression index on `(lower(email), project_id)` serving the sign-in hot path, which can't use the case-sensitive unique index.

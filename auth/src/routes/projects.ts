@@ -3,14 +3,26 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getDb } from '../lib/db';
 import {
+  apiKeys,
   developers,
   projectDomains,
   projects as projectsTable,
+  users,
 } from '../lib/schema';
 import { requireDeveloper } from '../middleware/developer';
+import { projectEnvironmentSchema } from '../schemas/project-environment';
 import { createProjectSchema } from '../schemas/projects';
-import { writeAuditLog } from '../services/audit.service';
+import { listAuditLogs, writeAuditLog } from '../services/audit.service';
 import * as ProjectService from '../services/project.service';
+
+function reqMeta(c: {
+  req: { header: (n: string) => string | undefined };
+}) {
+  return {
+    ipAddress: c.req.header('CF-Connecting-IP') ?? null,
+    userAgent: c.req.header('User-Agent') ?? null,
+  };
+}
 
 const projects = new Hono<{
   Bindings: { DB: D1Database; KV: KVNamespace };
@@ -29,6 +41,16 @@ projects.post('/', zValidator('json', createProjectSchema), async (c) => {
       c.env,
       developerId,
       input
+    );
+    void writeAuditLog(
+      c.env,
+      'project.created',
+      {
+        projectId: project.id,
+        userId: c.get('userId') ?? null,
+        ...reqMeta(c),
+      },
+      { name: project.name, slug: project.slug }
     );
     return c.json({ ok: true, project }, 201);
   } catch (e) {
@@ -53,6 +75,68 @@ projects.get('/:id', async (c) => {
   const member = await ProjectService.isProjectMember(c.env, id, developerId);
   if (!member) return c.json({ ok: false, error: 'Forbidden' }, 403);
   return c.json({ ok: true, project });
+});
+
+// Project-scoped audit timeline — what the dashboard Audit tab reads.
+// (The legacy admin endpoint lives at GET /v1/audit/logs?projectId=.)
+projects.get('/:id/audit', async (c) => {
+  const developerId = c.get('developerId');
+  if (!developerId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+  const id = c.req.param('id');
+  const member = await ProjectService.isProjectMember(c.env, id, developerId);
+  if (!member) return c.json({ ok: false, error: 'Forbidden' }, 403);
+  const project = await ProjectService.getProject(c.env, id);
+  if (!project) return c.json({ ok: false, error: 'Not found' }, 404);
+  const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, 100);
+  const offset = Math.max(Number(c.req.query('offset') ?? 0) || 0, 0);
+  const action = c.req.query('action') || undefined;
+  const { logs, total } = await listAuditLogs(c.env, {
+    projectId: id,
+    action,
+    limit,
+    offset,
+  });
+  // Attach actor emails (best-effort) + normalize target fields for the UI.
+  const db = getDb(c.env);
+  const actorIds = [...new Set(logs.map((l) => l.userId).filter(Boolean))];
+  const emailById = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const { inArray } = await import('drizzle-orm');
+    const rows = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(inArray(users.id, actorIds as string[]))
+      .all();
+    for (const r of rows) emailById.set(r.id, r.email);
+  }
+  return c.json({
+    ok: true,
+    total,
+    logs: logs.map((l) => {
+      const meta = (l.metadata ?? {}) as Record<string, unknown>;
+      const targetId =
+        typeof meta.userId === 'string'
+          ? meta.userId
+          : typeof meta.keyId === 'string'
+            ? meta.keyId
+            : undefined;
+      return {
+        id: l.id,
+        action: l.action,
+        actorId: l.userId,
+        actorEmail: (l.userId && emailById.get(l.userId)) || undefined,
+        targetId,
+        targetType: targetId
+          ? l.action.startsWith('key.')
+            ? 'key'
+            : 'user'
+          : undefined,
+        metadata: l.metadata,
+        ip: l.ipAddress,
+        createdAt: l.createdAt,
+      };
+    }),
+  });
 });
 
 projects.patch('/:id/domains', async (c) => {
@@ -113,7 +197,17 @@ projects.patch('/:id/domains', async (c) => {
       .set({ allowedDomains: updated, updatedAt: new Date() })
       .where(eq(projectsTable.id, id));
   }
-  await c.env.KV.delete('cors_live_domains');
+  await c.env.KV.delete('cors_project_domains_v2');
+  void writeAuditLog(
+    c.env,
+    body.action === 'add' ? 'domain.added' : 'domain.removed',
+    {
+      projectId: id,
+      userId: c.get('userId') ?? null,
+      ...reqMeta(c),
+    },
+    { domain: clean }
+  );
   const domains = await db
     .select({ domain: projectDomains.domain })
     .from(projectDomains)
@@ -157,9 +251,54 @@ projects.post('/:id/go-live', async (c) => {
     .update(projectsTable)
     .set({ environment: 'live', updatedAt: new Date() })
     .where(eq(projectsTable.id, id));
-  await c.env.KV.delete('cors_live_domains');
+  await db.delete(apiKeys).where(eq(apiKeys.projectId, id));
+  await c.env.KV.delete('cors_project_domains_v2');
+  void writeAuditLog(
+    c.env,
+    'project.environment_changed',
+    {
+      projectId: id,
+      userId: c.get('userId') ?? null,
+      ...reqMeta(c),
+    },
+    { environment: 'live' }
+  );
   return c.json({ ok: true, environment: 'live' });
 });
+
+projects.patch(
+  '/:id/environment',
+  zValidator('json', projectEnvironmentSchema),
+  async (c) => {
+    const developerId = c.get('developerId');
+    if (!developerId) return c.json({ ok: false, error: 'Unauthorized' }, 401);
+    const id = c.req.param('id');
+    const member = await ProjectService.isProjectMember(c.env, id, developerId);
+    if (!member) return c.json({ ok: false, error: 'Forbidden' }, 403);
+    const { environment } = c.req.valid('json');
+    const db = getDb(c.env);
+    const updated = await db
+      .update(projectsTable)
+      .set({ environment, updatedAt: new Date() })
+      .where(eq(projectsTable.id, id))
+      .returning({ environment: projectsTable.environment })
+      .get();
+    if (!updated) return c.json({ ok: false, error: 'Not found' }, 404);
+    await db.delete(apiKeys).where(eq(apiKeys.projectId, id));
+    await c.env.KV.delete('cors_project_domains_v2');
+    void writeAuditLog(
+      c.env,
+      'project.environment_changed',
+      {
+        projectId: id,
+        userId: c.get('userId') ?? null,
+        ...reqMeta(c),
+      },
+      { environment: updated.environment }
+    );
+    return c.json({ ok: true, environment: updated.environment });
+  }
+);
 
 projects.delete('/:id', async (c) => {
   const developerId = c.get('developerId');
@@ -169,7 +308,7 @@ projects.delete('/:id', async (c) => {
     const proj = await ProjectService.getProject(c.env, id);
     const name = proj?.name ?? id;
     await ProjectService.deleteProject(c.env, id, developerId);
-    await c.env.KV.delete('cors_live_domains');
+    await c.env.KV.delete('cors_project_domains_v2');
     void writeAuditLog(
       c.env,
       'project.deleted',

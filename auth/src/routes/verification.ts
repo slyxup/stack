@@ -29,9 +29,10 @@ tokens.get('/confirm', async (c) => {
     return c.html(
       EMAIL_SHELL(
         'Email verified',
-        `<h1 class="ok">✓ Email verified</h1>
+        `<p class="eyebrow">Email verification</p>
+         <h1 class="ok">Email verified</h1>
          <p><strong>${result.email}</strong> is confirmed. You can now sign in everywhere.</p>
-         <p style="font-size:12px">You can close this tab and return to the app.</p>`
+         <p class="msg ok">You're all set — close this tab and return to the app.</p>`
       )
     );
   } catch (e) {
@@ -39,8 +40,10 @@ tokens.get('/confirm', async (c) => {
     return c.html(
       EMAIL_SHELL(
         'Verification failed',
-        `<h1 class="err">Link invalid or expired</h1><p>${msg}</p>
-         <p style="font-size:12px">Request a new email from the app and try again.</p>`
+        `<p class="eyebrow">Email verification</p>
+         <h1 class="err">Link invalid or expired</h1>
+         <p class="msg err">${msg}</p>
+         <p>Request a new verification email from the app and try again.</p>`
       ),
       400
     );
@@ -53,32 +56,34 @@ tokens.get('/reset', async (c) => {
   return c.html(
     EMAIL_SHELL(
       'Choose a new password',
-      `<h1>Choose a new password</h1>
-       <p>Enter a strong password (min 8 characters).</p>
+      `<p class="eyebrow">Password reset</p>
+       <h1>Choose a new password</h1>
+       <p>Pick something strong (min 8 characters) you haven't used before. This link works once and expires in 1 hour.</p>
        <form id="f">
-         <input id="p1" type="password" placeholder="New password" minlength="8" required>
-         <input id="p2" type="password" placeholder="Confirm password" minlength="8" required>
+         <input id="p1" type="password" placeholder="New password" minlength="8" autocomplete="new-password" required>
+         <input id="p2" type="password" placeholder="Confirm password" minlength="8" autocomplete="new-password" required>
          <button type="submit">Update password</button>
        </form>
-       <p id="msg" style="margin-top:14px;font-size:13px"></p>
+       <p id="msg" class="msg" style="display:none;margin-top:14px;"></p>
        <script>
        document.getElementById('f').addEventListener('submit', async (e) => {
          e.preventDefault();
          const p1 = document.getElementById('p1').value;
          const p2 = document.getElementById('p2').value;
          const msg = document.getElementById('msg');
-         if (p1 !== p2) { msg.className='err'; msg.textContent='Passwords do not match'; return; }
+          if (p1.length < 8) { msg.style.display='block'; msg.className='msg err'; msg.textContent='Use at least 8 characters'; return; }
+          if (p1 !== p2) { msg.style.display='block'; msg.className='msg err'; msg.textContent='Passwords do not match'; return; }
          const res = await fetch('/v1/verification/password/reset', {
            method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ token: ${JSON.stringify(token).replace(/</g, '\\u003c')}, password: p1 })
          });
          const data = await res.json().catch(() => ({}));
-         if (res.ok && data.ok) {
-           msg.className='ok'; msg.textContent='✓ Password updated. You can sign in now.';
-           document.getElementById('f').style.display='none';
-         } else {
-           msg.className='err'; msg.textContent = data.error || 'Reset failed';
-         }
+          if (res.ok && data.ok) {
+            msg.style.display='block'; msg.className='msg ok'; msg.textContent='Password updated. You can sign in now.';
+            document.getElementById('f').style.display='none';
+          } else {
+            msg.style.display='block'; msg.className='msg err'; msg.textContent = data.error || 'Reset failed';
+          }
        });
        </script>`
     )

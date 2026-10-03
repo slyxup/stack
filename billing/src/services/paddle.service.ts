@@ -288,6 +288,65 @@ export async function resumeSubscription(
   });
 }
 
+// ── Refunds (real money movement — admin-approved only) ──
+
+interface PaddleTransactionDetails {
+  id: string;
+  status?: string;
+  details?: {
+    line_items?: { id: string }[];
+  } | null;
+}
+
+interface PaddleAdjustment {
+  id: string;
+  action?: string;
+  status?: string;
+  transaction_id?: string;
+}
+
+/**
+ * Full refund of a completed Paddle transaction via a transaction adjustment.
+ * Fetches the transaction first to enumerate its line items (Paddle requires
+ * item ids for a refund adjustment), then creates `{action:"refund"}` with
+ * every line item refunded in full.
+ * Throws on any failure — callers MUST mark the request `failed`, never
+ * claim success without a Paddle adjustment id.
+ * Docs: https://developer.paddle.com/api-reference/adjustments/create-transaction-adjustment
+ */
+export async function createFullRefundAdjustment(
+  config: PaddleConfig,
+  paddleTransactionId: string,
+  reason: string
+): Promise<PaddleAdjustment> {
+  const tx = await paddleFetch<PaddleTransactionDetails>(
+    config,
+    'GET',
+    `/transactions/${encodeURIComponent(paddleTransactionId)}`
+  );
+  if (tx.status !== 'completed') {
+    throw new Error(
+      `Paddle transaction ${paddleTransactionId} is not completed (status: ${tx.status ?? 'unknown'}) — cannot refund`
+    );
+  }
+  const lineItems = tx.details?.line_items ?? [];
+  if (lineItems.length === 0) {
+    throw new Error(
+      `Paddle transaction ${paddleTransactionId} has no line items — cannot build refund adjustment`
+    );
+  }
+  return paddleFetch<PaddleAdjustment>(
+    config,
+    'POST',
+    `/transactions/${encodeURIComponent(paddleTransactionId)}/adjustments`,
+    {
+      action: 'refund',
+      items: lineItems.map((li) => ({ item_id: li.id, type: 'full' })),
+      reason: reason.slice(0, 500),
+    }
+  );
+}
+
 // ── Webhook signature verification ──
 
 /**

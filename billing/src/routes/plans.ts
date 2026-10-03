@@ -3,6 +3,10 @@ import { Hono } from 'hono';
 import { getDb } from '../lib/db';
 import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
+import {
+  resolveProjectEnvironment,
+  selectPlanPrice,
+} from '../services/paddle-config';
 
 /** Deduplicated SHA256 helper — same logic as auth/lib/crypto sha256Hex, inlined to avoid cross-worker import. */
 async function sha256HexLocal(input: string): Promise<string> {
@@ -90,6 +94,8 @@ app.get('/', async (c) => {
     return c.json({ ok: false, error: 'projectId required' }, 400);
   }
 
+  const environment = await resolveProjectEnvironment(c.env, projectId);
+
   const db = getDb(c.env);
   const list = await db
     .select()
@@ -98,20 +104,28 @@ app.get('/', async (c) => {
     .orderBy(asc(plans.sortOrder))
     .all();
 
-  return c.json({
-    ok: true,
-    plans: list.map((p) => ({
-      id: p.id,
-      name: p.name,
-      paddlePriceId: p.paddlePriceId,
-      amount: p.amount,
-      currency: p.currency,
-      interval: p.interval,
-      trialDays: p.trialDays > 0 ? p.trialDays : null,
-      features: p.features ?? [],
-      isPopular: p.isPopular,
-    })),
-  });
+  try {
+    return c.json({
+      ok: true,
+      plans: list.map((p) => ({
+        id: p.id,
+        name: p.name,
+        paddlePriceId: selectPlanPrice(p, environment),
+        amount: p.amount,
+        currency: p.currency,
+        interval: p.interval,
+        trialDays: p.trialDays > 0 ? p.trialDays : null,
+        features: p.features ?? [],
+        isPopular: p.isPopular,
+      })),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Paddle price is not configured';
+    return c.json(
+      { ok: false, code: 'PADDLE_PRICE_NOT_CONFIGURED', error: message },
+      503
+    );
+  }
 });
 
 export default app;

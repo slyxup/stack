@@ -368,14 +368,26 @@ oauth.get('/callback/:provider', async (c) => {
   const base = c.env.HOSTED_AUTH_URL ?? c.env.APP_URL;
   const redirectUri = `${base}/v1/oauth/callback/${provider}`;
 
-  if (!code || !state) return c.redirect(`${base}/sign-in?error=missing_code`);
+  if (!code || !state) {
+    const fallback = c.req.query('redirect_url') ? safeRedirect(c.req.query('redirect_url'), c.env.APP_URL, c.env) : c.env.APP_URL;
+    return c.redirect(`${fallback}${fallback.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+  }
   const pending = await readChallenge(c.env, 'oauth_state', state);
-  if (!pending) return c.redirect(`${base}/sign-in?error=invalid_state`);
+  if (!pending) {
+    const fallback = c.env.APP_URL;
+    return c.redirect(`${fallback}${fallback.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+  }
   const cookieName = `slyxup_oauth_${state.slice(0, 16)}`;
-  if (getCookie(c, cookieName) !== pending.payload.browserBinding)
-    return c.redirect(`${base}/sign-in?error=browser_mismatch`);
-  if (!(await consumeChallenge(c.env, 'oauth_state', state)))
-    return c.redirect(`${base}/sign-in?error=used_state`);
+  if (getCookie(c, cookieName) !== pending.payload.browserBinding) {
+    const redirectUrl = (pending.payload as { redirectUrl?: string }).redirectUrl;
+    const dest = safeRedirect(redirectUrl, c.env.APP_URL, c.env);
+    return c.redirect(`${dest}${dest.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+  }
+  if (!(await consumeChallenge(c.env, 'oauth_state', state))) {
+    const redirectUrl = (pending.payload as { redirectUrl?: string }).redirectUrl;
+    const dest = safeRedirect(redirectUrl, c.env.APP_URL, c.env);
+    return c.redirect(`${dest}${dest.includes('?') ? '&' : '?'}error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`);
+  }
   deleteCookie(c, cookieName, { path: '/v1/oauth' });
   const stateObj = pending.payload as {
     provider: string;
@@ -422,8 +434,17 @@ oauth.get('/callback/:provider', async (c) => {
       : await db
           .select()
           .from(users)
-          .where(and(eq(users.email, profile.email), scope))
+          .where(and(sql`lower(${users.email}) = ${profile.email}`, scope))
           .get();
+
+    // OAuth and password accounts are intentionally exclusive. Providers above
+    // return verified emails, but that alone must not turn a password account
+    // into an OAuth account or grant a second login method.
+    if (user?.passwordHash) {
+      throw new Error(
+        'This email uses email and password sign-in. Continue with email and password.'
+      );
+    }
 
     if (user && (user.blocked || user.mustChangePassword))
       throw new Error('Account unavailable');
@@ -551,16 +572,21 @@ oauth.get('/callback/:provider', async (c) => {
     const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(`${dest}${joiner}auth=success`);
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     console.error(
       JSON.stringify({
         evt: 'oauth_error',
         provider,
-        msg: e instanceof Error ? e.message : String(e),
+        msg,
+        stack: e instanceof Error ? e.stack : undefined,
       })
     );
-    const joiner = base.includes('?') ? '&' : '?';
+    const pendingState = pending?.payload as { redirectUrl?: string } | undefined;
+    const maybeState = pendingState || (typeof stateObj !== 'undefined' ? stateObj : undefined);
+    const dest = maybeState?.redirectUrl ? safeRedirect(maybeState.redirectUrl, c.env.APP_URL, c.env) : c.env.APP_URL;
+    const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(
-      `${base}/sign-in?error=${encodeURIComponent('OAuth sign-in failed. Please try again.')}`
+      `${dest}${joiner}error=${encodeURIComponent(msg || 'OAuth sign-in failed. Please try again.')}`
     );
   }
 });

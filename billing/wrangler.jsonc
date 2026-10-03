@@ -5,11 +5,12 @@
   "compatibility_date": "2025-07-18",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "API_URL": "https://billing.slyxup.online",
-    "AUTH_URL": "https://auth.slyxup.online",
-    "APP_URL": "https://stack.slyxup.online",
-    "CORS_ORIGINS": "https://stack.slyxup.online,https://billing.slyxup.online,https://prompt.slyxup.online,https://automation.slyxup.online,http://localhost:5173,http://localhost:3002",
-    "PADDLE_ENVIRONMENT": "sandbox"
+    "API_URL": "https://billing-slyxup-com.billing-86c.workers.dev",
+    "PAYMENT_LINK_URL": "https://stack.slyxup.com/pay",
+    "AUTH_URL": "https://auth-slyxup-com.auth-0f4.workers.dev",
+    "APP_URL": "https://stack.slyxup.com",
+    "CORS_ORIGINS": "https://stack.slyxup.com,https://prompt.slyxup.com,https://automation.slyxup.com,https://email.slyxup.com,http://localhost:5173,http://localhost:3002",
+    "PADDLE_DEFAULT_ENVIRONMENT": "test"
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "slyxup_billing", "database_id": "5c5a0f61-3ca8-4e12-baf2-29e2d2ce9415", "migrations_dir": "migrations" },
@@ -17,5 +18,5 @@
   ],
   "kv_namespaces": [{ "binding": "KV", "id": "74a592aa3b044d15bb780648c774b906" }],
   "observability": { "enabled": true },
-  "routes": [{ "pattern": "billing.slyxup.online/*", "zone_name": "slyxup.online" }]
+    "routes": [{ "pattern": "billing.slyxup.com/*", "zone_name": "slyxup.com" }]
 }

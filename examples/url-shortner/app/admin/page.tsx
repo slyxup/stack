@@ -3,7 +3,7 @@
 import { AdminPanel } from '@slyxup/ui';
 
 const sk = process.env.NEXT_PUBLIC_SLYXUP_SECRET_KEY || '';
-const apiUrl = process.env.NEXT_PUBLIC_SLYXUP_API_URL || 'https://auth.slyxup.online';
+const apiUrl = process.env.NEXT_PUBLIC_SLYXUP_API_URL || 'https://auth.slyxup.com';
 
 export default function AdminPage() {
   if (!sk) {
@@ -15,8 +15,8 @@ export default function AdminPage() {
             Set <code>NEXT_PUBLIC_SLYXUP_SECRET_KEY</code> in your <code>.env.local</code>.
           </p>
           <pre style={{ background: '#18181b', border: '1px solid #27272a', padding: 16, borderRadius: 10, marginTop: 16, textAlign: 'left', fontSize: 13, color: '#a1a1aa' }}>
-{`NEXT_PUBLIC_SLYXUP_SECRET_KEY=sk_test_xxx
-NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.online`}
+{`NEXT_PUBLIC_SLYXUP_SECRET_KEY=sk_xxx
+NEXT_PUBLIC_SLYXUP_API_URL=https://auth.slyxup.com`}
           </pre>
         </div>
       </div>

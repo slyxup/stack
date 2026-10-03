@@ -1,6 +1,6 @@
 # Contributing to SlyxUp Stack
 
-> `slyxup.online/stack/` — CF Workers + D1, domain-based. Root `slyxup.online/` has no git.
+> `slyxup.com/stack/` — CF Workers + D1, domain-based. Root `slyxup.com/` has no git.
 
 ## 1. Modern Workflow (Strict)
 
@@ -42,30 +42,30 @@ Husky runs `commitlint --edit` on commit-msg + `lint-staged` (biome) on pre-comm
    ```bash
    pnpm typecheck && pnpm lint && pnpm build # 7/7 green
    pnpm cf:typegen
-   pnpm --filter auth.slyxup.online db:generate && pnpm --filter auth.slyxup.online db:migrate:local
-   npx wrangler deploy --dry-run --config auth.slyxup.online/wrangler.jsonc
+    pnpm --filter auth db:generate && pnpm --filter auth db:migrate:local
+    npx wrangler deploy --dry-run --config auth/wrangler.com-workers-dev.jsonc
    pnpm --filter @slyxup/core exec npm publish --dry-run --access public
    ```
 3. **SDK version:** Agar `packages/*` change kiya to `pnpm changeset` se `.changeset/*.md` banao, warna version bump nahi hoga (verified: no changeset → release success but no new npm version).
 4. **Push to main only after verify:** `git push origin feat/xxx` → `gh pr create` → CI green → `gh pr merge` → `main` push se hi `release.yml` (npm publish) + `deploy.yml` (wrangler deploy) trigger hoga. Local + prod dono me changes tabhi jayenge.
-5. **Check prod:** `gh run list`, `npm view @slyxup/core version`, `curl https://auth.slyxup.online/v1/health`, `wrangler d1 execute --remote`.
+5. **Check prod:** `gh run list`, `npm view @slyxup/core version`, the deployed `/v1/health` endpoints, and `wrangler d1 execute --remote` with the active config.
 
 ## 2. Before You Code — Planning Required
 
-1. Read `AGENTS.md` (build order db→api→core→react→nextjs→ui→cli)
+1. Read `AGENTS.md` (build order db→api→core→ui→workers→docs→release)
 2. Read `TECH_STACK.md` (D1 limits), `DRIZZLE_GUIDE.md`, `ENV_GUIDE.md`
-3. Check `LIMITATIONS.md` — don't build Dashboard/Orgs; keep billing in billing.slyxup.online only
+3. Check `LIMITATIONS.md` — don't build Dashboard/Orgs; keep billing in `billing` only
 4. Create issue → discuss → `feat/` branch → plan task list in PR description
 5. Do NOT generate entire repo — one phase per PR
 
 ## 3. Drizzle + D1 — Proper Workflow (Critical)
 
-Every schema change in `auth.slyxup.online/src/lib/schema.ts`:
+Every schema change in `auth/src/lib/schema.ts`:
 
 ```bash
-pnpm --filter auth.slyxup.online db:generate
-pnpm --filter auth.slyxup.online db:migrate:local   # test local D1
-pnpm --filter auth.slyxup.online db:migrate:remote  # only after local passes
+pnpm --filter auth db:generate
+pnpm --filter auth db:migrate:local   # test local D1
+pnpm --filter auth db:migrate:remote  # only after local passes
 pnpm typecheck
 git add src/lib/schema.ts migrations/
 git commit -m "drizzle(auth): add <table>, generate + migrate local+remote"
@@ -108,8 +108,8 @@ Husky pre-commit runs `lint-staged` (biome check). Fix before push.
 - [ ] Schema changed? `db:generate` + `migrate:local` + `migrate:remote` done?
 - [ ] `pnpm typecheck` + `lint` + `build` pass?
 - [ ] `wrangler types` run?
-- [ ] Domain folder naming `.slyxup.online`?
-- [ ] No new Dashboard/Orgs scope? Billing changes confined to billing.slyxup.online?
+- [ ] Package and active Wrangler config names are correct?
+- [ ] No new Dashboard/Orgs scope? Billing changes remain in `billing`?
 - [ ] Conventional commit?
 
 ## 8. AI Agent — Extra

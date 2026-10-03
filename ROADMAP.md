@@ -4,7 +4,7 @@
 
 ## Phase 0 — Setup (DONE, this commit)
 
-- [x] Monorepo `slyxup.online/stack/` domain-based (auth, stack, billing placeholder)
+- [x] Monorepo `slyxup.com/stack/` domain-based (auth, stack, billing placeholder)
 - [x] CF Workers + D1 + KV + R2 (wrangler.jsonc per domain)
 - [x] Planning MDs: `AGENTS.md`, `TECH_STACK.md`, `DRIZZLE_GUIDE.md`, `ENV_GUIDE.md`, `LIMITATIONS.md`, `STRUCTURE.md`
 - [x] Modern tooling: pnpm + turbo + biome + commitlint + husky + changesets
@@ -13,7 +13,7 @@
 
 ## Phase 1 — DB & Schema (Next)
 
-- `auth.slyxup.online/src/lib/schema.ts` — D1 sqliteTable for PLAN.md §8
+- `auth.slyxup.com/src/lib/schema.ts` — D1 sqliteTable for PLAN.md §8
 
 ## Phase 2 — API Contract
 ## Phase 3 — Core SDK

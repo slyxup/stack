@@ -4,8 +4,8 @@
 
 - Dashboard, Organizations, SAML/SCIM, Enterprise SSO
 - Billing Teams, Analytics, Storage, AI (auth stays identity-only)
-- **NEVER add billing tables/routes to `slyxup_auth` or the auth Worker** — billing.slyxup.online is the sole billing owner (its own D1 + Paddle webhooks). Auth ↔ billing integration happens only via billing's read-only `AUTH_DB` session check.
-- Passkeys, Mobile/Vue/Svelte SDKs, React Native
+- **NEVER add billing tables/routes to the auth database or Auth Worker** — billing owns its D1 and Paddle webhooks. Auth ↔ billing integration happens through the billing service's read-only auth-session validation.
+- Passkeys, mobile SDKs, Vue/Svelte SDKs, React Native, and separate framework SDK packages
 - Multi-region, complex admin panel
 
 If AI adds these, it’s out of scope — stop.
@@ -25,7 +25,7 @@ If AI adds these, it’s out of scope — stop.
 - **128MB memory** — stream large payloads, no `await res.text()` on unbounded
 - **CPU 50ms (free) / 30s (paid)** — no heavy Argon2 sync, use `ctx.waitUntil` for non-critical
 - **No `fs`, no `child_process`** — Workers sandbox
-- **Routes must have `zone_name: "slyxup.online"`** — `auth.slyxup.online/*` etc.
+- Deployment routes and custom domains must be defined in the active Wrangler configuration for the target account.
 - **Secrets max 512 per Worker** — keep vars minimal
 
 ## 4. Best-practice violations to block
@@ -48,9 +48,9 @@ If AI adds these, it’s out of scope — stop.
 
 ## 6. What AI can do when blocked
 
-- Ask: “This needs new auth-side tables — should identity own this, or does it belong in billing.slyxup.online?” (billing data NEVER goes into slyxup_auth)
+- Ask: “This needs new auth-side tables — should identity own this, or does it belong in billing?” (billing data NEVER goes into the auth database)
 - Suggest: batch helper, `d1-batch.ts` util, `crypto` wrapper
-- Never silently add Postgres/Docker/Next auth logic to `auth.slyxup.online`
+- Never silently add Postgres, Docker, or a new framework-specific SDK to the platform
 
 ---
 **AI: If you hit a limit, document it in this file, don't bypass.**

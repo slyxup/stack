@@ -19,13 +19,14 @@ export default function CheckoutSuccess() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const txId = params.get('transaction_id');
-  const projectId = params.get('project_id');
   // Where the user came from — redirect back to that platform (e.g. an SDK app).
   const origin = params.get('origin');
   const [state, setState] = useState<State>({ kind: 'verifying' });
   const [countdown, setCountdown] = useState(8);
 
-  const backTo = projectId ? `/admin/projects/${projectId}` : '/admin';
+  // Checkout can be initiated by an external product user. Never fall back to
+  // the admin dashboard when Paddle omits the return origin.
+  const backTo = '/';
   const returnHref = origin ?? null;
 
   // NEVER trust a bare ?transaction_id= URL — verify with Paddle first.
@@ -124,7 +125,7 @@ export default function CheckoutSuccess() {
                   to={backTo}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[13px] font-semibold hover:bg-[#1a1a2e] transition"
                 >
-                  Back to project <ArrowRight className="size-3.5" />
+                   Back to SlyxUp <ArrowRight className="size-3.5" />
                 </Link>
               )}
               <div className="text-[12px] text-[#a1a3ab]">
@@ -185,7 +186,7 @@ export default function CheckoutSuccess() {
                     to={backTo}
                     className="text-[13px] font-medium text-[#63666f] hover:text-black underline underline-offset-4"
                   >
-                    Back to project
+                     Back to SlyxUp
                   </Link>
                 </div>
               )}
@@ -229,7 +230,7 @@ export default function CheckoutSuccess() {
                     to={backTo}
                     className="text-[13px] font-medium text-[#63666f] hover:text-black underline underline-offset-4"
                   >
-                    Back to project
+                     Back to SlyxUp
                   </Link>
                 </div>
               )}

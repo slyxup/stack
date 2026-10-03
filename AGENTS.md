@@ -1,16 +1,16 @@
 # AGENTS.md — AI Agent Guide for SlyxUp Stack (CF Workers + D1)
 
-> Read this FIRST before writing any code. This repo is `slyxup.online/stack/` — CF-only, domain-based, drizzle + D1.
+> Read this FIRST before writing any code. This repo is `slyxup.com/stack/` — CF-only, domain-based, drizzle + D1.
 
 ## 1. What this project is
 
-SlyxUp Stack — open-source auth platform (github.com/slyxup/stack), domain-based inside `slyxup.online/stack/`:
-- `auth.slyxup.online/` → Hono Worker + D1 + KV + R2 (API `/v1/*` + Hosted Pages `/sign-in`)
-- `stack.slyxup.online/` → Marketing ONLY (Next.js, no dashboard/keys UI)
-- `billing.slyxup.online/` → LIVE billing Worker + D1 (`slyxup_billing`) — SOLE owner of billing tables; validates auth sessions via read-only `AUTH_DB` binding. NEVER add billing code/tables to auth.
-- `packages/{core,react,nextjs,ui,cli,billing}` → SDKs
+SlyxUp Stack — open-source auth platform (github.com/slyxup/stack), domain-based inside `slyxup.com/stack/`:
+- `auth/` → Hono Worker + D1 + KV (API `/v1/*`)
+- `web/` → Vite + React admin panel and public docs at `stack.slyxup.com`
+- `billing/` → Billing Worker + separate D1 and Paddle — sole owner of billing tables; validates auth sessions through read-only auth data. NEVER add billing code/tables to auth.
+- `packages/{core,ui}` → SDKs
 
-Root `slyxup.online/` has NO git, NO code — real monorepo is `slyxup.online/stack/`.
+Root `slyxup.com/` has NO git, NO code — real monorepo is `slyxup.com/stack/`.
 
 ---
 
@@ -18,16 +18,13 @@ Root `slyxup.online/` has NO git, NO code — real monorepo is `slyxup.online/st
 
 AI must build in this order, each phase must pass `pnpm typecheck && pnpm build` before next:
 
-1. **DB Schema** → `auth.slyxup.online/src/lib/schema.ts` (D1 correct, see DRIZZLE_GUIDE.md) → `pnpm db:generate` → `pnpm db:migrate:local` + `remote`
-2. **API Contract** → `auth.slyxup.online/src/routes/` + `schemas/` (Zod) + `services/`
+1. **DB Schema** → `auth/src/lib/schema.ts` (D1 correct, see DRIZZLE_GUIDE.md) → `pnpm db:generate` → `pnpm db:migrate:local` + `remote`
+2. **API Contract** → `auth/src/routes/` + `schemas/` (Zod) + `services/`
 3. **Core SDK** → `packages/core` (client, auth, sessions, users, errors, types)
-4. **React SDK** → `packages/react` (SlyxUpProvider, useAuth, useUser, useSession) depends on core
-5. **Next.js SDK** → `packages/nextjs` (server auth, middleware, cookies)
-6. **UI** → `packages/ui` (SignIn/SignUp etc. built on react, not vice versa)
-7. **CLI** → `packages/cli` (login, init, project, keys, env, doctor)
-8. **Workers plumbing** → `wrangler.jsonc`, `drizzle.config.ts`, `worker-configuration.d.ts`
-9. **Website/Docs** → `stack.slyxup.online/app/*`, `docs/`
-10. **CI/Release** → `.github/workflows/ci.yml`, `release.yml`
+4. **UI** → `packages/ui` (SignIn/SignUp etc. built on React + Tailwind)
+5. **Workers plumbing** → `wrangler.jsonc`, `drizzle.config.ts`, `worker-configuration.d.ts`
+6. **Website/Docs** → `web/src/`, public `/docs`, and `INTEGRATION_GUIDE.md`
+7. **CI/Release** → `.github/workflows/ci.yml`, `release.yml`
 
 **Don't generate entire repo at once** — finish schema first, test it, then API.
 
@@ -39,7 +36,7 @@ AI must build in this order, each phase must pass `pnpm typecheck && pnpm build`
 - Email verification, forgot/reset password, change password, update profile, delete account
 - OAuth: Google, GitHub only (later: Apple etc.)
 - Sessions: DB-backed, HttpOnly Secure SameSite cookies, `crypto.randomUUID()`, `crypto.getRandomValues()`
-- Keys: `pk_test/live`, `sk_test/live` (CLI manages)
+- Keys: `pk_` and `sk_`; the project `test/live` environment controls behavior
 - Projects + project_members (see PLAN.md §8)
 - Drizzle schema + migrations (D1 SQLite)
 - Workers best practices: `env.DB/KV`, `ctx.waitUntil`, streaming, no global state, floating promises
@@ -48,7 +45,7 @@ AI must build in this order, each phase must pass `pnpm typecheck && pnpm build`
 
 DO NOT build — will explode scope:
 
-- Dashboard / Organizations / SAML / SCIM (billing already exists as its own Worker — `billing.slyxup.online`; never merge billing INTO auth)
+- Organizations / SAML / SCIM (billing is its own Worker; never merge billing INTO auth)
 - Teams / Analytics / Passkeys / Mobile/Vue/Svelte SDKs
 - 10+ OAuth providers, multi-region, complex admin panel
 
@@ -62,7 +59,7 @@ If AI tries to add these, stop and ask.
 - **DB**: D1 (SQLite) — see TECH_STACK.md for limits
 - **ORM**: Drizzle `sqlite-core` + `d1-http` — see DRIZZLE_GUIDE.md
 - **Validation**: Zod
-- **Password**: Argon2id via WebCrypto-compatible
+- **Password**: PBKDF2-HMAC-SHA-256 with a per-user salt
 - **Logging**: `observability` in wrangler.jsonc + structured JSON
 - **Testing**: Vitest + `wrangler dev` local D1
 
@@ -89,7 +86,7 @@ Read `DRIZZLE_GUIDE.md` before editing schema.
 
 - **Vars** (non-secret): `wrangler.jsonc` `vars` — `APP_URL`, `CORS_ORIGINS` — same in dev/prod
 - **Secrets**: `wrangler secret put SESSION_SECRET` — NEVER in `wrangler.jsonc` or `.env`
-- **Local dev**: `auth.slyxup.online/.dev.vars` (gitignored) — copy from `.env.example`
+- **Local dev**: `auth/.dev.vars` and `billing/.dev.vars` (gitignored)
 - **D1/KV IDs**: `REPLACE_WITH_*_ID` placeholders → replace via `wrangler d1 create` output
 - No `.env` in Workers — use `.dev.vars` + secrets
 
@@ -116,11 +113,10 @@ Full rules: see `references/rules.md` (workers-best-practices skill).
 
 ## 9. Conventions
 
-- Domain folder name = deploy domain (`auth.slyxup.online` → `auth.slyxup.online/*` route)
-- Dependency: `@slyxup/ui → @slyxup/react → @slyxup/core` (never reverse)
+- Domain folder names are runtime packages (`auth`, `billing`, `web`); deployment URLs live in each active Wrangler config.
+- Dependency: `@slyxup/ui → @slyxup/core` (never reverse)
 - API versioned `/v1/` from day one
-- `api.auth.slyxup.online` deprecated → redirect to `auth.slyxup.online/v1/`
-- `stack.slyxup.online` has NO `/dashboard` — marketing only
+- The deployed web app provides `/admin` and public `/docs`; it is not a marketing-only site.
 - **README sync rule**: ANY edit to a package's public surface (`packages/*/src`) — new/renamed/removed exports, methods, props, commands, or behavior — MUST update that package's `README.md` in the SAME change. No shipping SDK changes with stale docs.
 
 ---
@@ -145,7 +141,7 @@ Full rules: see `references/rules.md` (workers-best-practices skill).
 - `ENV_GUIDE.md` → dev/prod parity, wrangler secrets
 - `STRUCTURE.md` → deploy mapping + tree
 - `LIMITATIONS.md` → what AI must not do
-- `auth.slyxup.online/wrangler.jsonc` → Worker config example
-- `auth.slyxup.online/drizzle.config.ts` → drizzle D1 config
+- `auth/wrangler.com-workers-dev.jsonc` → active Auth Worker config
+- `billing/wrangler.com-workers-dev.jsonc` → active Billing Worker config
 
 **Start with DB schema — that's the foundation.**

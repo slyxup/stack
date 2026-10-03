@@ -9,8 +9,11 @@ import {
   Routes,
 } from 'react-router-dom';
 import { AdminLayout } from './components/AdminLayout';
+import { Logo } from './components/marketing';
 import CheckoutSuccess from './pages/CheckoutSuccess';
+import CheckoutPage from './pages/CheckoutPage';
 import Landing from './pages/Landing';
+import About from './pages/About';
 import Login from './pages/Login';
 import ProjectDetail from './pages/ProjectDetail';
 import Projects from './pages/Projects';
@@ -18,6 +21,7 @@ import UiKit from './pages/UiKit';
 import { useAuth } from './store/auth';
 
 const Docs = lazy(() => import('./pages/Docs'));
+const DocPage = lazy(() => import('./pages/DocPage'));
 
 function RequireAuth() {
   const { user, ready, hydrate } = useAuth();
@@ -73,9 +77,13 @@ export default function App() {
       <Suspense fallback={<output className="p-8">Loading page…</output>}>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
           <Route path="/checkout/success" element={<CheckoutSuccess />} />
+          <Route path="/pay" element={<CheckoutPage />} />
+          <Route path="/pay/" element={<CheckoutPage />} />
           <Route path="/docs" element={<DocsStandalone />} />
+          <Route path="/docs/:slug" element={<DocStandalone />} />
           <Route path="/ui" element={<UiKit />} />
           <Route element={<RequireAuth />}>
             <Route element={<AdminLayout />}>
@@ -94,13 +102,13 @@ export default function App() {
 /** Public docs shell — same content, minimal topbar, no auth required. */
 function DocsStandalone() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#fafafa]">
       <div className="sticky top-0 z-30 border-b border-[#e4e6eb] bg-white/90 backdrop-blur">
-        <div className="mx-auto max-w-[1120px] px-4 sm:px-8 py-3 flex items-center gap-2">
-          <div className="size-8 rounded-lg bg-black flex items-center justify-center font-extrabold text-white text-[13px]">
-            S
-          </div>
-          <span className="text-[14px] font-bold">SlyxUp Docs</span>
+        <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-3 flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
+            <Logo size={32} />
+            <span className="text-[14px] font-bold">SlyxUp Docs</span>
+          </Link>
           <Link
             to="/admin"
             className="ml-auto flex items-center gap-1.5 rounded-full bg-black text-white px-4 py-2 text-[12.5px] font-semibold"
@@ -115,9 +123,38 @@ function DocsStandalone() {
           </Link>
         </div>
       </div>
-      <div className="mx-auto max-w-[1120px] px-4 sm:px-8 py-6 sm:py-8">
+      <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-6 sm:py-8">
         <Docs />
       </div>
+    </div>
+  );
+}
+
+/** Single doc page shell — breadcrumb + sidebar + TOC live inside DocPage. */
+function DocStandalone() {
+  return (
+    <div className="min-h-screen bg-[#fafafa]">
+      <div className="sticky top-0 z-30 border-b border-[#e4e6eb] bg-white/90 backdrop-blur">
+        <div className="mx-auto max-w-[1280px] px-4 sm:px-8 py-3 flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
+            <Logo size={32} />
+            <span className="text-[14px] font-bold">SlyxUp Docs</span>
+          </Link>
+          <Link
+            to="/docs"
+            className="ml-auto rounded-full border border-[#e4e6eb] px-4 py-2 text-[12.5px] font-semibold"
+          >
+            All docs
+          </Link>
+          <Link
+            to="/ui"
+            className="flex items-center gap-1.5 rounded-full border border-[#e4e6eb] px-4 py-2 text-[12.5px] font-semibold"
+          >
+            UI Kit
+          </Link>
+        </div>
+      </div>
+      <DocPage />
     </div>
   );
 }

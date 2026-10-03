@@ -32,6 +32,6 @@ echo "[6/6] Deploy web (Pages)..."
 pnpm --filter web run deploy
 
 echo "== Done — all services deployed =="
-echo "Auth:    https://auth.slyxup.online/v1/health"
-echo "Billing: https://billing.slyxup.online/v1/health"
-echo "Web:     https://stack.slyxup.online"
+echo "Auth:    https://auth-slyxup-com.auth-0f4.workers.dev/v1/health"
+echo "Billing: https://billing-slyxup-com.billing-86c.workers.dev/v1/health"
+echo "Web:     https://stack.slyxup.com"

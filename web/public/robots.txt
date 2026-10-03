@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /pay
+Disallow: /checkout/
+
+Sitemap: https://stack.slyxup.com/sitemap.xml

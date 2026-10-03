@@ -4,3 +4,10 @@
   Cache-Control: no-store
 /index.html
   Cache-Control: no-store
+/sitemap.xml
+  Cache-Control: public, max-age=3600
+  Content-Type: application/xml; charset=utf-8
+/robots.txt
+  Cache-Control: public, max-age=3600
+/llms.txt
+  Cache-Control: public, max-age=3600

@@ -9,10 +9,12 @@
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   "vars": {
     "API_URL": "https://billing-slyxup-com.billing-86c.workers.dev",
+    "PAYMENT_LINK_URL": "https://stack.slyxup.com/pay",
+    "PAYMENT_SUCCESS_URL": "https://stack.slyxup.com/checkout/success",
     "AUTH_URL": "https://auth-slyxup-com.auth-0f4.workers.dev",
     "APP_URL": "https://stack.slyxup.com",
-    "CORS_ORIGINS": "https://stack.slyxup.com,https://email.slyxup.com,http://localhost:5173,http://localhost:3002",
-    "PADDLE_ENVIRONMENT": "sandbox"
+    "CORS_ORIGINS": "https://stack.slyxup.com,https://email.slyxup.com,https://prompt.slyxup.com,https://soffice.slyxup.com,http://localhost:5173,http://localhost:3002",
+    "PADDLE_DEFAULT_ENVIRONMENT": "test"
   },
   "d1_databases": [{
     "binding": "DB",

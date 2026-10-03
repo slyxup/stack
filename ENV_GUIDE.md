@@ -6,21 +6,23 @@
 | --- | --- | --- |
 | `auth` | Hono Cloudflare Worker, D1/KV/R2 | `http://localhost:8787` |
 | `billing` | Hono Cloudflare Worker, separate billing D1; `AUTH_DB` read access | `http://localhost:8788` |
-| `web` | Vite/React, Cloudflare Pages | `http://localhost:5173` |
+| `web` | Vite/React, Cloudflare Worker Static Assets | `http://localhost:5173` |
 
-Public hostnames are deployment targets, not directory/package names. Use `pnpm --filter auth`, never `pnpm --filter auth.slyxup.online`.
+Public hostnames are deployment targets, not directory/package names. Use `pnpm --filter auth`, never `pnpm --filter auth.slyxup.com`.
 
 ## Public configuration versus secrets
 
 - Worker bindings and non-secret vars live in each service's `wrangler.jsonc`.
 - Local secrets/overrides go in that service's gitignored `.dev.vars`.
 - Production secrets are set through `pnpm --filter auth exec wrangler secret put NAME` (or `billing`). Verify secret **names** with `wrangler secret list`; do not print values.
-- Browser variables are public. Vite substitutes `import.meta.env.VITE_*`; Next.js substitutes `process.env.NEXT_PUBLIC_*`. Pass values explicitly to SDK constructors/providers. Never put `sk_*`, Paddle API keys, webhook secrets or bootstrap tokens in browser variables.
+- Browser variables are public. Vite substitutes `import.meta.env.VITE_*`. Pass values explicitly to package constructors/providers. Never put `sk_*`, Paddle API keys, webhook secrets or bootstrap tokens in browser variables.
 - Wrangler vars are deployment configuration. Vite public values must be present **at build time**; Pages runtime vars do not rewrite a built JavaScript bundle.
 
 Auth configuration includes `APP_URL`, `API_URL`, `HOSTED_AUTH_URL`, `CORS_ORIGINS`, `ALLOWED_REDIRECT_ORIGINS`, OAuth client IDs and email sender settings. Relevant secrets include `SESSION_SECRET`, `ENCRYPTION_KEY`, OAuth client secrets and the configured email provider key. See `.env.example` and `auth/src/lib/better-auth.ts` for exact current requirements.
 
-Billing configuration includes `APP_URL`, `AUTH_URL`, `API_URL`, exact `CORS_ORIGINS`, and `PADDLE_ENVIRONMENT`. Secrets are `PADDLE_API_KEY`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_CLIENT_TOKEN` and `BILLING_ADMIN_SECRET`. A Paddle client token is safe for Paddle.js, but the API and webhook keys are server secrets. The checked-in environment is sandbox: use matching sandbox prices, credentials and webhook destination.
+Billing API calls use `https://billing-slyxup-com.billing-86c.workers.dev`, while Paddle checkout uses the permanent approved page `https://stack.slyxup.com/pay`; the Stack Worker proxies that page and its billing config request to Billing. Project `environment=test` selects Paddle Sandbox; project `environment=live` selects Paddle Production. Configure `PADDLE_SANDBOX_API_KEY`, `PADDLE_SANDBOX_CLIENT_TOKEN`, `PADDLE_SANDBOX_WEBHOOK_SECRET`, `PADDLE_PRODUCTION_API_KEY`, `PADDLE_PRODUCTION_CLIENT_TOKEN`, and `PADDLE_PRODUCTION_WEBHOOK_SECRET` as Worker secrets. API and webhook keys are server secrets; client tokens are only returned by the authenticated mode-aware config endpoint. Paddle Website Approval must include `stack.slyxup.com`, and notifications should use `https://billing-slyxup-com.billing-86c.workers.dev/v1/webhooks/paddle`.
+
+Run `pnpm --filter billing paddle:live` for Paddle Live credentials only. It validates the live API key, stores production secrets through Wrangler, and deploys Billing. It does not ask for SDK/project configuration. Afterward, run `pnpm --filter billing paddle:live:map-price` once to map the Paddle Live `pri_...` price to an existing billing plan.
 
 ## Local setup
 
@@ -41,7 +43,7 @@ Set local URL overrides deliberately, for example `AUTH_URL=http://localhost:878
 
 Existing registered D1 bindings can be simulated locally; `wrangler d1 create --local` is not a setup step. `wrangler d1 create NAME` provisions a remote database. Each Worker's default local D1 state is separate; billing's HTTP fallback can reach a local auth Worker when its simulated `AUTH_DB` does not contain the auth tables.
 
-The operator website uses `VITE_API_URL` and `VITE_BILLING_URL` (see `web/src/lib/api.ts`). Consumer SDK examples use the explicitly passed `VITE_SLYXUP_*` / `NEXT_PUBLIC_SLYXUP_*` values described in `INTEGRATION_GUIDE.md`.
+The operator website uses `VITE_API_URL` and `VITE_BILLING_URL` (see `web/src/lib/api.ts`). Production consumers should use `https://billing-slyxup-com.billing-86c.workers.dev` for billing; local development uses the local billing Worker port.
 
 ## Deployment
 

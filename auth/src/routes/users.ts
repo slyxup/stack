@@ -5,6 +5,7 @@ import { getDb } from '../lib/db';
 import { sanitizeUser } from '../lib/sanitize';
 import { userProfiles, users as usersTable } from '../lib/schema';
 import { requireSession } from '../middleware/auth';
+import type { SessionUser } from '../services/auth.service';
 import {
   changePasswordSchema,
   disableTOTPSchema,
@@ -31,12 +32,18 @@ import { dispatchWebhooks } from '../services/webhook.service';
 
 const users = new Hono<{
   Bindings: { DB: D1Database; KV: KVNamespace };
-  Variables: { userId: string };
+  Variables: { userId: string; sessionUser: SessionUser | undefined };
 }>();
 
 users.use('*', requireSession);
 
 users.get('/', async (c) => {
+  // requireSession already loaded user + bio — reuse it, zero extra queries.
+  // (Falls back to a fresh fetch only if a future middleware stops stashing.)
+  const cached = c.get('sessionUser');
+  if (cached) {
+    return c.json({ ok: true, user: sanitizeUser(cached) });
+  }
   const userId = c.get('userId');
   const db = getDb(c.env);
   const user = await db
@@ -50,6 +57,7 @@ users.get('/', async (c) => {
     .from(userProfiles)
     .where(eq(userProfiles.userId, userId))
     .get();
+
   return c.json({
     ok: true,
     user: sanitizeUser({ ...user, bio: profile?.bio ?? null }),

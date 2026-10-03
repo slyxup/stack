@@ -10,7 +10,7 @@
 
 ```bash
 pnpm test          # turbo test (all workspaces)
-pnpm --filter auth.slyxup.online test  # worker unit
+pnpm --filter auth test  # worker unit
 wrangler dev --local --test  # D1 local + KV mock
 ```
 
@@ -40,7 +40,7 @@ test('create user', async () => {
 
 ## Coverage
 
-- `coverage` threshold 80% for `auth.slyxup.online/src/services/*`
+- `coverage` threshold 80% for `auth/src/services/*`
 - CI fails if `pnpm test -- --coverage` <80%
 
 See `ci.yml` `Test` step.

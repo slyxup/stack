@@ -155,11 +155,11 @@ export interface ErrorResponse {
 export type Result<T> = T | ErrorResponse;
 
 export interface SlyxupClientOptions {
-  /** Publishable key — pk_test_xxx / pk_live_xxx */
+  /** Publishable key — pk_xxx; behavior follows the project's environment. */
   publishableKey?: string;
-  /** Secret key — sk_test_xxx / sk_live_xxx (server-side admin API) */
+  /** Secret key — sk_xxx; behavior follows the project's environment. */
   secretKey?: string;
-  /** API base URL, default https://auth.slyxup.online */
+  /** API base URL, default is the deployed Auth Worker */
   apiUrl?: string;
   /** Session token supplied by a request-scoped server integration. */
   sessionToken?: string;

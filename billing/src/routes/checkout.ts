@@ -14,6 +14,11 @@ import {
 import type { Env } from '../middleware/auth';
 import { requireUser } from '../middleware/auth';
 import { checkoutSchema } from '../schemas/billing';
+import {
+  getPaddleConfig,
+  resolveProjectEnvironment,
+  selectPlanPrice,
+} from '../services/paddle-config';
 
 // ── POST /v1/billing/checkout — create Paddle hosted-checkout transaction ──
 
@@ -42,9 +47,6 @@ app.post(
   rateLimit,
   zValidator('json', checkoutSchema),
   async (c) => {
-    const apiKey = c.env.PADDLE_API_KEY;
-    if (!apiKey) throw notConfigured();
-
     const userId = c.get('userId');
     const userEmail = c.get('userEmail');
     const { planId, origin } = c.req.valid('json');
@@ -86,12 +88,15 @@ app.post(
     if (blocking)
       throw conflict('Active subscription already exists for this project');
 
-    const config = {
-      apiKey,
-      environment: (c.env.PADDLE_ENVIRONMENT === 'production'
-        ? 'production'
-        : 'sandbox') as 'sandbox' | 'production',
-    };
+    const billingEnvironment = await resolveProjectEnvironment(
+      c.env,
+      plan.projectId
+    );
+    const config = getPaddleConfig(c.env, billingEnvironment);
+    const customerColumn =
+      billingEnvironment === 'live'
+        ? 'paddleLiveCustomerId'
+        : 'paddleTestCustomerId';
 
     // B8: Lookup our customer row by userId first, then by paddleCustomerId.
     const existingByUser = await db
@@ -102,7 +107,11 @@ app.post(
 
     let paddleCustomerId: string;
     if (existingByUser) {
-      paddleCustomerId = existingByUser.paddleCustomerId ?? '';
+      paddleCustomerId =
+        (existingByUser as unknown as Record<string, string | null>)[customerColumn] ??
+        (billingEnvironment === 'test'
+          ? existingByUser.paddleCustomerId ?? ''
+          : '');
     } else {
       // Paddle may return an existing customer if the email matches — check
       // whether that paddleCustomerId is already owned by a different user
@@ -111,16 +120,9 @@ app.post(
         const { createPaddleCustomer, findPaddleCustomerByEmail } =
           await import('../services/paddle.service');
 
-        const existingPaddle = await findPaddleCustomerByEmail(
-          config,
-          userEmail
-        );
-        if (existingPaddle) {
-          paddleCustomerId = existingPaddle.id;
-        } else {
-          const customer = await createPaddleCustomer(config, userEmail);
-          paddleCustomerId = customer.id;
-        }
+        const existingPaddle = await findPaddleCustomerByEmail(config, userEmail);
+        const customer = existingPaddle ?? (await createPaddleCustomer(config, userEmail));
+        paddleCustomerId = customer.id;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(
@@ -143,6 +145,18 @@ app.post(
       }
     }
 
+    // Existing rows may contain a customer from the other Paddle environment.
+    // Resolve the current environment's customer before sending customer_id.
+    if (!paddleCustomerId) {
+      const { createPaddleCustomer, findPaddleCustomerByEmail } =
+        await import('../services/paddle.service');
+      const existingPaddle = await findPaddleCustomerByEmail(config, userEmail);
+      paddleCustomerId =
+        (existingPaddle ?? (await createPaddleCustomer(config, userEmail))).id;
+    }
+
+    let paddlePriceId = plan.paddlePriceId;
+
     // Check if this paddleCustomerId is already owned by a different user
     const existingByPaddle = await db
       .select()
@@ -151,8 +165,18 @@ app.post(
       .get();
 
     // B3: Upsert — handle both userId and paddleCustomerId unique constraints
-    try {
-      if (existingByPaddle && existingByPaddle.userId !== userId) {
+    // Same Paddle customer (same email) may legitimately be shared across
+    // different Stack projects/platforms. Each platform keeps its own
+    // subscriptions; blocking checkout globally breaks per-project billing.
+    // Only hard-block when the rows are genuinely different people (email
+    // mismatch); same-email reuse is safe because Paddle dedupes by email
+    // and each project scopes its own subscription rows.
+    let skipCustomerUpsert = false;
+    if (existingByPaddle && existingByPaddle.userId !== userId) {
+      const sameEmail =
+        (existingByPaddle.email || '').toLowerCase().trim() ===
+        (userEmail || '').toLowerCase().trim();
+      if (!sameEmail) {
         return c.json(
           {
             ok: false,
@@ -163,21 +187,30 @@ app.post(
           409
         );
       }
-      await db
-        .insert(customers)
-        .values({
+      // Same email, different Stack userId — allow reuse; skip the insert
+      // that would violate the paddleCustomerId unique constraint and go
+      // straight to checkout creation below.
+      skipCustomerUpsert = true;
+    }
+    try {
+      if (!skipCustomerUpsert) {
+        const customerValues = {
           userId,
           email: userEmail,
           paddleCustomerId,
-        })
-        .onConflictDoUpdate({
+          ...(billingEnvironment === 'live'
+            ? { paddleLiveCustomerId: paddleCustomerId }
+            : { paddleTestCustomerId: paddleCustomerId }),
+        };
+        await db.insert(customers).values(customerValues).onConflictDoUpdate({
           target: customers.userId,
           set: {
             email: userEmail,
-            paddleCustomerId,
+            [customerColumn]: paddleCustomerId,
             updatedAt: new Date(),
           },
         });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(
@@ -208,7 +241,11 @@ app.post(
     // (a non-Paddle.js page there strands the buyer with no way to pay).
     try {
       const { createCheckout } = await import('../services/paddle.service');
-      const payBase = `${c.env.API_URL.replace(/\/$/, '')}/pay`;
+      paddlePriceId = selectPlanPrice(plan, billingEnvironment);
+      // Paddle validates checkout.url against its approved Website list. Stack
+      // is the permanent public host and proxies /pay to this Worker.
+      const payBase =
+        c.env.PAYMENT_LINK_URL ?? 'https://stack.slyxup.com/pay';
       const intentId = crypto.randomUUID();
       await db
         .insert(checkoutIntents)
@@ -223,7 +260,7 @@ app.post(
       if (origin) payParams.set('origin', origin);
       const checkout = await createCheckout(
         config,
-        plan.paddlePriceId,
+          paddlePriceId,
         paddleCustomerId,
         `${payBase}?${payParams}`,
         {
@@ -251,7 +288,7 @@ app.post(
           level: 'error',
           msg: 'createCheckout failed',
           planId: plan.id,
-          paddlePriceId: plan.paddlePriceId,
+           paddlePriceId,
           paddleCustomerId,
           err: msg,
         })

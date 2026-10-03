@@ -1,5 +1,16 @@
 # @slyxup/core
 
+## 3.0.1
+
+### Patch Changes
+
+- Centralize auth and billing URLs, modernize UI, fix Slyxup.online references
+
+  - Single source of truth for auth and billing URLs via packages/core/src/urls.ts
+  - All UI components now use correct slyxup.com workers.dev endpoints
+  - Modern responsive redesign across auth flows and billing primitives
+  - Only one env place needed to change auth and billing URLs platform-wide
+
 ## 3.0.0
 
 ### Major Changes

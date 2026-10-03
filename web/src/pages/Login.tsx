@@ -1,8 +1,10 @@
-import { ArrowRight, Check, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Seo } from '../components/Seo';
+import { Logo } from '../components/marketing';
 import { Alert, Button, Input, Label } from '../components/ui';
-import { AUTH_URL } from '../lib/api';
+import { AUTH_URL, forgotPassword } from '../lib/api';
 import { useAuth } from '../store/auth';
 
 const POINTS = [
@@ -16,8 +18,23 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<'login' | 'forgot'>('login');
+  const [forgotSent, setForgotSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const requestPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    const r = await forgotPassword(email);
+    setBusy(false);
+    if (!r.ok) {
+      setError(r.error || 'Unable to send reset email');
+      return;
+    }
+    setForgotSent(true);
+  };
 
   if (ready && user) return <Navigate to="/admin" replace />;
 
@@ -36,13 +53,17 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-white text-black flex flex-col lg:grid lg:grid-cols-[1fr_1.05fr] overflow-x-clip">
+      <Seo
+        title="Sign in"
+        description="Sign in to the SlyxUp admin panel to manage projects, users, keys, domains and billing."
+        path="/login"
+        robots="noindex, follow"
+      />
       {/* Brand panel */}
       <div className="relative overflow-hidden bg-[#050505] text-white flex flex-col justify-between p-6 sm:p-12 min-h-[300px] lg:min-h-screen min-w-0">
         <div className="absolute inset-0 bg-dots pointer-events-none" />
         <Link to="/" className="relative flex items-center gap-2.5 w-fit">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-white font-extrabold text-[13px] text-black">
-            S
-          </span>
+          <Logo size={32} />
           <span className="text-[14px] font-semibold">SlyxUp</span>
         </Link>
         <div className="relative my-8 lg:my-0 min-w-0 rise rise-1">
@@ -71,62 +92,122 @@ export default function Login() {
           </ul>
         </div>
         <div className="relative font-mono text-[11px] text-white/35">
-          HttpOnly sessions · Argon2id · rate limits
+          HttpOnly sessions · PBKDF2 hashing · rate limits
         </div>
       </div>
 
       {/* Form panel */}
       <div className="relative flex items-center justify-center bg-[#fafafa] px-4 sm:px-8 py-10 lg:py-0 min-w-0">
         <div className="w-full max-w-[380px] min-w-0 rise rise-2">
-          <h2 className="font-display text-[24px] font-bold">Welcome back</h2>
+          <h2 className="font-display text-[24px] font-bold">
+            {mode === 'login' ? 'Welcome back' : 'Set a password'}
+          </h2>
           <p className="mt-1 text-[13.5px] text-[#71717a]">
-            Sign in to open your projects.{' '}
-            <Link
-              to="/docs"
-              className="font-medium text-black underline underline-offset-4"
-            >
-              New here? Read the docs
-            </Link>
+            {mode === 'login' ? (
+              <>
+                Sign in to open your projects.{' '}
+                <Link
+                  to="/docs"
+                  className="font-medium text-black underline underline-offset-4"
+                >
+                  New here? Read the docs
+                </Link>
+              </>
+            ) : (
+              'If you signed up with Google or GitHub, use this form to create an email password.'
+            )}
           </p>
-          <form
-            onSubmit={submit}
-            className="mt-6 rounded-xl border border-black/[0.08] bg-white p-5 sm:p-6 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] min-w-0"
-          >
-            <div className="min-w-0">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+          {mode === 'forgot' && forgotSent ? (
+            <div className="mt-6 rounded-xl border border-black/[0.08] bg-white p-5 sm:p-6 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+              <p className="text-[14px] leading-relaxed text-[#3f3f46]">
+                If an account exists for <strong>{email}</strong>, a password
+                reset link is on its way. The link lets an OAuth-only account
+                create a password.
+              </p>
+              <button
+                type="button"
+                className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold underline underline-offset-4"
+                onClick={() => {
+                  setMode('login');
+                  setForgotSent(false);
+                }}
+              >
+                <ChevronLeft className="size-4" /> Back to sign in
+              </button>
             </div>
-            <div className="min-w-0">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            {error && <Alert>{error}</Alert>}
-            <Button type="submit" size="lg" className="w-full" disabled={busy}>
-              {busy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <>
-                  Continue <ArrowRight className="size-4" />
-                </>
+          ) : (
+            <form
+              onSubmit={mode === 'login' ? submit : requestPasswordReset}
+              className="mt-6 rounded-xl border border-black/[0.08] bg-white p-5 sm:p-6 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] min-w-0"
+            >
+              <div className="min-w-0">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              {mode === 'login' && (
+                <div className="min-w-0">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
               )}
-            </Button>
-          </form>
+              {error && <Alert>{error}</Alert>}
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={busy}
+              >
+                {busy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    {mode === 'login' ? 'Continue' : 'Send reset link'}
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
+              </Button>
+              {mode === 'login' ? (
+                <button
+                  type="button"
+                  className="w-full text-center text-[12.5px] font-medium text-[#52525b] underline underline-offset-4"
+                  onClick={() => {
+                    setError(null);
+                    setForgotSent(false);
+                    setMode('forgot');
+                  }}
+                >
+                  Forgot password or signed up with Google/GitHub?
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="w-full text-center text-[12.5px] font-medium text-[#52525b] underline underline-offset-4"
+                  onClick={() => {
+                    setError(null);
+                    setMode('login');
+                  }}
+                >
+                  Back to sign in
+                </button>
+              )}
+            </form>
+          )}
         </div>
       </div>
     </div>
