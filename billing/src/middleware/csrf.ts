@@ -19,7 +19,18 @@ function isMachineCall(c: Context): boolean {
   return false;
 }
 
-/** Double-submit cookie CSRF protection (mirrors auth worker). */
+/** True when the request carries a session cookie (cookie-authenticated). */
+function hasSessionCookie(c: Context): boolean {
+  const cookie = c.req.header('Cookie') ?? c.req.header('cookie') ?? '';
+  return /(?:^|;\s*)(?:__Host-slyxup_session|slyxup_session)=/.test(cookie);
+}
+
+/**
+ * Double-submit cookie CSRF protection (mirrors auth worker).
+ * Enforcement applies to cookie-authenticated mutations only — Bearer-token
+ * browser clients (checkout flow) carry no ambient credential, so requiring
+ * a token there would 403 legitimate payments.
+ */
 export async function csrfMiddleware(c: Context, next: Next) {
   // NOTE: set cookies/headers AFTER `await next()` — pre-next mutations
   // land on a placeholder response the handler discards.
@@ -42,6 +53,23 @@ export async function csrfMiddleware(c: Context, next: Next) {
   if (!SAFE_METHODS.has(c.req.method)) {
     if (isExempt(path)) {
       await next();
+      c.res.headers.set('X-CSRF-Token', token);
+      return;
+    }
+    // No session cookie → Bearer/unauthenticated request, not CSRF-able.
+    // Pass through (still minting/exposing the token for later use).
+    if (!hasSessionCookie(c)) {
+      await next();
+      if (minted) {
+        const isHttps = new URL(c.req.url).protocol === 'https:';
+        setCookie(c, COOKIE_NAME, token, {
+          httpOnly: false,
+          secure: isHttps,
+          sameSite: 'Lax',
+          maxAge: 60 * 60 * 24,
+          path: '/',
+        });
+      }
       c.res.headers.set('X-CSRF-Token', token);
       return;
     }

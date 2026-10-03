@@ -43,6 +43,8 @@ app.use('*', async (c, next) => {
     'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers':
       'Content-Type, Authorization, Cookie, X-Publishable-Key, X-Secret-Key, X-CSRF-Token',
+    // Browser JS must be able to read the CSRF token header.
+    'Access-Control-Expose-Headers': 'X-CSRF-Token',
     'Access-Control-Max-Age': '86400',
   };
   let allow = false;
