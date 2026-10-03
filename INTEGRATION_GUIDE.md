@@ -1,6 +1,6 @@
 # Integrating SlyxUp Auth and Billing
 
-This guide describes the shipped 3.0.0 packages. Install `@slyxup/core@3.0.0` for the headless TypeScript client or `@slyxup/ui@3.0.0` for the React components. There are no separate React, Next.js, Vue, Svelte, or CLI packages.
+This guide describes the published 3.0.0 SDK release. Install `@slyxup/core@3.0.0` for the headless TypeScript client or `@slyxup/ui@3.0.0` for the React components; both npm `latest` tags point to 3.0.0. There are no separate React, Next.js, Vue, Svelte, or CLI packages.
 
 ## Choose your session transport first
 
