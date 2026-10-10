@@ -2,7 +2,7 @@
   "name": "@slyxup/stack-monorepo",
   "private": true,
   "version": "0.1.0",
-  "description": "SlyxUp Stack — Cloudflare Workers + D1 (github.com/slyxup/stack) — domain-based: slyxup.com/stack/*",
+  "description": "SlyxUp Stack \u2014 Cloudflare Workers + D1 (github.com/slyxup/stack) \u2014 domain-based: slyxup.com/stack/*",
   "repository": "github:slyxup/stack",
   "packageManager": "pnpm@10.34.5",
   "engines": {
