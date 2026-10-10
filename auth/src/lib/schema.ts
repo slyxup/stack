@@ -157,7 +157,7 @@ export const users = sqliteTable(
       .notNull()
       .default(false),
     passwordHash: text('password_hash'),
-    /** Hash algorithm version: 'pbkdf2' (legacy 100k) or 'pbkdf2-600k' (V4+). Reserved: 'argon2id'. */
+    /** Hash algorithm version: 'pbkdf2' (PBKDF2-100k, current) or 'pbkdf2-600k' (retired V4 label — rows predate the workerd 100k cap fix). Reserved: 'argon2id'. */
     passwordHashVersion: text('password_hash_version')
       .notNull()
       .default('pbkdf2'),
@@ -273,6 +273,9 @@ export const recoveryCodes = sqliteTable(
 );
 
 // ── Sessions (DB-backed, HttpOnly cookie) ──
+// Access token lives 24h; refresh token lives 7d and rotates the access
+// token so active users are never logged out mid-use. Both are opaque
+// 32-byte hex tokens (crypto.getRandomValues, never Math.random).
 // Sessions MUST cascade on user delete — otherwise deleted users leave
 // orphan tokens (reported bug). FK onDelete cascade handles it, but service
 // also deletes explicitly for D1 safety (see user.service:deleteUser).
@@ -289,6 +292,10 @@ export const sessions = sqliteTable(
       onDelete: 'cascade',
     }),
     token: text('token').notNull().unique(),
+    /** Opaque refresh token (rotates the access token). Null on legacy rows. */
+    refreshToken: text('refresh_token'),
+    /** Refresh-token expiry (7d from issue/rotation). Null on legacy rows. */
+    refreshExpiresAt: integer('refresh_expires_at', { mode: 'timestamp' }),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     /** HMAC-SHA256(IP + normalized UA). Null when SESSION_SECRET unset. */
@@ -304,6 +311,9 @@ export const sessions = sqliteTable(
   },
   (t) => ({
     tokenIdx: uniqueIndex('sessions_token_idx').on(t.token),
+    refreshTokenIdx: uniqueIndex('sessions_refresh_token_idx').on(
+      t.refreshToken
+    ),
     userIdx: index('sessions_user_idx').on(t.userId),
     projectIdx: index('sessions_project_idx').on(t.projectId),
     // Composite for fast expiry cleanup

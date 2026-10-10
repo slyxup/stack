@@ -6,12 +6,16 @@
 //    in workerd,
 //  - Argon2id m=19MiB x t=2 blows the 10–50ms Workers CPU budget per login,
 //    causing timeouts under load.
-// OWASP (2023+) explicitly approves PBKDF2-HMAC-SHA-256 at 600k iterations
-// as an acceptable alternative when Argon2id is unavailable — which is the
-// case on Workers. So V4 uses versioned PBKDF2 with opportunistic upgrades:
+// OWASP (2023+) prefers PBKDF2-HMAC-SHA-256 at 600k iterations, but workerd's
+// WebCrypto hard-caps PBKDF2 at 100,000 iterations — requesting more throws
+// ("iteration counts above 100000 are not supported") and broke all signups.
+// So the current version is PBKDF2-HMAC-SHA-256 at exactly 100k: the strongest
+// setting this runtime allows. Format stays versioned, so if Workers ever
+// raises the cap we can bump CURRENT_ITERATIONS and old hashes keep verifying
+// (iterations are parsed from the stored string) with opportunistic rehash:
 //
-//   legacy  `salt_b64:hash_b64`              → PBKDF2 100k (pre-V4)
-//   current `pbkdf2$600000$salt_b64$hash_b64` → PBKDF2 600k (V4+)
+//   legacy  `salt_b64:hash_b64`              → PBKDF2 100k, unversioned (pre-V4)
+//   current `pbkdf2$100000$salt_b64$hash_b64` → PBKDF2 100k (V4+)
 //   future  `$argon2id$...`                  → reserved; verify returns false
 //                                            until an Argon2id verifier lands
 //
@@ -19,7 +23,7 @@
 // `needsRehash()` + opportunistic rehash in signIn() gives zero-downtime
 // migration: old hashes keep verifying, then upgrade on next login.
 
-const CURRENT_ITERATIONS = 600_000;
+const CURRENT_ITERATIONS = 100_000;
 const LEGACY_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
@@ -70,7 +74,12 @@ export type PasswordHashVersion = 'pbkdf2' | 'pbkdf2-600k' | 'argon2id';
 
 export function getHashVersion(stored: string): PasswordHashVersion {
   if (stored.startsWith('$argon2id$')) return 'argon2id';
-  if (stored.startsWith('pbkdf2$')) return 'pbkdf2-600k';
+  if (stored.startsWith('pbkdf2$')) {
+    // 'pbkdf2-600k' is retired (workerd caps PBKDF2 at 100k) but kept as a
+    // label so rows written by the old hasher stay identifiable.
+    const iterations = Number(stored.split('$')[1]);
+    if (iterations === 600_000) return 'pbkdf2-600k';
+  }
   return 'pbkdf2';
 }
 
@@ -119,7 +128,7 @@ export async function verifyPassword(
  * upgraded on next successful login (opportunistic rehash).
  */
 export function needsRehash(storedHash: string): boolean {
-  // Anything that isn't the current versioned PBKDF2-600k format rehashes.
+  // Anything that isn't the current `pbkdf2$100000$` format rehashes.
   // `$argon2id$` returns false here only because we can't verify it yet —
   // if a verifier lands, flip this to check its params.
   if (storedHash.startsWith('$argon2id$')) return false;
@@ -129,4 +138,4 @@ export function needsRehash(storedHash: string): boolean {
 }
 
 /** Current version label to store in `users.passwordHashVersion` on write. */
-export const CURRENT_HASH_VERSION: PasswordHashVersion = 'pbkdf2-600k';
+export const CURRENT_HASH_VERSION: PasswordHashVersion = 'pbkdf2';

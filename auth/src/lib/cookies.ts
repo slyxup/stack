@@ -1,6 +1,9 @@
 export const SESSION_COOKIE = 'slyxup_session';
 /** Host-only cookie name (preferred) — prevents cross-subdomain leakage */
 export const SESSION_COOKIE_HOST = '__Host-slyxup_session';
+/** Refresh-token cookies (7d). Same host-only strategy as the session cookie. */
+export const REFRESH_COOKIE = 'slyxup_refresh';
+export const REFRESH_COOKIE_HOST = '__Host-slyxup_refresh';
 
 /** Apex domain of the requesting host (e.g. `slyxup.com`) so the session
  * cookie is shared across product subdomains. Empty for localhost/IPs and
@@ -91,6 +94,66 @@ export function setSessionCookie(
   }
 }
 
+/**
+ * Get refresh token: explicit body/Bearer value wins, then refresh cookies.
+ * Callers pass an explicit token first (mobile/SDK), falling back to cookies
+ * (browser platform flows).
+ */
+export function getRefreshToken(
+  c: {
+    req: { header: (n: string) => string | undefined };
+  },
+  explicit?: string
+): string | undefined {
+  if (explicit?.trim()) return explicit.trim();
+  const auth = c.req.header('Authorization');
+  // NOTE: plain Bearer here carries the *refresh* token only on /refresh.
+  // The access-token path uses getSessionToken; keep them separate so a
+  // leaked access token can never be exchanged for a new pair.
+  const cookie = c.req.header('Cookie') ?? '';
+  for (const name of [REFRESH_COOKIE_HOST, REFRESH_COOKIE]) {
+    const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    if (match) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+export function setRefreshCookie(
+  c: {
+    req: { header: (n: string) => string | undefined };
+    header: (n: string, v: string, options?: { append?: boolean }) => void;
+  },
+  token: string,
+  expiresAt: Date
+) {
+  const host = (c.req.header('Host') ?? '').split(':')[0].toLowerCase();
+  const isLocalhost =
+    !host ||
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+  const expires = expiresAt.toUTCString();
+  const useHostPrefix = !isLocalhost;
+  const cookieName = useHostPrefix ? REFRESH_COOKIE_HOST : REFRESH_COOKIE;
+  c.header(
+    'Set-Cookie',
+    `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=${expires}`
+  );
+  if (useHostPrefix) {
+    c.header(
+      'Set-Cookie',
+      `${REFRESH_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=${expires}`,
+      { append: true }
+    );
+  }
+}
+
 export function clearSessionCookie(c: {
   req: { header: (n: string) => string | undefined };
   header: (n: string, v: string, options?: { append?: boolean }) => void;
@@ -111,6 +174,19 @@ export function clearSessionCookie(c: {
     c.header(
       'Set-Cookie',
       `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+      { append: true }
+    );
+  }
+  // Always clear refresh cookies alongside the session.
+  c.header(
+    'Set-Cookie',
+    `${useHostPrefix ? REFRESH_COOKIE_HOST : REFRESH_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+    { append: true }
+  );
+  if (useHostPrefix) {
+    c.header(
+      'Set-Cookie',
+      `${REFRESH_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
       { append: true }
     );
   }

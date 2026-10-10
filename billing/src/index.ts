@@ -1,7 +1,11 @@
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { getDb } from './lib/db';
 import { ApiError } from './lib/http';
+import { checkoutIntents } from './lib/schema';
 import type { Env } from './middleware/auth';
+import { csrfMiddleware } from './middleware/csrf';
 import adminRoute from './routes/admin';
 import checkoutRoute from './routes/checkout';
 import entitlementsRoute from './routes/entitlements';
@@ -18,10 +22,6 @@ import {
   getPaddleConfig,
   resolveProjectEnvironment,
 } from './services/paddle-config';
-import { checkoutIntents } from './lib/schema';
-import { getDb } from './lib/db';
-import { csrfMiddleware } from './middleware/csrf';
-import { eq } from 'drizzle-orm';
 
 // SlyxUp Billing Worker — CF Workers + D1 + Paddle
 // Deploy: `wrangler deploy` (URL comes from your Cloudflare account)
@@ -49,7 +49,8 @@ app.use('*', async (c, next) => {
   };
   let allow = false;
   // Pages previews + product subdomains — always safe for CORS
-  if (origin.endsWith('.pages.dev') || origin.endsWith('.slyxup.com')) allow = true;
+  if (origin.endsWith('.pages.dev') || origin.endsWith('.slyxup.com'))
+    allow = true;
   if (
     !allow &&
     origin &&
@@ -159,8 +160,10 @@ app.get('/v1/health', (c) =>
 );
 
 // Paddle checkout redirect lands here — VERIFY with Paddle first.
-// Completed → forward to the web success page. Anything else → send the
-// buyer to /pay to actually complete payment (never celebrate unpaid).
+// Completed → billing-hosted success page (/success), which then returns
+// the buyer to the project that started checkout (?origin=...). Anything
+// else → send the buyer to /pay to actually complete payment (never
+// celebrate unpaid).
 app.get('/', async (c) => {
   const url = new URL(c.req.url);
   const txnId =
@@ -168,6 +171,8 @@ app.get('/', async (c) => {
   const projectId = url.searchParams.get('project_id');
   const origin = url.searchParams.get('origin');
   const base = c.env.APP_URL ?? 'https://stack.slyxup.com';
+  const successBase =
+    c.env.PAYMENT_SUCCESS_URL ?? `${new URL(c.req.url).origin}/success`;
   if (txnId) {
     const paid = await isTransactionCompleted(c.env, txnId);
     const params = new URLSearchParams();
@@ -175,13 +180,129 @@ app.get('/', async (c) => {
     if (origin) params.set('origin', origin);
     if (paid) {
       params.set('transaction_id', txnId);
-      return c.redirect(`${base}/checkout/success?${params}`, 302);
+      return c.redirect(
+        `${successBase}${successBase.includes('?') ? '&' : '?'}${params}`,
+        302
+      );
     }
     // Not paid (or lookup failed) → resume payment instead of fake success.
     params.set('_ptxn', txnId);
     return c.redirect(`${new URL(c.req.url).origin}/pay?${params}`, 302);
   }
   return c.redirect(base, 302);
+});
+
+// Billing-hosted result page: verifies the transaction server-side, shows
+// success / pending / failed states, and returns the buyer to the project
+// that started checkout (?origin=...). This is the canonical landing for
+// every subscribe flow — Paddle successUrl, /pay overlay, and GET / above.
+app.get('/success', (c) => {
+  const url = new URL(c.req.url);
+  const rawTxn =
+    url.searchParams.get('transaction_id') ??
+    url.searchParams.get('_ptxn') ??
+    '';
+  const rawProject = url.searchParams.get('project_id') ?? '';
+  const rawOrigin = url.searchParams.get('origin') ?? '';
+  const txnId = /^txn_[A-Za-z0-9]+$/.test(rawTxn) ? rawTxn : '';
+  const projectId = /^[\w-]{1,80}$/.test(rawProject) ? rawProject : '';
+  let origin = '';
+  try {
+    const u = new URL(rawOrigin);
+    if (u.protocol === 'https:' || u.protocol === 'http:')
+      origin = u.toString();
+  } catch {
+    origin = '';
+  }
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Subscription result — SlyxUp Billing</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui, sans-serif; background: #fafbfc; color: #111; display: flex; min-height: 100vh; align-items: center; justify-content: center; margin: 0; }
+  .card { text-align: center; max-width: 440px; padding: 32px; }
+  .icon { width: 64px; height: 64px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 30px; margin-bottom: 12px; }
+  .ok { background: #ecfdf5; } .warn { background: #fffbeb; } .err { background: #fef2f2; }
+  .spin { width: 32px; height: 32px; border-radius: 50%; border: 3px solid #e4e4e7; border-top-color: #09090b; margin: 0 auto 16px; animation: s 0.8s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  h1 { font-size: 22px; margin: 0 0 8px; } p { font-size: 14px; color: #63666f; line-height: 1.6; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; color: #a1a3ab; }
+  .btn { display: inline-block; margin-top: 14px; padding: 10px 20px; border-radius: 10px; background: #09090b; color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; }
+  .link { display: inline-block; margin-top: 10px; font-size: 13px; color: #63666f; }
+  .count { font-size: 12px; color: #a1a3ab; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="card" id="root"><div class="spin"></div><p>Verifying payment…</p></div>
+<script>
+(function () {
+  var TXN = ${JSON.stringify(txnId)};
+  var PROJECT = ${JSON.stringify(projectId)};
+  var ORIGIN = ${JSON.stringify(origin)};
+  var root = document.getElementById('root');
+  var countdown = 8, timer = null;
+  function esc(s) { return String(s).replace(/[<>&"]/g, function (ch) { return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'})[ch]; }); }
+  function returnBtn(label) {
+    if (!ORIGIN) return '';
+    return '<div><a class="btn" href="' + esc(ORIGIN) + '">' + esc(label) + '</a></div><div class="count" id="count"></div>';
+  }
+  function tick() {
+    var el = document.getElementById('count');
+    if (!el) { if (timer) clearInterval(timer); return; }
+    el.textContent = 'Redirecting in ' + countdown + 's…';
+    if (countdown <= 0) { if (timer) clearInterval(timer); window.location.assign(ORIGIN); return; }
+    countdown -= 1;
+  }
+  function startCountdown() {
+    if (!ORIGIN) return;
+    timer = setInterval(tick, 1000); tick();
+  }
+  function paidView() {
+    root.innerHTML = '<div class="icon ok">✓</div><h1>Payment successful</h1>' +
+      '<p>Your subscription is now active.' + (ORIGIN ? ' Taking you back to the app.' : ' Manage it from your project billing settings.') + '</p>' +
+      (TXN ? '<p class="mono">Transaction ' + esc(TXN) + '</p>' : '') + returnBtn('Back to app');
+    startCountdown();
+  }
+  function pendingView(status, checkoutUrl) {
+    root.innerHTML = '<div class="icon warn">!</div><h1>Payment not completed</h1>' +
+      '<p>No payment was recorded for this checkout' + (status ? ' (' + esc(status) + ')' : '') + '. Your plan has <strong>not</strong> changed — complete the payment to activate it.</p>' +
+      (TXN ? '<p class="mono">Transaction ' + esc(TXN) + '</p>' : '') +
+      (checkoutUrl ? '<div><a class="btn" href="' + esc(checkoutUrl) + '">Complete payment</a></div>' : '') +
+      '<div><button class="btn" style="background:#fff;color:#111;border:1px solid #e4e4e7" onclick="location.reload()">I\\u2019ve paid — check again</button></div>' +
+      (ORIGIN ? '<div><a class="link" href="' + esc(ORIGIN) + '">Return without paying</a></div>' : '');
+  }
+  function failedView(msg) {
+    var payParams = [];
+    if (PROJECT) payParams.push('project_id=' + encodeURIComponent(PROJECT));
+    if (ORIGIN) payParams.push('origin=' + encodeURIComponent(ORIGIN));
+    if (TXN) payParams.push('_ptxn=' + encodeURIComponent(TXN));
+    var payHref = '/pay' + (payParams.length ? '?' + payParams.join('&') : '');
+    root.innerHTML = '<div class="icon err">×</div><h1>Could not verify payment</h1>' +
+      '<p>' + esc(msg) + ' Nothing was charged by this page — if you did pay, your subscription activates automatically once the payment provider confirms it.</p>' +
+      '<div><a class="btn" href="' + esc(payHref) + '">Try again</a></div>' +
+      (ORIGIN ? '<div><a class="link" href="' + esc(ORIGIN) + '">Return to app</a></div>' : '');
+  }
+  if (!TXN) { failedView('No transaction reference in this URL.'); return; }
+  fetch('/v1/billing/transactions/' + encodeURIComponent(TXN), { headers: { Accept: 'application/json' } })
+    .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+    .then(function (res) {
+      if (res.status === 200 && res.body && res.body.paid) { paidView(); return; }
+      if (res.status === 200 && res.body) { pendingView(res.body.status, res.body.checkoutUrl); return; }
+      failedView((res.body && res.body.error) || 'Transaction not found.');
+    })
+    .catch(function () { failedView('Network error while verifying payment.'); });
+})();
+</script>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
 });
 
 // Real payment-link page — hosts Paddle.js and opens the checkout overlay
@@ -208,9 +329,9 @@ app.get('/pay', (c) => {
   if (projectId) successParams.set('project_id', projectId);
   if (origin) successParams.set('origin', origin);
   if (txnId) successParams.set('transaction_id', txnId);
-   const successBase =
-     c.env.PAYMENT_SUCCESS_URL ?? `${new URL(c.req.url).origin}/`;
-   const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}${successParams}`;
+  const successBase =
+    c.env.PAYMENT_SUCCESS_URL ?? `${new URL(c.req.url).origin}/success`;
+  const successUrl = `${successBase}${successBase.includes('?') ? '&' : '?'}${successParams}`;
 
   const html = `<!doctype html>
 <html lang="en">

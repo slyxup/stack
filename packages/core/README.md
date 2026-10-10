@@ -20,8 +20,12 @@ const client = new SlyxupClient({
 });
 
 // ── Auth ──
+// Sessions: 24h access token + 7d refresh token. The SDK stores both and
+// transparently rotates the access token on 401, so active users are never
+// logged out mid-use. Call `await client.refresh()` to renew proactively;
+// `client.getRefreshToken()` reads the stored refresh token.
 await client.auth.signUp({ email: 'ada@example.com', password: 'password123', firstName: 'Ada', username: 'ada' });
-// Returns { user, sessionToken, expiresAt } on success, or
+// Returns { user, sessionToken, refreshToken, expiresAt, refreshExpiresAt } on success, or
 // { code: '2FA_REQUIRED', challengeToken } when the account has 2FA enabled.
 await client.auth.signIn({ email: 'ada@example.com', password: 'password123' });
 // Complete a 2FA challenge:

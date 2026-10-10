@@ -98,7 +98,10 @@ export interface AuthResponse {
     bio?: string | null;
   };
   sessionToken?: string;
+  /** 7-day refresh token — the SDK rotates the 24h access token with it automatically. */
+  refreshToken?: string;
   expiresAt?: string;
+  refreshExpiresAt?: string;
 }
 
 /** Returned by signIn when the account has 2FA enabled. */
@@ -163,6 +166,12 @@ export interface SlyxupClientOptions {
   apiUrl?: string;
   /** Session token supplied by a request-scoped server integration. */
   sessionToken?: string;
+  /**
+   * Refresh token paired with `sessionToken`. Pass it whenever you restore a
+   * persisted session yourself (e.g. from localStorage) — without it the
+   * client cannot rotate an expired 24h access token and the user is signed out.
+   */
+  refreshToken?: string;
   /** Memory by default. sessionStorage is an explicit, script-readable SPA opt-in. */
   tokenStorage?: 'memory' | 'sessionStorage';
 }

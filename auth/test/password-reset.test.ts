@@ -5,7 +5,7 @@ import { getDb } from '../src/lib/db';
 vi.mock('../src/lib/db', () => ({ getDb: vi.fn() }));
 vi.mock('../src/lib/password', () => ({
   hashPassword: vi.fn().mockResolvedValue('hashed-password'),
-  CURRENT_HASH_VERSION: 'pbkdf2-600k',
+  CURRENT_HASH_VERSION: 'pbkdf2',
 }));
 
 describe('password reset single use', () => {

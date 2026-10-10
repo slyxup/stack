@@ -10,9 +10,24 @@ import {
 describe('versioned password hashing (Week 1 Day 1)', () => {
   it('hashes new passwords in the current versioned format', async () => {
     const hash = await hashPassword('CorrectHorse123!');
-    expect(hash.startsWith('pbkdf2$600000$')).toBe(true);
-    expect(getHashVersion(hash)).toBe('pbkdf2-600k');
-    expect(CURRENT_HASH_VERSION).toBe('pbkdf2-600k');
+    expect(hash.startsWith('pbkdf2$100000$')).toBe(true);
+    expect(getHashVersion(hash)).toBe('pbkdf2');
+    expect(CURRENT_HASH_VERSION).toBe('pbkdf2');
+  });
+
+  it('never requests more iterations than workerd allows (regression: 600k broke all signups)', async () => {
+    // Cloudflare Workers caps PBKDF2 at 100,000 iterations — requesting more
+    // throws and fails the signup. This guards the constant itself so a
+    // well-meaning OWASP bump can't take down registration again.
+    const hash = await hashPassword('CorrectHorse123!');
+    const iterations = Number(hash.split('$')[1]);
+    expect(Number.isInteger(iterations)).toBe(true);
+    expect(iterations).toBeLessThanOrEqual(100_000);
+  });
+
+  it('still labels retired 600k rows so they stay identifiable', () => {
+    expect(getHashVersion('pbkdf2$600000$c2FsdA==$aGFzaA==')).toBe('pbkdf2-600k');
+    expect(needsRehash('pbkdf2$600000$c2FsdA==$aGFzaA==')).toBe(true);
   });
 
   it('verifies current hashes', async () => {

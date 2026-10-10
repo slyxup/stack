@@ -2,7 +2,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
-import { setSessionCookie } from '../lib/cookies';
+import { setRefreshCookie, setSessionCookie } from '../lib/cookies';
 import { randomToken, randomUUID } from '../lib/crypto';
 import { getDb } from '../lib/db';
 import {
@@ -196,6 +196,42 @@ const exchangeInput = z.object({
   verifier: z.string().min(43).max(128),
 });
 
+type OAuthStatePayload = {
+  provider: string;
+  redirectUrl?: string;
+  projectId: string | null;
+  appChallenge: string | null;
+  pkceVerifier: string;
+  browserBinding?: string;
+};
+
+/**
+ * Where to send the user after OAuth settles (success or failure).
+ *
+ * Project flows validated `redirectUrl` against the project's registered
+ * domains at start time and store it server-side, so it is safe to reuse
+ * as-is — re-running the static env allowlist here is what used to dump
+ * users from other products (e.g. SMedia) onto APP_URL's dashboard whenever
+ * OAuth hit an error (denied consent, password-account conflict, expired
+ * state). Platform (non-project) flows still go through the env allowlist.
+ */
+function trustedRedirect(
+  redirectUrl: string | undefined,
+  projectId: string | null,
+  fallback: string,
+  env?: { ALLOWED_REDIRECT_ORIGINS?: string }
+): string {
+  if (redirectUrl && projectId) {
+    try {
+      const u = new URL(redirectUrl);
+      if (u.protocol === 'https:' || u.protocol === 'http:') return redirectUrl;
+    } catch {
+      /* fall through to allowlist */
+    }
+  }
+  return safeRedirect(redirectUrl, fallback, env);
+}
+
 /** Exchange a one-time app code with the verifier retained by the initiating tab. */
 oauth.post('/exchange', async (c) => {
   const input = exchangeInput.safeParse(await c.req.json().catch(() => null));
@@ -218,8 +254,18 @@ oauth.post('/exchange', async (c) => {
   )
     return c.json({ ok: false, error: 'Wrong project key' }, 403);
   const origin = c.req.header('Origin');
-  if (origin && origin !== new URL(String(payload.redirectUrl)).origin)
-    return c.json({ ok: false, error: 'Wrong exchange origin' }, 403);
+  // redirectUrl is always set for project (app-challenge) flows; platform
+  // cookie flows may omit it — only enforce when both sides are present.
+  if (origin && payload.redirectUrl) {
+    let expectedOrigin: string | null = null;
+    try {
+      expectedOrigin = new URL(String(payload.redirectUrl)).origin;
+    } catch {
+      expectedOrigin = null;
+    }
+    if (expectedOrigin && origin !== expectedOrigin)
+      return c.json({ ok: false, error: 'Wrong exchange origin' }, 403);
+  }
   if (!(await consumeChallenge(c.env, 'oauth_exchange', input.data.code)))
     return c.json({ ok: false, error: 'OAuth code already used' }, 401);
   const db = getDb(c.env);
@@ -246,20 +292,27 @@ oauth.post('/exchange', async (c) => {
     );
     return c.json({ ok: false, code: '2FA_REQUIRED', challengeToken }, 403);
   }
-  const sessionToken = randomToken(32);
-  const expiresAt = new Date(Date.now() + 7 * 86400000);
+  const { mintSessionTokens } = await import('../services/auth.service');
+  const minted = mintSessionTokens();
   await db.insert(sessions).values({
     userId: user.id,
     projectId: user.projectId,
-    token: sessionToken,
-    expiresAt,
+    token: minted.sessionToken,
+    refreshToken: minted.refreshToken,
+    refreshExpiresAt: minted.refreshExpiresAt,
+    expiresAt: minted.expiresAt,
   });
-  if (!user.projectId) setSessionCookie(c, sessionToken, expiresAt);
+  if (!user.projectId) {
+    setSessionCookie(c, minted.sessionToken, minted.expiresAt);
+    setRefreshCookie(c, minted.refreshToken, minted.refreshExpiresAt);
+  }
   return c.json({
     ok: true,
     user: { id: user.id, email: user.email },
-    sessionToken,
-    expiresAt: expiresAt.toISOString(),
+    sessionToken: minted.sessionToken,
+    refreshToken: minted.refreshToken,
+    expiresAt: minted.expiresAt.toISOString(),
+    refreshExpiresAt: minted.refreshExpiresAt.toISOString(),
   });
 });
 
@@ -371,6 +424,25 @@ oauth.get('/callback/:provider', async (c) => {
   // release test and INTEGRATION_GUIDE depend on them. Redirects go back to
   // the app's redirectUrl (safe-allowlisted) instead of hosted /sign-in.
   if (!code || !state) {
+    // Providers echo `state` even when the user denies consent
+    // (?error=access_denied&state=...) — honor the app that started the flow
+    // instead of dumping the user on APP_URL's dashboard.
+    if (!code && state) {
+      const resumed = await readChallenge(c.env, 'oauth_state', state);
+      const payload = resumed?.payload as OAuthStatePayload | undefined;
+      if (payload?.redirectUrl) {
+        const dest = trustedRedirect(
+          payload.redirectUrl,
+          payload.projectId,
+          c.env.APP_URL,
+          c.env
+        );
+        const joiner = dest.includes('?') ? '&' : '?';
+        return c.redirect(
+          `${dest}${joiner}error=${encodeURIComponent(c.req.query('error') ?? 'access_denied')}`
+        );
+      }
+    }
     const fallback = c.req.query('redirect_url')
       ? safeRedirect(c.req.query('redirect_url'), c.env.APP_URL, c.env)
       : c.env.APP_URL;
@@ -387,31 +459,44 @@ oauth.get('/callback/:provider', async (c) => {
   }
   const cookieName = `slyxup_oauth_${state.slice(0, 16)}`;
   if (getCookie(c, cookieName) !== pending.payload.browserBinding) {
-    const redirectUrl = (pending.payload as { redirectUrl?: string })
-      .redirectUrl;
-    const dest = safeRedirect(redirectUrl, c.env.APP_URL, c.env);
+    const payload = pending.payload as OAuthStatePayload;
+    const dest = trustedRedirect(
+      payload.redirectUrl,
+      payload.projectId,
+      c.env.APP_URL,
+      c.env
+    );
     return c.redirect(
       `${dest}${dest.includes('?') ? '&' : '?'}error=browser_mismatch`
     );
   }
   if (!(await consumeChallenge(c.env, 'oauth_state', state))) {
-    const redirectUrl = (pending.payload as { redirectUrl?: string })
-      .redirectUrl;
-    const dest = safeRedirect(redirectUrl, c.env.APP_URL, c.env);
+    const payload = pending.payload as OAuthStatePayload;
+    const dest = trustedRedirect(
+      payload.redirectUrl,
+      payload.projectId,
+      c.env.APP_URL,
+      c.env
+    );
     return c.redirect(
       `${dest}${dest.includes('?') ? '&' : '?'}error=used_state`
     );
   }
   deleteCookie(c, cookieName, { path: '/v1/oauth' });
-  const stateObj = pending.payload as {
-    provider: string;
-    redirectUrl?: string;
-    projectId: string | null;
-    appChallenge: string | null;
-    pkceVerifier: string;
+  const stateObj = pending.payload as OAuthStatePayload;
+  // All post-state errors return to the app that started the flow (never the
+  // hosted dashboard), so embedded SDK users land back where they subscribed.
+  const errorToApp = (msg: string) => {
+    const dest = trustedRedirect(
+      stateObj.redirectUrl,
+      stateObj.projectId,
+      c.env.APP_URL,
+      c.env
+    );
+    const joiner = dest.includes('?') ? '&' : '?';
+    return c.redirect(`${dest}${joiner}error=${encodeURIComponent(msg)}`);
   };
-  if (stateObj.provider !== provider)
-    return c.redirect(`${base}/sign-in?error=state_mismatch`);
+  if (stateObj.provider !== provider) return errorToApp('state_mismatch');
 
   try {
     const profile = await exchangeAndProfile(
@@ -479,18 +564,14 @@ oauth.get('/callback/:provider', async (c) => {
             .INITIAL_ADMIN_EMAIL
         )?.toLowerCase();
         if (requiredEmail && profile.email.toLowerCase() !== requiredEmail) {
-          return c.redirect(
-            `${base}/sign-in?error=${encodeURIComponent('Bootstrap restricted to owner email')}`
-          );
+          return errorToApp('Bootstrap restricted to owner email');
         }
         const secret = (c.env as unknown as Record<string, string | undefined>)
           .BOOTSTRAP_SECRET;
         if (secret) {
           // OAuth bootstrap via secret cannot be validated without token — disallow OAuth for first admin when secret is set.
           // Owner must use POST /v1/setup/bootstrap with token instead (secure).
-          return c.redirect(
-            `${base}/sign-in?error=${encodeURIComponent('Bootstrap requires secret — use /setup')}`
-          );
+          return errorToApp('Bootstrap requires secret — use /setup');
         }
       }
       const id = randomUUID();
@@ -525,7 +606,7 @@ oauth.get('/callback/:provider', async (c) => {
           updatedAt: now,
         })
         .where(eq(users.id, user.id));
-      if (user.blocked) return c.redirect(`${base}/sign-in?error=blocked`);
+      if (user.blocked) return errorToApp('blocked');
     }
 
     if (!linked) {
@@ -565,24 +646,34 @@ oauth.get('/callback/:provider', async (c) => {
       c.header('Referrer-Policy', 'no-referrer');
       return c.redirect(target.href);
     }
-    // Legacy platform-cookie flow.
-    const sessionToken = randomToken(32);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+    // Legacy platform-cookie flow (24h access + 7d refresh, like everywhere else).
+    const { mintSessionTokens: mintLegacy } = await import(
+      '../services/auth.service'
+    );
+    const legacy = mintLegacy();
     await db.insert(sessions).values({
       id: randomUUID(),
       userId: user.id,
-      token: sessionToken,
-      expiresAt,
+      token: legacy.sessionToken,
+      refreshToken: legacy.refreshToken,
+      refreshExpiresAt: legacy.refreshExpiresAt,
+      expiresAt: legacy.expiresAt,
       createdAt: now,
       updatedAt: now,
     });
 
-    setSessionCookie(c, sessionToken, expiresAt);
+    setSessionCookie(c, legacy.sessionToken, legacy.expiresAt);
+    setRefreshCookie(c, legacy.refreshToken, legacy.refreshExpiresAt);
 
     // Verification tokens are email-scoped in the legacy schema. Do not
     // consume another project's tokens when a platform account uses OAuth.
 
-    const dest = safeRedirect(stateObj.redirectUrl, c.env.APP_URL, c.env);
+    const dest = trustedRedirect(
+      stateObj.redirectUrl,
+      stateObj.projectId,
+      c.env.APP_URL,
+      c.env
+    );
     const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(`${dest}${joiner}auth=success`);
   } catch (e) {
@@ -595,13 +686,14 @@ oauth.get('/callback/:provider', async (c) => {
         stack: e instanceof Error ? e.stack : undefined,
       })
     );
-    const pendingState = pending?.payload as
-      | { redirectUrl?: string }
-      | undefined;
-    const maybeState =
-      pendingState || (typeof stateObj !== 'undefined' ? stateObj : undefined);
+    const maybeState = pending?.payload as OAuthStatePayload | undefined;
     const dest = maybeState?.redirectUrl
-      ? safeRedirect(maybeState.redirectUrl, c.env.APP_URL, c.env)
+      ? trustedRedirect(
+          maybeState.redirectUrl,
+          maybeState.projectId,
+          c.env.APP_URL,
+          c.env
+        )
       : c.env.APP_URL;
     const joiner = dest.includes('?') ? '&' : '?';
     return c.redirect(

@@ -8,12 +8,22 @@ describe('session cookies', () => {
   });
   it('sets and clears both host and legacy cookies without overwriting', async () => {
     const app = new Hono().get('/set', (c) => { setSessionCookie(c, 'token', new Date(Date.now() + 60000)); return c.text('ok'); }).get('/clear', (c) => { clearSessionCookie(c); return c.text('ok'); });
-    for (const path of ['/set', '/clear']) {
-      const response = await app.request(path, { headers: { Host: 'auth.example.com' } });
+    {
+      const response = await app.request('/set', { headers: { Host: 'auth.example.com' } });
       const cookies = response.headers.getSetCookie();
       expect(cookies).toHaveLength(2);
       expect(cookies[0]).toContain('__Host-slyxup_session=');
       expect(cookies[1]).toMatch(/^slyxup_session=/);
+    }
+    {
+      // Clearing also revokes the refresh pair (host + legacy).
+      const response = await app.request('/clear', { headers: { Host: 'auth.example.com' } });
+      const cookies = response.headers.getSetCookie();
+      expect(cookies).toHaveLength(4);
+      expect(cookies[0]).toContain('__Host-slyxup_session=;');
+      expect(cookies[1]).toMatch(/^slyxup_session=;/);
+      expect(cookies[2]).toContain('__Host-slyxup_refresh=;');
+      expect(cookies[3]).toMatch(/^slyxup_refresh=;/);
     }
   });
 });

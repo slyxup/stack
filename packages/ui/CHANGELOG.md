@@ -1,5 +1,16 @@
 # @slyxup/ui
 
+## 3.2.0
+
+### Minor Changes
+
+- 24h access + 7d refresh sessions with transparent auto-rotate. `SlyxupClient` stores the refresh token (memory or `sessionStorage`), retries once on 401 via `POST /v1/auth/refresh`, and exposes `refresh()`, `getRefreshToken()`, plus a `refreshToken` constructor option for apps that persist sessions themselves. Sign-up/sign-in/2FA/OAuth responses now include `refreshToken` and `refreshExpiresAt`. No breaking changes.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @slyxup/core@3.2.0
+
 ## 3.1.0
 
 ### Minor Changes

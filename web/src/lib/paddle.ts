@@ -65,12 +65,15 @@ export async function ensurePaddle(projectId?: string): Promise<void> {
   return initPromise;
 }
 
-export function openCheckout(transactionId: string) {
+export function openCheckout(
+  transactionId: string,
+  settings?: Record<string, unknown>
+) {
   if (!window.Paddle)
     throw new Error('Paddle not initialized — call ensurePaddle() first');
   window.Paddle.Checkout.open({
     transactionId,
-    settings: { displayMode: 'overlay' },
+    settings: { displayMode: 'overlay', ...(settings ?? {}) },
   });
 }
 

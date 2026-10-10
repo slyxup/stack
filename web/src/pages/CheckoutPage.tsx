@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { ensurePaddle, openCheckout } from '../lib/paddle';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ensurePaddle, onCheckoutResult, openCheckout } from '../lib/paddle';
 
+/**
+ * Web checkout entry (/pay): opens the Paddle overlay for a prepared
+ * transaction, then routes to the verified success page — never leaves the
+ * buyer stranded on a spinner. The success page re-verifies with Paddle and
+ * returns the buyer to ?origin= (the project that started checkout).
+ */
 export default function CheckoutPage() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const transactionId = params.get('_ptxn') ?? params.get('transaction_id');
   const projectId = params.get('project_id') ?? '';
   const origin = params.get('origin');
@@ -14,12 +21,39 @@ export default function CheckoutPage() {
       setError('This checkout link is missing its transaction reference.');
       return;
     }
+    let cancelled = false;
+    const successParams = new URLSearchParams();
+    if (projectId) successParams.set('project_id', projectId);
+    if (origin) successParams.set('origin', origin);
+    successParams.set('transaction_id', transactionId);
+    const successUrl = `/checkout/success?${successParams}`;
+
     void ensurePaddle(projectId)
-      .then(() => openCheckout(transactionId))
+      .then(() => {
+        if (cancelled) return;
+        // Paddle redirects here on payment; the overlay event covers the
+        // in-page completion without a full navigation.
+        const off = onCheckoutResult?.((e) => {
+          if (cancelled) return;
+          if (e.name === 'checkout.completed') navigate(successUrl);
+          else if (e.name === 'checkout.error')
+            setError('Payment failed. Please try again.');
+        });
+        void off;
+        openCheckout(transactionId, { successUrl });
+      })
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : 'Checkout could not be opened.');
+        if (!cancelled)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : 'Checkout could not be opened.'
+          );
       });
-  }, [projectId, transactionId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, transactionId, origin, navigate]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#fafbfc] px-6 text-center text-[#111]">

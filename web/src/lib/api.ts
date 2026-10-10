@@ -14,9 +14,53 @@ export const BILLING_URL =
   'https://billing-slyxup-com.billing-86c.workers.dev';
 
 const TOKEN_KEY = 'slyxup_session_token';
+const REFRESH_KEY = 'slyxup_refresh_token';
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_KEY);
+}
+
+function persistPair(access?: string | null, refresh?: string | null) {
+  if (access) localStorage.setItem(TOKEN_KEY, access);
+  if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+}
+
+/**
+ * Rotate the 24h access token with the stored 7d refresh token.
+ * Returns true when a fresh pair was stored. Single-flight guarded.
+ */
+let refreshInflight: Promise<boolean> | null = null;
+export function refreshSession(): Promise<boolean> {
+  if (refreshInflight) return refreshInflight;
+  refreshInflight = (async () => {
+    try {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+      const r = await fetch(`${AUTH_URL}/v1/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const j = (await r.json().catch(() => null)) as {
+        ok?: boolean;
+        sessionToken?: string;
+        refreshToken?: string;
+      } | null;
+      if (!r.ok || !j?.ok || !j.sessionToken) return false;
+      persistPair(j.sessionToken, j.refreshToken);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInflight = null;
+    }
+  })();
+  return refreshInflight;
 }
 
 function authHeaders(): Record<string, string> {
@@ -43,7 +87,8 @@ export interface ApiUser {
 async function request<T>(
   base: string,
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  retried = false
 ): Promise<ApiResult<T>> {
   try {
     const r = await fetch(`${base}${path}`, {
@@ -55,6 +100,16 @@ async function request<T>(
         ...(init?.headers || {}),
       },
     });
+    // Transparent auto-refresh: one retry with a rotated access token so
+    // active admin users never get logged out when the 24h token lapses.
+    if (
+      r.status === 401 &&
+      !retried &&
+      !path.startsWith('/v1/auth/refresh') &&
+      !path.startsWith('/v1/auth/sign-')
+    ) {
+      if (await refreshSession()) return request<T>(base, path, init, true);
+    }
     const j = (await r.json().catch(() => ({}))) as ApiBody;
     if (!r.ok)
       return {
@@ -87,12 +142,16 @@ export async function signIn(
   if (!r.ok) return r;
   const token =
     r.data.sessionToken || r.data.token || r.data?.data?.sessionToken;
-  if (token && token !== 'cookie') localStorage.setItem(TOKEN_KEY, token);
+  const refresh = (
+    r.data as { refreshToken?: string; data?: { refreshToken?: string } }
+  ).refreshToken;
+  if (token && token !== 'cookie') persistPair(token, refresh);
   return { ok: true, data: { token: token || 'cookie' } };
 }
 
 export function signOut() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
 }
 
 export async function currentUser(): Promise<ApiResult<{ user: ApiUser }>> {
@@ -464,7 +523,8 @@ export interface Invoice {
 
 async function billing<T>(
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  retried = false
 ): Promise<ApiResult<T>> {
   try {
     const r = await fetch(`${BILLING_URL}${path}`, {
@@ -476,6 +536,9 @@ async function billing<T>(
         ...(init?.headers || {}),
       },
     });
+    if (r.status === 401 && !retried) {
+      if (await refreshSession()) return billing<T>(path, init, true);
+    }
     const j = (await r.json().catch(() => ({}))) as ApiBody;
     if (!r.ok)
       return {

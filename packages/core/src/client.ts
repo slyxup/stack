@@ -59,7 +59,10 @@ export class SlyxupClient {
   readonly secretKey?: string;
   readonly apiUrl: string;
   private _getToken?: () => string | undefined;
+  private _getRefresh?: () => string | undefined;
   private _request?: <T>(path: string, init?: RequestInit) => Promise<T>;
+  private _refreshPair?: (access: string, refresh?: string) => void;
+  private refreshInflight?: Promise<boolean>;
   private oauthCompletion?: Promise<SignInResponse | null>;
 
   readonly auth: {
@@ -244,6 +247,44 @@ export class SlyxupClient {
   getToken(): string | undefined {
     return this._getToken?.();
   }
+  /** Get current refresh token (rotates the 24h access token). */
+  getRefreshToken(): string | undefined {
+    return this._getRefresh?.();
+  }
+  /**
+   * Rotate the access token with the stored refresh token (7d window).
+   * Called automatically on 401 — call it manually to proactively renew.
+   * Returns true when a fresh pair was stored.
+   */
+  async refresh(): Promise<boolean> {
+    if (this.refreshInflight) return this.refreshInflight;
+    const doRefresh = (async (): Promise<boolean> => {
+      const refreshToken = this._getRefresh?.();
+      if (!refreshToken) return false;
+      try {
+        const res = await fetch(`${this.apiUrl}/v1/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+          credentials: 'include',
+        });
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          sessionToken?: string;
+          refreshToken?: string;
+        } | null;
+        if (!res.ok || !data?.ok || !data.sessionToken) return false;
+        this._refreshPair?.(data.sessionToken, data.refreshToken);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        this.refreshInflight = undefined;
+      }
+    })();
+    this.refreshInflight = doRefresh;
+    return doRefresh;
+  }
   /** Raw request for custom endpoints (uses same auth headers + cookies as SDK) */
   async request<T>(path: string, init?: RequestInit): Promise<T> {
     if (!this._request) throw new Error('Client not initialized');
@@ -263,7 +304,9 @@ export class SlyxupClient {
       );
     }
     const storageKey = `slyxup:session:${this.apiUrl}:${this.publishableKey ?? 'platform'}`;
+    const refreshStorageKey = `${storageKey}:refresh`;
     let storedToken = options.sessionToken;
+    let storedRefresh = options.refreshToken;
     let csrfToken: string | undefined;
     try {
       if (typeof document !== 'undefined') {
@@ -278,10 +321,14 @@ export class SlyxupClient {
         typeof window !== 'undefined'
       ) {
         storedToken = window.sessionStorage.getItem(storageKey) ?? undefined;
+        storedRefresh =
+          window.sessionStorage.getItem(refreshStorageKey) ?? undefined;
       }
     } catch {}
-    const persistToken = (t: string | undefined) => {
+    const persistToken = (t: string | undefined, refresh?: string) => {
       storedToken = t;
+      if (refresh !== undefined) storedRefresh = refresh || undefined;
+      if (t === undefined) storedRefresh = undefined;
       try {
         if (
           options.tokenStorage === 'sessionStorage' &&
@@ -289,10 +336,19 @@ export class SlyxupClient {
         ) {
           if (t) window.sessionStorage.setItem(storageKey, t);
           else window.sessionStorage.removeItem(storageKey);
+          if (storedRefresh)
+            window.sessionStorage.setItem(refreshStorageKey, storedRefresh);
+          else window.sessionStorage.removeItem(refreshStorageKey);
         }
       } catch {}
     };
+    const persistPair = (access?: string, refresh?: string) => {
+      if (access) persistToken(access, refresh);
+    };
     this._getToken = () => storedToken;
+    this._getRefresh = () => storedRefresh;
+    this._refreshPair = (access: string, refresh?: string) =>
+      persistPair(access, refresh);
     // _request will be assigned after `request` is defined below
 
     const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -337,7 +393,11 @@ export class SlyxupClient {
     const requestInner = async <T>(
       path: string,
       init: RequestInit & { body?: string } = {},
-      opts?: { captureError?: boolean; captureChallenge?: boolean }
+      opts?: {
+        captureError?: boolean;
+        captureChallenge?: boolean;
+        retried?: boolean;
+      }
     ): Promise<Result<T>> => {
       let res: Response;
       try {
@@ -369,6 +429,23 @@ export class SlyxupClient {
           : { ok: false, error: 'Invalid response' };
 
       if (!res.ok) {
+        // Transparent auto-refresh: one retry with a rotated access token so
+        // active users never see a logout when the 24h token lapses mid-use.
+        // Never loops (retried flag) and never refreshes the refresh call itself.
+        if (
+          res.status === 401 &&
+          !opts?.retried &&
+          !path.startsWith('/v1/auth/refresh') &&
+          !path.startsWith('/v1/auth/sign-')
+        ) {
+          try {
+            if (await this.refresh()) {
+              return requestInner<T>(path, init, { ...opts, retried: true });
+            }
+          } catch {
+            /* fall through to the 401 below */
+          }
+        }
         if (
           opts?.captureChallenge &&
           res.status === 403 &&
@@ -485,7 +562,8 @@ export class SlyxupClient {
           if ('challengeToken' in result) return result;
           if (!('user' in result))
             throw new SlyxupError(result.error, 401, 'oauth_exchange_failed');
-          if (result.sessionToken) persistToken(result.sessionToken);
+          if (result.sessionToken)
+            persistPair(result.sessionToken, result.refreshToken);
           return result;
         })();
         return this.oauthCompletion;
@@ -501,7 +579,7 @@ export class SlyxupClient {
         const res = await post<AuthResponse>('/v1/auth/sign-up', input);
         if (!('user' in res))
           throw new SlyxupError(res.error, 400, 'api_error');
-        if (res.sessionToken) persistToken(res.sessionToken);
+        if (res.sessionToken) persistPair(res.sessionToken, res.refreshToken);
         return res;
       },
       signIn: async (input) => {
@@ -524,13 +602,13 @@ export class SlyxupClient {
           throw new UnauthorizedError(
             (res as { error?: string }).error ?? 'Sign in failed'
           );
-        if (res.sessionToken) persistToken(res.sessionToken);
+        if (res.sessionToken) persistPair(res.sessionToken, res.refreshToken);
         return res;
       },
       completeSignIn: async (input) => {
         const res = await post<AuthResponse>('/v1/auth/sign-in/2fa', input);
         if (!('user' in res)) throw new UnauthorizedError(res.error);
-        if (res.sessionToken) persistToken(res.sessionToken);
+        if (res.sessionToken) persistPair(res.sessionToken, res.refreshToken);
         this.oauthCompletion = undefined;
         return res;
       },

@@ -2,7 +2,9 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import {
   clearSessionCookie,
+  getRefreshToken,
   getSessionToken,
+  setRefreshCookie,
   setSessionCookie,
 } from '../lib/cookies';
 import { sanitizeUser } from '../lib/sanitize';
@@ -73,18 +75,19 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
   try {
     const bootstrapToken =
       c.req.header('X-Bootstrap-Token') ?? c.req.header('x-bootstrap-token');
-    const { sessionToken, expiresAt, user } = await AuthService.signUp(
-      c.env as unknown as { DB: D1Database } & Record<
-        string,
-        string | undefined
-      >,
-      {
-        ...input,
-        projectId,
-        bootstrapToken,
-      },
-      requestMeta(c)
-    );
+    const { sessionToken, refreshToken, expiresAt, refreshExpiresAt, user } =
+      await AuthService.signUp(
+        c.env as unknown as { DB: D1Database } & Record<
+          string,
+          string | undefined
+        >,
+        {
+          ...input,
+          projectId,
+          bootstrapToken,
+        },
+        requestMeta(c)
+      );
     void dispatchWebhooks(c.env, projectId ?? null, 'user.created', {
       id: user.id,
       email: user.email,
@@ -102,8 +105,21 @@ auth.post('/sign-up', zValidator('json', signUpSchema), async (c) => {
     );
     // Per-platform isolation: only platform (no projectId) gets a host-only cookie.
     // Project users (with publishable key → projectId) use Bearer token only (per-origin localStorage) — no shared cookie → no cross-login overwrite.
-    if (!projectId) setSessionCookie(c, sessionToken, expiresAt);
-    return c.json({ ok: true, user, sessionToken }, 201);
+    if (!projectId) {
+      setSessionCookie(c, sessionToken, expiresAt);
+      setRefreshCookie(c, refreshToken, refreshExpiresAt);
+    }
+    return c.json(
+      {
+        ok: true,
+        user,
+        sessionToken,
+        refreshToken,
+        expiresAt,
+        refreshExpiresAt,
+      },
+      201
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
     if (msg === 'INVALID_BOOTSTRAP_TOKEN')
@@ -168,9 +184,13 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
         403
       );
     }
-    const { user, sessionToken, expiresAt } = result;
+    const { user, sessionToken, refreshToken, expiresAt, refreshExpiresAt } =
+      result;
     // Only platform logins get a cookie; project logins stay Bearer-only for isolation
-    if (!user.projectId) setSessionCookie(c, sessionToken, expiresAt);
+    if (!user.projectId) {
+      setSessionCookie(c, sessionToken, expiresAt);
+      setRefreshCookie(c, refreshToken, refreshExpiresAt);
+    }
     void dispatchWebhooks(c.env, user.projectId, 'user.signed_in', {
       id: user.id,
       email: user.email,
@@ -197,7 +217,9 @@ auth.post('/sign-in', zValidator('json', signInSchema), async (c) => {
       // Bearer token for server-to-server / console usage (cookies are
       // SameSite=Lax and do not travel cross-origin)
       sessionToken,
+      refreshToken,
       expiresAt: expiresAt.toISOString(),
+      refreshExpiresAt: refreshExpiresAt.toISOString(),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
@@ -259,8 +281,10 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
       recoveryCode,
       requestMeta(c)
     );
-    if (!result.user.projectId)
+    if (!result.user.projectId) {
       setSessionCookie(c, result.sessionToken, result.expiresAt);
+      setRefreshCookie(c, result.refreshToken, result.refreshExpiresAt);
+    }
     void dispatchWebhooks(c.env, result.user.projectId, 'user.signed_in', {
       id: result.user.id,
       email: result.user.email,
@@ -285,7 +309,9 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
         emailVerified: result.user.emailVerified,
       },
       sessionToken: result.sessionToken,
+      refreshToken: result.refreshToken,
       expiresAt: result.expiresAt.toISOString(),
+      refreshExpiresAt: result.refreshExpiresAt.toISOString(),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed';
@@ -298,11 +324,69 @@ auth.post('/sign-in/2fa', zValidator('json', signIn2FASchema), async (c) => {
   }
 });
 
+// ── Refresh: rotate the 24h access token with the 7d refresh token ──
+// Body { refreshToken } (SDK/mobile) or refresh cookie (browser platform).
+// The SDK calls this automatically on 401, so active users never log out.
+auth.post('/refresh', async (c) => {
+  let bodyToken: string | undefined;
+  try {
+    const body = (await c.req.json()) as { refreshToken?: unknown };
+    if (typeof body?.refreshToken === 'string') bodyToken = body.refreshToken;
+  } catch {
+    /* body-less cookie call */
+  }
+  const presented = getRefreshToken(c, bodyToken);
+  if (!presented)
+    return c.json({ ok: false, error: 'Refresh token required' }, 401);
+  const result = await AuthService.refreshSession(
+    c.env,
+    presented,
+    requestMeta(c)
+  );
+  if (!result)
+    return c.json({ ok: false, error: 'Invalid or expired session' }, 401);
+  // Platform browsers get fresh cookies; project SDKs use the Bearer pair.
+  if (!result.user.projectId) {
+    setSessionCookie(c, result.sessionToken, result.expiresAt);
+    setRefreshCookie(c, result.refreshToken, result.refreshExpiresAt);
+  }
+  c.header('Cache-Control', 'no-store');
+  return c.json({
+    ok: true,
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      emailVerified: result.user.emailVerified,
+    },
+    sessionToken: result.sessionToken,
+    refreshToken: result.refreshToken,
+    expiresAt: result.expiresAt.toISOString(),
+    refreshExpiresAt: result.refreshExpiresAt.toISOString(),
+  });
+});
+
 auth.post('/sign-out', async (c) => {
   const token = getSessionToken(c);
+  // Fallback: the access token may already have expired — allow revoking
+  // the whole session via its refresh token (body or cookie).
+  let refreshFallback: string | undefined;
+  if (!token) {
+    try {
+      const body = (await c.req.json()) as { refreshToken?: unknown };
+      if (typeof body?.refreshToken === 'string')
+        refreshFallback = body.refreshToken;
+    } catch {
+      /* ignore */
+    }
+    if (!refreshFallback) refreshFallback = getRefreshToken(c);
+  }
   // Fetch session before deletion to decide cookie handling (platform vs project isolation)
   let sessionData: Awaited<ReturnType<typeof AuthService.getSession>> | null =
     null;
+  if (refreshFallback && !token) {
+    await AuthService.signOutByRefresh(c.env, refreshFallback);
+  }
   if (token) {
     sessionData = await AuthService.getSession(c.env, token, requestMeta(c));
     await AuthService.signOut(c.env, token);

@@ -18,7 +18,7 @@
 - Authentication: sign-up (24h verify mail), sign-in email|username, sign-out, bootstrap first admin — /docs/authentication
 - OAuth (Google + GitHub): hosted code flow, 10-min state, upsert-by-email, link/unlink — /docs/oauth
 - Passwords & verification: PBKDF2 100k, non-enumerating flows, 24h verify / 1h reset — /docs/passwords-verification
-- Sessions: 32-byte token, 7-day expiry, slyxup_session + __Host cookies, Bearer wins — /docs/sessions
+- Sessions: 24h access + 7d refresh (SDK auto-rotates on 401, POST /v1/auth/refresh), slyxup_session + __Host cookies, Bearer wins — /docs/sessions
 - Two-factor auth (TOTP): setup → enable → challenge, recovery codes, disable — /docs/two-factor
 - Users & members: search (q/limit/offset), roles owner/admin/member, block-revokes-all, delete — /docs/users-members
 - API keys: pk_ browser vs sk_ server, test vs live, create-once, instant revoke, rotation — /docs/api-keys
@@ -27,7 +27,7 @@
 ## Monetize (Paddle)
 - Billing overview: list plans → checkout → subscription.created webhook → entitlements — /docs/billing-overview
 - Plans: amount/currency/interval/trialDays/features/popular/sortOrder; public active-only; admin CRUD + sync — /docs/plans
-- Checkout (Paddle): POST /v1/billing/checkout → checkoutUrl; overlay vs redirect; verify via transactions/:id — /docs/checkout
+- Checkout (Paddle): POST /v1/billing/checkout { planId, origin } → checkoutUrl; billing-hosted /success verifies + returns buyer to origin — /docs/checkout
 - Subscriptions & invoices: status/period/cancel-at-end/resume; invoices newest-first — /docs/subscriptions-invoices
 - Entitlements & access: server-side getEntitlements → features.includes(); never trust client/URL — /docs/entitlements
 - Paddle setup: sandbox keys → price mapping → webhooks → test → production + go-live — /docs/paddle-setup

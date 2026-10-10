@@ -1,10 +1,7 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { randomToken, randomUUID, sha256Hex } from '../lib/crypto';
 import { getDb } from '../lib/db';
-import {
-  generateFingerprint,
-  type RequestMeta,
-} from '../lib/fingerprint';
+import { type RequestMeta, generateFingerprint } from '../lib/fingerprint';
 import { log } from '../lib/logger';
 import {
   CURRENT_HASH_VERSION,
@@ -21,6 +18,22 @@ import {
 } from '../lib/schema';
 import { verifyTOTP } from '../lib/totp';
 import { sendVerificationEmail } from './token.service';
+
+/** Access tokens live 24h; refresh tokens live 7d and rotate them. */
+export const ACCESS_TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
+export const REFRESH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
+/** Sliding window: active sessions extend their access token when <12h remain. */
+export const SESSION_SLIDE_WINDOW_MS = 1000 * 60 * 60 * 12;
+
+/** Mint a fresh access + refresh token pair with their expiries. */
+export function mintSessionTokens(now = Date.now()) {
+  return {
+    sessionToken: randomToken(32),
+    refreshToken: randomToken(32),
+    expiresAt: new Date(now + ACCESS_TOKEN_TTL_MS),
+    refreshExpiresAt: new Date(now + REFRESH_TOKEN_TTL_MS),
+  };
+}
 
 export async function signUp(
   env: { DB: D1Database } & Record<string, string | undefined>,
@@ -132,10 +145,12 @@ export async function signUp(
     createdAt: now,
   });
 
-  // Create session (fingerprinted to IP + UA when a secret is configured)
-  const sessionToken = randomToken(32);
+  // Create session (fingerprinted to IP + UA when a secret is configured).
+  // Access token 24h + refresh token 7d (auto-rotated, never logs active users out).
+  const minted = mintSessionTokens();
+  const sessionToken = minted.sessionToken;
+  const expiresAt = minted.expiresAt;
   const sessionId = randomUUID();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
   const fingerprint = meta
     ? await generateFingerprint(meta, env.SESSION_SECRET)
     : null;
@@ -144,6 +159,8 @@ export async function signUp(
     userId,
     projectId: input.projectId ?? null,
     token: sessionToken,
+    refreshToken: minted.refreshToken,
+    refreshExpiresAt: minted.refreshExpiresAt,
     ipAddress: meta?.ip ?? null,
     userAgent: meta?.userAgent ?? null,
     fingerprintHash: fingerprint,
@@ -162,7 +179,9 @@ export async function signUp(
   return {
     userId,
     sessionToken,
+    refreshToken: minted.refreshToken,
     expiresAt,
+    refreshExpiresAt: minted.refreshExpiresAt,
     verificationToken: token,
     role,
     user: { id: userId, email },
@@ -173,7 +192,9 @@ export type SignInResult =
   | {
       user: typeof users.$inferSelect;
       sessionToken: string;
+      refreshToken: string;
       expiresAt: Date;
+      refreshExpiresAt: Date;
       requires2FA: false;
     }
   | {
@@ -257,7 +278,7 @@ export async function signIn(
   if (!user || !user.passwordHash) throw new Error('Invalid credentials');
   const ok = await verifyPassword(input.password, user.passwordHash);
   if (!ok) throw new Error('Invalid credentials');
-  // Opportunistic rehash: upgrade legacy PBKDF2-100k → PBKDF2-600k on login.
+  // Opportunistic rehash: upgrade legacy/unversioned hashes → PBKDF2-100k on login.
   // Best-effort — never blocks authentication.
   if (needsRehash(user.passwordHash)) {
     try {
@@ -299,9 +320,10 @@ export async function signIn(
     return { user, challengeToken, requires2FA: true };
   }
 
-  const sessionToken = randomToken(32);
+  const minted = mintSessionTokens();
+  const sessionToken = minted.sessionToken;
+  const expiresAt = minted.expiresAt;
   const sessionId = randomUUID();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
   const now = new Date();
   const fingerprint = meta
     ? await generateFingerprint(meta, env.SESSION_SECRET)
@@ -311,6 +333,8 @@ export async function signIn(
     userId: user.id,
     projectId: input.projectId ?? user.projectId ?? null,
     token: sessionToken,
+    refreshToken: minted.refreshToken,
+    refreshExpiresAt: minted.refreshExpiresAt,
     ipAddress: meta?.ip ?? null,
     userAgent: meta?.userAgent ?? null,
     fingerprintHash: fingerprint,
@@ -319,7 +343,14 @@ export async function signIn(
     updatedAt: now,
   });
 
-  return { user, sessionToken, expiresAt, requires2FA: false };
+  return {
+    user,
+    sessionToken,
+    refreshToken: minted.refreshToken,
+    expiresAt,
+    refreshExpiresAt: minted.refreshExpiresAt,
+    requires2FA: false,
+  };
 }
 
 /**
@@ -373,9 +404,10 @@ export async function complete2FASignIn(
   if (!(await consumeChallenge(env, 'two_factor', challengeToken)))
     throw new Error('2FA_CHALLENGE_INVALID');
 
-  const sessionToken = randomToken(32);
+  const minted = mintSessionTokens();
+  const sessionToken = minted.sessionToken;
+  const expiresAt = minted.expiresAt;
   const sessionId = randomUUID();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
   const now = new Date();
   const fingerprint = meta
     ? await generateFingerprint(meta, env.SESSION_SECRET)
@@ -385,6 +417,8 @@ export async function complete2FASignIn(
     userId: user.id,
     projectId: challenge.scope ?? challenge.projectId ?? null,
     token: sessionToken,
+    refreshToken: minted.refreshToken,
+    refreshExpiresAt: minted.refreshExpiresAt,
     ipAddress: meta?.ip ?? null,
     userAgent: meta?.userAgent ?? null,
     fingerprintHash: fingerprint,
@@ -393,7 +427,13 @@ export async function complete2FASignIn(
     updatedAt: now,
   });
 
-  return { user, sessionToken, expiresAt };
+  return {
+    user,
+    sessionToken,
+    refreshToken: minted.refreshToken,
+    expiresAt,
+    refreshExpiresAt: minted.refreshExpiresAt,
+  };
 }
 
 /** Find a user by username within a project scope (projectId null = platform users). */
@@ -450,8 +490,9 @@ async function redeemRecoveryCode(
   return claimed.length === 1;
 }
 
-export type SessionUser =
-  NonNullable<Awaited<ReturnType<typeof getSession>>>['user'];
+export type SessionUser = NonNullable<
+  Awaited<ReturnType<typeof getSession>>
+>['user'];
 
 export async function getSession(
   env: { DB: D1Database; SESSION_SECRET?: string },
@@ -473,15 +514,22 @@ export async function getSession(
       .catch(() => undefined);
     return null;
   }
-  // Fingerprint check: sessions are bound to IP + UA. A mismatch on a
-  // session older than the rotation grace (5 min) means likely hijack →
-  // revoke. Within grace (e.g. mobile network hop right after login),
-  // rotate the fingerprint instead of killing the session.
+  // Fingerprint check: sessions are bound to IP + UA. Mobile/corporate
+  // networks rotate IPs mid-use, so an IP-only change on the same device
+  // (same normalized UA) always rotates instead of revoking. A mismatch on
+  // BOTH IP and device older than the rotation grace (5 min) means likely
+  // hijack → revoke. Within grace, rotate the fingerprint instead.
   if (meta && session.fingerprintHash && env.SESSION_SECRET) {
     const current = await generateFingerprint(meta, env.SESSION_SECRET);
     if (current && current !== session.fingerprintHash) {
+      const { normalizeUserAgent } = await import('../lib/fingerprint');
+      const uaSame =
+        !!meta.userAgent &&
+        !!session.userAgent &&
+        normalizeUserAgent(meta.userAgent) ===
+          normalizeUserAgent(session.userAgent);
       const ageMs = Date.now() - new Date(session.updatedAt).getTime();
-      if (ageMs > 5 * 60 * 1000) {
+      if (!uaSame && ageMs > 5 * 60 * 1000) {
         log.warn('session_fingerprint_mismatch', { sessionId: session.id });
         await db
           .delete(sessions)
@@ -499,6 +547,48 @@ export async function getSession(
         })
         .where(eq(sessions.id, session.id))
         .catch(() => undefined);
+    }
+  }
+  // Rolling upkeep (best-effort, never blocks the request):
+  // 1. Legacy rows without a refresh token get one (upgrade without logout).
+  // 2. Active sessions within the slide window extend their 24h access token
+  //    (capped by the 7d refresh expiry) so use never interrupts.
+  {
+    const nowMs = Date.now();
+    const accessLeftMs = new Date(session.expiresAt).getTime() - nowMs;
+    const refreshValid =
+      session.refreshExpiresAt &&
+      new Date(session.refreshExpiresAt).getTime() > nowMs;
+    const needsRefreshToken = !session.refreshToken || !refreshValid;
+    const needsSlide =
+      accessLeftMs < SESSION_SLIDE_WINDOW_MS &&
+      (refreshValid || needsRefreshToken);
+    if (needsRefreshToken || needsSlide) {
+      const minted = mintSessionTokens(nowMs);
+      const cappedAccess =
+        refreshValid && session.refreshExpiresAt
+          ? new Date(
+              Math.min(
+                minted.expiresAt.getTime(),
+                new Date(session.refreshExpiresAt).getTime()
+              )
+            )
+          : minted.expiresAt;
+      await db
+        .update(sessions)
+        .set({
+          ...(needsRefreshToken
+            ? {
+                refreshToken: minted.refreshToken,
+                refreshExpiresAt: minted.refreshExpiresAt,
+              }
+            : {}),
+          expiresAt: needsSlide ? cappedAccess : session.expiresAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(sessions.id, session.id))
+        .catch(() => undefined);
+      if (needsSlide) session.expiresAt = cappedAccess;
     }
   }
   // User + profile are independent once the session is known — fetch concurrently.
@@ -535,6 +625,80 @@ export async function getSession(
     return null;
   }
   return { session, user: { ...user, bio: profile?.bio ?? null } };
+}
+
+/**
+ * Rotate an access token with a valid refresh token (7d window).
+ * Returns the new pair, or null when the refresh token is unknown/expired.
+ * Rotation is atomic-ish: the row is only updated when the presented refresh
+ * token still matches (guards against concurrent double-refresh races).
+ */
+export async function refreshSession(
+  env: { DB: D1Database; SESSION_SECRET?: string },
+  refreshToken: string,
+  meta?: RequestMeta
+) {
+  if (!refreshToken) return null;
+  const db = getDb(env);
+  const session = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.refreshToken, refreshToken))
+    .get();
+  if (!session || !session.refreshExpiresAt) return null;
+  if (new Date(session.refreshExpiresAt).getTime() <= Date.now()) {
+    await db
+      .delete(sessions)
+      .where(eq(sessions.id, session.id))
+      .catch(() => undefined);
+    return null;
+  }
+  const [user] = await Promise.all([
+    db.select().from(users).where(eq(users.id, session.userId)).get(),
+  ]);
+  if (
+    !user ||
+    user.blocked ||
+    user.deletedAt ||
+    !user.emailVerified ||
+    user.mustChangePassword
+  ) {
+    if (user?.blocked) {
+      await db
+        .delete(sessions)
+        .where(eq(sessions.id, session.id))
+        .catch(() => undefined);
+    }
+    return null;
+  }
+  const minted = mintSessionTokens();
+  const fingerprint = meta
+    ? await generateFingerprint(meta, env.SESSION_SECRET)
+    : session.fingerprintHash;
+  const rotated = await db
+    .update(sessions)
+    .set({
+      token: minted.sessionToken,
+      refreshToken: minted.refreshToken,
+      expiresAt: minted.expiresAt,
+      refreshExpiresAt: minted.refreshExpiresAt,
+      fingerprintHash: fingerprint,
+      ipAddress: meta?.ip ?? session.ipAddress,
+      userAgent: meta?.userAgent ?? session.userAgent,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(sessions.id, session.id), eq(sessions.refreshToken, refreshToken))
+    )
+    .returning({ id: sessions.id });
+  if (rotated.length !== 1) return null;
+  return {
+    user,
+    sessionToken: minted.sessionToken,
+    refreshToken: minted.refreshToken,
+    expiresAt: minted.expiresAt,
+    refreshExpiresAt: minted.refreshExpiresAt,
+  };
 }
 
 export async function forcePasswordChange(
@@ -604,4 +768,14 @@ export async function forcePasswordChange(
 export async function signOut(env: { DB: D1Database }, token: string) {
   const db = getDb(env);
   await db.delete(sessions).where(eq(sessions.token, token));
+}
+
+/** Revoke a session by its refresh token (used when the access token expired). */
+export async function signOutByRefresh(
+  env: { DB: D1Database },
+  refreshToken: string
+) {
+  if (!refreshToken) return;
+  const db = getDb(env);
+  await db.delete(sessions).where(eq(sessions.refreshToken, refreshToken));
 }
