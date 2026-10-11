@@ -26,7 +26,11 @@ export default function CheckoutPage() {
     if (projectId) successParams.set('project_id', projectId);
     if (origin) successParams.set('origin', origin);
     successParams.set('transaction_id', transactionId);
-    const successUrl = `/checkout/success?${successParams}`;
+    const successPath = `/checkout/success?${successParams}`;
+    // Paddle.js validates successUrl strictly: it must be an absolute
+    // http(s) URL (relative paths fail with "The value for successUrl is
+    // not valid"). In-app navigation keeps using the relative path.
+    const successUrl = `${window.location.origin}${successPath}`;
 
     void ensurePaddle(projectId)
       .then(() => {
@@ -35,7 +39,7 @@ export default function CheckoutPage() {
         // in-page completion without a full navigation.
         const off = onCheckoutResult?.((e) => {
           if (cancelled) return;
-          if (e.name === 'checkout.completed') navigate(successUrl);
+          if (e.name === 'checkout.completed') navigate(successPath);
           else if (e.name === 'checkout.error')
             setError('Payment failed. Please try again.');
         });
