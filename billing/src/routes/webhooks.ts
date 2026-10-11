@@ -36,7 +36,7 @@ interface SubData {
   id: string;
   status?: string;
   customer_id?: string;
-  items?: { price?: { id?: string } }[];
+  items?: { price?: { id?: string }; quantity?: number }[];
   current_billing_period?: {
     starts_at?: string | null;
     ends_at?: string | null;
@@ -104,6 +104,22 @@ async function applySubscriptionEvent(
   config: PaddleConfig
 ): Promise<void> {
   const priceId = data.items?.[0]?.price?.id;
+  // Subscriptions are single-seat (prices locked to quantity 1). A quantity
+  // above 1 means the buyer used an unlocked price — flag it loudly instead
+  // of silently recording a multiplied bill.
+  for (const item of data.items ?? []) {
+    if ((item.quantity ?? 1) > 1) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          msg: 'subscription_quantity_above_one',
+          subId: data.id,
+          priceId: item.price?.id,
+          quantity: item.quantity,
+        })
+      );
+    }
+  }
   if (!data.id || !priceId) {
     console.warn(
       JSON.stringify({

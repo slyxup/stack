@@ -7,11 +7,16 @@ import { plans } from '../lib/schema';
 import type { Env } from '../middleware/auth';
 import { requireAdmin } from '../middleware/auth';
 import { planCreateSchema, planUpdateSchema } from '../schemas/billing';
-import { createPaddlePrice, createPaddleProduct } from '../services/paddle.service';
 import {
   getPaddleConfig,
   resolveProjectEnvironment,
 } from '../services/paddle-config';
+import {
+  createPaddlePrice,
+  createPaddleProduct,
+  getPaddlePrice,
+  lockPaddlePriceQuantity,
+} from '../services/paddle.service';
 
 // ── /v1/admin/plans — CRUD guarded by BILLING_ADMIN_SECRET bearer token ──
 const app = new Hono<{ Bindings: Env['Bindings'] }>();
@@ -121,9 +126,63 @@ app.post('/:id/sync', async (c) => {
       .get();
     return c.json({ ok: true, environment, plan: updated });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Paddle sync failed';
+    const message =
+      error instanceof Error ? error.message : 'Paddle sync failed';
     return c.json({ ok: false, error: message }, 502);
   }
+});
+
+/** POST /v1/admin/plans/:id/lock-quantity — remove the checkout quantity
+ * stepper from every Paddle price on this plan by locking each to exactly 1.
+ * Subscriptions are single-seat: buyers must never multiply their bill.
+ * Prices created by sync already ship locked; this repairs older prices.
+ * When Paddle refuses to patch a price (immutable), the response flags it
+ * with `needsResync: true` — run POST /v1/admin/plans/:id/sync to mint a
+ * locked replacement instead. */
+app.post('/:id/lock-quantity', async (c) => {
+  const id = c.req.param('id');
+  const db = getDb(c.env);
+  const plan = await db.select().from(plans).where(eq(plans.id, id)).get();
+  if (!plan) throw notFound('Plan not found');
+  const environment = await resolveProjectEnvironment(c.env, plan.projectId);
+  const config = getPaddleConfig(c.env, environment);
+  const priceIds = [
+    ...new Set(
+      [
+        plan.paddlePriceId,
+        plan.paddleTestPriceId,
+        plan.paddleLivePriceId,
+      ].filter((v): v is string => !!v)
+    ),
+  ];
+  const results = [];
+  for (const priceId of priceIds) {
+    try {
+      const before = await getPaddlePrice(config, priceId);
+      if (before.quantity?.minimum === 1 && before.quantity?.maximum === 1) {
+        results.push({ priceId, status: 'already_locked' as const });
+        continue;
+      }
+      await lockPaddlePriceQuantity(config, priceId);
+      results.push({ priceId, status: 'locked' as const });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        JSON.stringify({
+          level: 'warn',
+          msg: 'price_quantity_lock_failed',
+          priceId,
+          err: msg,
+        })
+      );
+      results.push({
+        priceId,
+        status: 'needs_resync' as const,
+        error: msg,
+      });
+    }
+  }
+  return c.json({ ok: true, environment, results });
 });
 
 /** DELETE /v1/admin/plans/:id — soft delete via isActive=false (keeps FK history) */

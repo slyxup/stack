@@ -126,6 +126,35 @@ interface PaddlePrice {
   amount: string;
   currencyCode: string;
   billingCycle: { interval: string; frequency: number } | null;
+  quantity?: { minimum: number; maximum: number } | null;
+}
+
+/** Fetch a Paddle price (used to inspect its quantity range). */
+export async function getPaddlePrice(
+  config: PaddleConfig,
+  priceId: string
+): Promise<PaddlePrice> {
+  return paddleFetch<PaddlePrice>(
+    config,
+    'GET',
+    `/prices/${encodeURIComponent(priceId)}`
+  );
+}
+
+/** Lock a Paddle price to quantity exactly 1.
+ *  Subscriptions are single-seat: the checkout stepper must never let buyers
+ *  multiply their bill. Throws when Paddle refuses (e.g. immutable price) —
+ *  callers report it so the price can be re-synced instead. */
+export async function lockPaddlePriceQuantity(
+  config: PaddleConfig,
+  priceId: string
+): Promise<PaddlePrice> {
+  return paddleFetch<PaddlePrice>(
+    config,
+    'PATCH',
+    `/prices/${encodeURIComponent(priceId)}`,
+    { quantity: { minimum: 1, maximum: 1 } }
+  );
 }
 
 /** Create a product in Paddle */
